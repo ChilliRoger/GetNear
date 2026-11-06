@@ -1,0 +1,15 @@
+{
+  "schedule": "0 */1 * * * *",
+  "uniswapApiUrl": "https://trade-api.gateway.uniswap.org/v1/quote",
+  "usdcBase": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "eurcBase": "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42",
+  "baseChainSelector": "ethereum-mainnet-base-1",
+  "arcChainSelector": "arc-testnet",
+  "swapExecutorAddress": "0xBcA2be0dCe857a936b4660538A9CCdDcB7aE92fF",
+  "treasuryVaultAddress": "0x75a1ff87d9369fefeb2914bd6cc69296f7ebd997",
+  "swapperAddress": "0xB60679110E14D2291f8105EF002A49809cfB283b",
+  "poolFee": 500,
+  "demoMinTradeAmountRaw": "5000000",
+  "uniswapApiKey": "${UNISWAP_API_KEY}",
+  "oracleApiUrl": "http://localhost:38174"
+}

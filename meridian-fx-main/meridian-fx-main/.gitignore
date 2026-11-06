@@ -1,0 +1,23 @@
+node_modules
+dist
+.turbo
+.vercel
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+NOTES.md
+docs/project-setup-playbook.md
+
+# CRE build artifacts
+.cre_build_tmp.*
+
+# Foundry build artifacts and dependencies
+contracts/out/
+contracts/cache/
+contracts/lib/binary.wasm
+contracts/broadcast/
+
+# Playwright
+test-results/
+playwright-report/

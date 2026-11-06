@@ -1,0 +1,39 @@
+Initializing...
+Loading settings...
+Checking RPC connectivity...
+Compiling workflow...
+✓ Workflow compiled
+✓ Simulation limits enabled
+  HTTP: req=10kb resp=100kb timeout=10s | ConfHTTP: req=10kb resp=100kb timeout=10s | Consensus obs=100kb | ChainWrite report=5kb gas=5000000 | WASM binary=100mb compressed=20mb
+  Binary hash: d6b8c9490eb45817886bff1a87e0d0cda3f5db08d07d78e57b566f0f722c6705
+  Config hash: 30c164d37c0eb6d8c6012d19c5e15c0730839d2246456ed97761266766cb5d74
+2026-04-03T23:36:52Z [SIMULATION] Simulator Initialized
+
+2026-04-03T23:36:52Z [SIMULATION] Running trigger trigger=cron-trigger@1.0.0
+2026-04-03T23:36:52Z [USER LOG] Running CronTrigger
+2026-04-03T23:36:52Z [USER LOG] === Meridian Treasury Workflow Start ===
+2026-04-03T23:36:52Z [USER LOG] Fetching quote from https://trade-api.gateway.uniswap.org/v1/quote
+2026-04-03T23:36:52Z [USER LOG] Quote: rate=868189600000000000 input=5000000 output=4340948
+2026-04-03T23:36:52Z [USER LOG] Reading policy from TreasuryVault on Arc
+2026-04-03T23:36:53Z [USER LOG] Policy: threshold=10000000 rateMin=800000000000000000 rateMax=1100000000000000000 v2
+2026-04-03T23:36:53Z [USER LOG] Reading balances from SwapExecutor on Base
+2026-04-03T23:36:53Z [USER LOG] Balances: USDC=9000000 EURC=868268
+2026-04-03T23:36:53Z [USER LOG] Decision: EXECUTE (tradeAmount=5000000)
+2026-04-03T23:36:53Z [USER LOG] TradeId: 0x24acc983bbd2cfd8617b212c5bab99bcb401f16dd3d66608dcdacb94b7aa54de
+2026-04-03T23:36:53Z [USER LOG] Executing auto-trade on Base
+2026-04-03T23:36:53Z [USER LOG] executeSwap tx succeeded: 0x0000000000000000000000000000000000000000000000000000000000000000
+2026-04-03T23:36:53Z [USER LOG] Logging execution on Arc
+2026-04-03T23:36:54Z [USER LOG] logExecution tx succeeded: 0x0000000000000000000000000000000000000000000000000000000000000000
+2026-04-03T23:36:54Z [USER LOG] === AUTO EXECUTE complete: 0x0000000000000000000000000000000000000000000000000000000000000000 ===
+
+✓ Workflow Simulation Result:
+"EXECUTED:0x24acc983bbd2cfd8617b212c5bab99bcb401f16dd3d66608dcdacb94b7aa54de"
+
+2026-04-03T23:36:54Z [SIMULATION] Execution finished signal received
+2026-04-03T23:36:54Z [SIMULATION] Skipping WorkflowEngineV2
+
+╭──────────────────────────────────────────────────────╮
+│ Simulation complete! Ready to deploy your workflow?  │
+│                                                      │
+│ Run cre account access to request deployment access. │
+╰──────────────────────────────────────────────────────╯
