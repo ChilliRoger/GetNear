@@ -1,8 +1,0 @@
-{
-  "schedule": "0 */1 * * * *",
-  "privacyServerUrl": "http://localhost:38175",
-  "minBalanceForSwap": "1000000",
-  "inputToken": "USDC",
-  "outputToken": "USDC",
-  "swapAmount": "1"
-}
