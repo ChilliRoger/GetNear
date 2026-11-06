@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { DISPLAY_MULTIPLIER, formatDisplayAmount } from "@meridian/shared";
+import { DISPLAY_MULTIPLIER, formatDisplayAmount } from "@getnear/shared";
 import { Card } from "@/components/card";
 import { useToast } from "@/components/toast-provider";
 import { usePolicy } from "@/lib/hooks";

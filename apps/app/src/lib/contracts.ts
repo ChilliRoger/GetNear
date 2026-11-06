@@ -1,6 +1,6 @@
 import { createPublicClient, http, defineChain } from "viem";
 import { base } from "viem/chains";
-import { CONTRACTS, TOKENS } from "@meridian/shared";
+import { CONTRACTS, TOKENS } from "@getnear/shared";
 
 // Arc testnet — no built-in viem chain definition
 const arcTestnet = defineChain({

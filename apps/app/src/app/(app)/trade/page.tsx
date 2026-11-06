@@ -9,7 +9,7 @@ import { PrivacyComparison } from "@/components/privacy/privacy-comparison";
 import { PrivacyTxHistory } from "@/components/privacy/privacy-tx-history";
 import { useToast } from "@/components/toast-provider";
 import { useI18n } from "@/lib/i18n";
-import { formatDisplayAmount, DISPLAY_MULTIPLIER, type TradeOrder } from "@meridian/shared";
+import { formatDisplayAmount, DISPLAY_MULTIPLIER, type TradeOrder } from "@getnear/shared";
 
 const ORACLE_URL = "/api/oracle";
 

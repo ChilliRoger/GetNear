@@ -15,18 +15,18 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Meridian FX — The Treasury System for the Stablecoin Era",
+  title: "GetNear — The Treasury System for the Stablecoin Era",
   description:
     "AI treasury agent replacing $120B/year in bank FX fees. Autonomous USDC/EURC conversion powered by Chainlink CRE, Uniswap, and Circle Arc.",
   openGraph: {
-    title: "Meridian FX",
+    title: "GetNear",
     description: "Autonomous treasury FX for the stablecoin era",
     type: "website",
-    url: "https://meridian.omnipass.world",
+    url: "https://github.com/ChilliRoger/GetNear",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Meridian FX",
+    title: "GetNear",
     description: "Autonomous treasury FX for the stablecoin era",
   },
 };

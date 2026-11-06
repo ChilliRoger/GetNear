@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     port: 58173,
     strictPort: true,
-    allowedHosts: ['dev.omnipass.world'],
+    allowedHosts: [''],
     proxy: {
       '/api/fynd': {
         target: 'http://localhost:3000',

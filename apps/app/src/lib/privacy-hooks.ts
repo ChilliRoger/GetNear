@@ -148,7 +148,7 @@ export function usePrivacyStatus() {
 
 // ── usePublicBalances ─────────────────────────────────────────────
 
-import type { PublicBalancesResponse, ShieldedBalancesResponse, ShieldHistoryResponse } from "@meridian/shared";
+import type { PublicBalancesResponse, ShieldedBalancesResponse, ShieldHistoryResponse } from "@getnear/shared";
 
 export function usePublicBalances(interval = 10000) {
   const [data, setData] = useState<PublicBalancesResponse | null>(null);

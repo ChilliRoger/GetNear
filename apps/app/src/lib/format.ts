@@ -1,4 +1,4 @@
-import { formatDisplayAmount } from "@meridian/shared";
+import { formatDisplayAmount } from "@getnear/shared";
 
 // Re-export from shared as the single source of truth
 export { formatDisplayAmount };

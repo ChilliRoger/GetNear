@@ -16,7 +16,7 @@ const SIMULATION_LINES = [
   { text: "", type: "blank" as const, delay: 3600 },
   { text: "[SIMULATION] Running trigger trigger=cron-trigger@1.0.0", type: "sim" as const, delay: 3900 },
   { text: "[USER LOG] Running CronTrigger", type: "log" as const, delay: 4200 },
-  { text: "[USER LOG] === Meridian Treasury Workflow Start ===", type: "highlight" as const, delay: 4500 },
+  { text: "[USER LOG] === GetNear Treasury Workflow Start ===", type: "highlight" as const, delay: 4500 },
   { text: "[USER LOG] Fetching quote from Uniswap Trade API", type: "log" as const, delay: 4800 },
   { text: "[USER LOG] Quote: rate=0.8682 EURC/USDC  in=5.00 USDC  out=4.34 EURC", type: "data" as const, delay: 5400 },
   { text: "[USER LOG] Reading policy from TreasuryVault on Arc", type: "log" as const, delay: 5900 },

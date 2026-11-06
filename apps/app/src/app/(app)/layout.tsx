@@ -1,7 +1,7 @@
 "use client";
 
 import { Nav } from "@/components/nav";
-import { MeridianLogo } from "@/components/meridian-logo";
+import { GetNearLogo } from "@/components/getnear-logo";
 import { LanguageToggle } from "@/components/language-toggle";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ToastProvider } from "@/components/toast-provider";
@@ -20,7 +20,7 @@ export default function AppLayout({
       <header className="sticky top-0 z-40 border-b border-border bg-surface/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <MeridianLogo size={36} cropped />
+            <GetNearLogo size={36} cropped />
             <div>
               <h1 className="text-base font-semibold tracking-tight">
                 {t("header.title")}

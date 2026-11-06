@@ -20,13 +20,13 @@ export type {
   ShieldTransaction,
   ShieldHistoryResponse,
   SepoliaToken,
-} from '@meridian/shared'
+} from '@getnear/shared'
 
 import type {
   PublicBalancesResponse,
   ShieldedBalancesResponse,
   ShieldTransaction,
-} from '@meridian/shared'
+} from '@getnear/shared'
 
 // ── Frontend hook return types ────────────────────────────────────────
 

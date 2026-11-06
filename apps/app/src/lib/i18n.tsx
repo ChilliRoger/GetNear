@@ -18,7 +18,7 @@ const I18nContext = createContext<I18nContextType>({
 
 function getInitialLocale(): Locale {
   if (typeof window !== "undefined") {
-    const saved = localStorage.getItem("meridian-locale");
+    const saved = localStorage.getItem("GetNear-locale");
     if (saved === "en" || saved === "fr") return saved;
   }
   return "en";
@@ -30,7 +30,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);
     if (typeof window !== "undefined") {
-      localStorage.setItem("meridian-locale", l);
+      localStorage.setItem("GetNear-locale", l);
     }
   }, []);
 
@@ -54,7 +54,7 @@ export const useI18n = () => useContext(I18nContext);
 const translations: Record<Locale, Record<string, string>> = {
   en: {
     // Header
-    "header.title": "Meridian",
+    "header.title": "GetNear",
     "header.subtitle": "Treasury FX",
     "header.live": "Live",
 
@@ -132,11 +132,11 @@ const translations: Record<Locale, Record<string, string>> = {
 
     // Savings Calculator
     "calc.title": "Calculate Your Savings",
-    "calc.subtitle": "See how much your organization saves with Meridian FX",
+    "calc.subtitle": "See how much your organization saves with GetNear",
     "calc.annual_volume": "Annual FX Volume",
     "calc.bank_fee": "Current Bank FX Fee",
     "calc.traditional": "Traditional Bank",
-    "calc.meridian": "Meridian FX",
+    "calc.GetNear": "GetNear",
     "calc.annual_savings": "Annual Savings",
     "calc.cost_reduction": "cost reduction",
     "calc.fee": "fee",
@@ -147,14 +147,14 @@ const translations: Record<Locale, Record<string, string>> = {
     "landing.hero_pre": "Autonomous Treasury Agent",
     "landing.hero_h1_1": "FX management",
     "landing.hero_h1_2": "for the stablecoin era",
-    "landing.hero_desc": "Meridian monitors USDC/EURC rates, auto-executes optimal conversions through Uniswap, and requires World ID-verified human approval for large trades. Fully autonomous. Built on Chainlink CRE.",
+    "landing.hero_desc": "GetNear monitors USDC/EURC rates, auto-executes optimal conversions through Uniswap, and requires World ID-verified human approval for large trades. Fully autonomous. Built on Chainlink CRE.",
     "landing.btn_launch": "Launch Dashboard",
     "landing.btn_source": "View Source",
     "landing.stats_replaced": "replaced annually",
     "landing.stats_fee": "avg swap fee",
     "landing.stats_operation": "operation",
     "landing.stats_settlement": "settlement",
-    "landing.how_title": "How Meridian Works",
+    "landing.how_title": "How GetNear Works",
     "landing.how_subtitle": "Four autonomous steps. Zero human intervention for standard trades.",
     "landing.step_monitor": "Monitor",
     "landing.step_decide": "Decide",
@@ -162,8 +162,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "landing.step_log": "Log",
     "landing.cost_title": "Cost Comparison",
     "landing.cost_headline": "Your bank is overcharging you. Dramatically.",
-    "landing.cost_meridian_label": "Meridian FX Agent",
-    "landing.cost_saves_pre": "On a $1M USDC → EURC conversion, Meridian saves",
+    "landing.cost_GetNear_label": "GetNear Agent",
+    "landing.cost_saves_pre": "On a $1M USDC → EURC conversion, GetNear saves",
     "landing.cost_saves_post": "96% reduction in conversion costs",
     "landing.cre_section": "Chainlink CRE",
     "landing.cre_title": "Watch the Agent Think",
@@ -173,7 +173,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "landing.audit_title": "On-Chain Audit Trail",
     "landing.audit_subtitle": "Every decision. Every trade. Immutably recorded on Arc.",
     "landing.cta_1": "Stop paying banks.",
-    "landing.cta_2": "Start running Meridian.",
+    "landing.cta_2": "Start running GetNear.",
     "landing.cta_desc": "Open source. Fully autonomous. Built for treasuries that move millions in stablecoins.",
     "landing.footer_built": "Built at",
     "landing.footer_by": "by",
@@ -187,7 +187,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "landing.stats_value_fees": "$120B",
     "landing.stats_label_fees": "Annual FX fees replaced",
     "landing.stats_value_fee": "~0.05%",
-    "landing.stats_label_fee": "Meridian conversion fee",
+    "landing.stats_label_fee": "GetNear conversion fee",
     "landing.stats_value_ops": "24/7",
     "landing.stats_label_ops": "Autonomous operation",
     "landing.stats_value_settle": "<1s",
@@ -196,10 +196,10 @@ const translations: Record<Locale, Record<string, string>> = {
     // Landing — architecture diagram
     "landing.arch_section": "System Architecture",
     "landing.arch_title": "How the agent thinks, decides, and settles",
-    "landing.arch_flow_title": "MERIDIAN FX — SYSTEM FLOW",
+    "landing.arch_flow_title": "GetNear — SYSTEM FLOW",
     "landing.arch_cfo": "CFO / Treasury Ops",
     "landing.arch_sets_policy": "sets policy",
-    "landing.arch_agent": "MERIDIAN AGENT",
+    "landing.arch_agent": "GetNear AGENT",
     "landing.arch_agent_sub": "Chainlink CRE \u00b7 Consensus-Verified",
     "landing.arch_uniswap": "UNISWAP",
     "landing.arch_uniswap_desc": "Swap on Base",
@@ -227,23 +227,23 @@ const translations: Record<Locale, Record<string, string>> = {
     "landing.cost_bank_label": "Traditional Bank FX",
     "landing.cost_bank_fee_pct": "1.3%",
     "landing.cost_avg_fee_label": "avg fee",
-    "landing.cost_meridian_badge": "Meridian",
-    "landing.cost_meridian_fee_pct": "~0.05%",
+    "landing.cost_GetNear_badge": "GetNear",
+    "landing.cost_GetNear_fee_pct": "~0.05%",
     "landing.cost_row_1m": "$1M conversion",
     "landing.cost_row_1m_bank": "$13,000 fee",
-    "landing.cost_row_1m_meridian": "~$500 fee",
+    "landing.cost_row_1m_GetNear": "~$500 fee",
     "landing.cost_row_settlement": "Settlement",
     "landing.cost_row_settlement_bank": "1-2 business days",
-    "landing.cost_row_settlement_meridian": "Sub-second on Base",
+    "landing.cost_row_settlement_GetNear": "Sub-second on Base",
     "landing.cost_row_transparency": "Transparency",
     "landing.cost_row_transparency_bank": "Opaque markup",
-    "landing.cost_row_transparency_meridian": "Every tx on-chain",
+    "landing.cost_row_transparency_GetNear": "Every tx on-chain",
     "landing.cost_row_audit": "Audit trail",
     "landing.cost_row_audit_bank": "PDF statements",
-    "landing.cost_row_audit_meridian": "Arc L1 immutable log",
+    "landing.cost_row_audit_GetNear": "Arc L1 immutable log",
     "landing.cost_row_availability": "Availability",
     "landing.cost_row_availability_bank": "Banker hours only",
-    "landing.cost_row_availability_meridian": "24/7/365 autonomous",
+    "landing.cost_row_availability_GetNear": "24/7/365 autonomous",
     "landing.cost_saves_amount": "$12,500",
 
     // Landing — sponsors section
@@ -263,7 +263,7 @@ const translations: Record<Locale, Record<string, string>> = {
     // Landing — audit trail section
     "landing.audit_section": "Trust Architecture",
     "landing.audit_heading": "Every decision. Every swap. On-chain forever.",
-    "landing.audit_desc": "Meridian logs every rate check, decision rationale, swap execution, and settlement to Arc \u2014 Circle\u2019s stablecoin-native L1. Auditors, regulators, and your CFO see the same immutable record.",
+    "landing.audit_desc": "GetNear logs every rate check, decision rationale, swap execution, and settlement to Arc \u2014 Circle\u2019s stablecoin-native L1. Auditors, regulators, and your CFO see the same immutable record.",
     "landing.audit_terminal_title": "arc-explorer \u2014 treasury audit log",
 
     // Landing — footer links
@@ -369,7 +369,7 @@ const translations: Record<Locale, Record<string, string>> = {
 
   fr: {
     // Header
-    "header.title": "Meridian",
+    "header.title": "GetNear",
     "header.subtitle": "Trésorerie FX",
     "header.live": "En direct",
 
@@ -447,11 +447,11 @@ const translations: Record<Locale, Record<string, string>> = {
 
     // Savings Calculator
     "calc.title": "Calculez vos économies",
-    "calc.subtitle": "Découvrez combien votre organisation économise avec Meridian FX",
+    "calc.subtitle": "Découvrez combien votre organisation économise avec GetNear",
     "calc.annual_volume": "Volume FX annuel",
     "calc.bank_fee": "Frais FX bancaires actuels",
     "calc.traditional": "Banque traditionnelle",
-    "calc.meridian": "Meridian FX",
+    "calc.GetNear": "GetNear",
     "calc.annual_savings": "Économies annuelles",
     "calc.cost_reduction": "réduction des coûts",
     "calc.fee": "frais",
@@ -462,14 +462,14 @@ const translations: Record<Locale, Record<string, string>> = {
     "landing.hero_pre": "Agent de trésorerie autonome",
     "landing.hero_h1_1": "Gestion FX",
     "landing.hero_h1_2": "pour l'ère des stablecoins",
-    "landing.hero_desc": "Meridian surveille les taux USDC/EURC, exécute automatiquement les conversions optimales via Uniswap, et exige une approbation humaine vérifiée par World ID pour les transactions importantes. Entièrement autonome. Construit sur Chainlink CRE.",
+    "landing.hero_desc": "GetNear surveille les taux USDC/EURC, exécute automatiquement les conversions optimales via Uniswap, et exige une approbation humaine vérifiée par World ID pour les transactions importantes. Entièrement autonome. Construit sur Chainlink CRE.",
     "landing.btn_launch": "Lancer le tableau de bord",
     "landing.btn_source": "Voir le code source",
     "landing.stats_replaced": "remplacés annuellement",
     "landing.stats_fee": "frais de swap moyen",
     "landing.stats_operation": "opération",
     "landing.stats_settlement": "règlement",
-    "landing.how_title": "Comment fonctionne Meridian",
+    "landing.how_title": "Comment fonctionne GetNear",
     "landing.how_subtitle": "Quatre étapes autonomes. Zéro intervention humaine pour les transactions standard.",
     "landing.step_monitor": "Surveiller",
     "landing.step_decide": "Décider",
@@ -477,8 +477,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "landing.step_log": "Enregistrer",
     "landing.cost_title": "Comparaison des coûts",
     "landing.cost_headline": "Votre banque vous surfacture. Considérablement.",
-    "landing.cost_meridian_label": "Agent Meridian FX",
-    "landing.cost_saves_pre": "Sur une conversion de 1M$ USDC → EURC, Meridian économise",
+    "landing.cost_GetNear_label": "Agent GetNear",
+    "landing.cost_saves_pre": "Sur une conversion de 1M$ USDC → EURC, GetNear économise",
     "landing.cost_saves_post": "96% de réduction des coûts de conversion",
     "landing.cre_section": "Chainlink CRE",
     "landing.cre_title": "Regardez l'agent réfléchir",
@@ -488,7 +488,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "landing.audit_title": "Piste d'audit on-chain",
     "landing.audit_subtitle": "Chaque décision. Chaque transaction. Enregistrée de manière immuable sur Arc.",
     "landing.cta_1": "Arrêtez de payer les banques.",
-    "landing.cta_2": "Lancez Meridian.",
+    "landing.cta_2": "Lancez GetNear.",
     "landing.cta_desc": "Open source. Entièrement autonome. Conçu pour les trésoreries qui déplacent des millions en stablecoins.",
     "landing.footer_built": "Construit à",
     "landing.footer_by": "par",
@@ -502,7 +502,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "landing.stats_value_fees": "120 Md$",
     "landing.stats_label_fees": "Frais FX annuels remplacés",
     "landing.stats_value_fee": "~0,05 %",
-    "landing.stats_label_fee": "Frais de conversion Meridian",
+    "landing.stats_label_fee": "Frais de conversion GetNear",
     "landing.stats_value_ops": "24/7",
     "landing.stats_label_ops": "Fonctionnement autonome",
     "landing.stats_value_settle": "<1s",
@@ -511,10 +511,10 @@ const translations: Record<Locale, Record<string, string>> = {
     // Landing — architecture diagram
     "landing.arch_section": "Architecture du système",
     "landing.arch_title": "Comment l'agent analyse, décide et règle",
-    "landing.arch_flow_title": "MERIDIAN FX — FLUX SYSTÈME",
+    "landing.arch_flow_title": "GetNear — FLUX SYSTÈME",
     "landing.arch_cfo": "DAF / Ops Trésorerie",
     "landing.arch_sets_policy": "définit la politique",
-    "landing.arch_agent": "AGENT MERIDIAN",
+    "landing.arch_agent": "AGENT GetNear",
     "landing.arch_agent_sub": "Chainlink CRE \u00b7 Vérifié par consensus",
     "landing.arch_uniswap": "UNISWAP",
     "landing.arch_uniswap_desc": "Swap sur Base",
@@ -542,23 +542,23 @@ const translations: Record<Locale, Record<string, string>> = {
     "landing.cost_bank_label": "FX bancaire traditionnel",
     "landing.cost_bank_fee_pct": "1,3 %",
     "landing.cost_avg_fee_label": "frais moyen",
-    "landing.cost_meridian_badge": "Meridian",
-    "landing.cost_meridian_fee_pct": "~0,05 %",
+    "landing.cost_GetNear_badge": "GetNear",
+    "landing.cost_GetNear_fee_pct": "~0,05 %",
     "landing.cost_row_1m": "Conversion 1M$",
     "landing.cost_row_1m_bank": "13 000 $ de frais",
-    "landing.cost_row_1m_meridian": "~500 $ de frais",
+    "landing.cost_row_1m_GetNear": "~500 $ de frais",
     "landing.cost_row_settlement": "Règlement",
     "landing.cost_row_settlement_bank": "1-2 jours ouvrables",
-    "landing.cost_row_settlement_meridian": "Sub-seconde sur Base",
+    "landing.cost_row_settlement_GetNear": "Sub-seconde sur Base",
     "landing.cost_row_transparency": "Transparence",
     "landing.cost_row_transparency_bank": "Majoration opaque",
-    "landing.cost_row_transparency_meridian": "Chaque tx on-chain",
+    "landing.cost_row_transparency_GetNear": "Chaque tx on-chain",
     "landing.cost_row_audit": "Piste d'audit",
     "landing.cost_row_audit_bank": "Relevés PDF",
-    "landing.cost_row_audit_meridian": "Journal immuable Arc L1",
+    "landing.cost_row_audit_GetNear": "Journal immuable Arc L1",
     "landing.cost_row_availability": "Disponibilité",
     "landing.cost_row_availability_bank": "Heures bancaires uniquement",
-    "landing.cost_row_availability_meridian": "24/7/365 autonome",
+    "landing.cost_row_availability_GetNear": "24/7/365 autonome",
     "landing.cost_saves_amount": "12 500 $",
 
     // Landing — sponsors section
@@ -578,7 +578,7 @@ const translations: Record<Locale, Record<string, string>> = {
     // Landing — audit trail section
     "landing.audit_section": "Architecture de confiance",
     "landing.audit_heading": "Chaque décision. Chaque swap. On-chain pour toujours.",
-    "landing.audit_desc": "Meridian enregistre chaque vérification de taux, chaque justification de décision, chaque exécution de swap et chaque règlement sur Arc — le L1 natif stablecoin de Circle. Auditeurs, régulateurs et votre DAF voient le même registre immuable.",
+    "landing.audit_desc": "GetNear enregistre chaque vérification de taux, chaque justification de décision, chaque exécution de swap et chaque règlement sur Arc — le L1 natif stablecoin de Circle. Auditeurs, régulateurs et votre DAF voient le même registre immuable.",
     "landing.audit_terminal_title": "arc-explorer — journal d'audit trésorerie",
 
     // Landing — footer links

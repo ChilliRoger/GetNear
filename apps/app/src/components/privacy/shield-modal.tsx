@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { parseUnits } from "viem";
-import { SEPOLIA_TOKEN_META } from "@meridian/shared";
-import type { SepoliaToken } from "@meridian/shared";
+import { SEPOLIA_TOKEN_META } from "@getnear/shared";
+import type { SepoliaToken } from "@getnear/shared";
 
 interface ShieldModalProps {
   token: string;

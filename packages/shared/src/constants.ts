@@ -1,4 +1,4 @@
-export const DISPLAY_MULTIPLIER = 1_000_000
+export const DISPLAY_MULTIPLIER = 1
 
 export function formatDisplayAmount(rawAmount: bigint, currency = 'USD'): string {
   const realUsd = Number(rawAmount) / 1e6

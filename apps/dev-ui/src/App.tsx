@@ -3,7 +3,7 @@ import PricesPage from './PricesPage'
 import DepthPage from './DepthPage'
 import BookDepthPage from './BookDepthPage'
 import OraclePage from './oracle/OraclePage'
-import { MeridianLogo } from './MeridianLogo'
+import { GetNearLogo } from './GetNearLogo'
 
 type Tab = 'quote' | 'prices' | 'depth' | 'book' | 'oracle' | 'logo'
 
@@ -258,7 +258,7 @@ function App() {
     <div className={`mx-auto px-4 min-h-dvh flex flex-col ${tab === 'oracle' ? 'max-w-5xl' : 'max-w-[480px]'}`}>
       <header className="flex items-center justify-between py-3 border-b border-border mb-4">
         <h1 className="text-xl font-bold flex items-center gap-2">
-          <MeridianLogo size={32} cropped color="#4a9eff" />
+          <GetNearLogo size={32} cropped color="#4a9eff" />
           <span className="text-[#4a9eff]">MFX</span> Dev
         </h1>
         <HealthIndicator health={health} />
@@ -374,22 +374,22 @@ function App() {
           <div className="bg-surface border border-border rounded-xl p-4">
             <div className="text-xs uppercase tracking-wide text-muted mb-3">Full (default 320px)</div>
             <div className="flex justify-center">
-              <MeridianLogo />
+              <GetNearLogo />
             </div>
           </div>
           <div className="bg-surface border border-border rounded-xl p-4">
             <div className="text-xs uppercase tracking-wide text-muted mb-3">Large Text (40px — landing nav)</div>
             <div className="flex items-center gap-3 bg-[#0d1116] rounded-lg p-3">
-              <MeridianLogo size={40} largeText />
-              <span className="text-sm font-semibold">Meridian <span className="text-[#00d4aa]/60 text-[10px] uppercase tracking-[0.2em]">FX</span></span>
+              <GetNearLogo size={40} largeText />
+              <span className="text-sm font-semibold">GetNear <span className="text-[#00d4aa]/60 text-[10px] uppercase tracking-[0.2em]">FX</span></span>
             </div>
           </div>
           <div className="bg-surface border border-border rounded-xl p-4">
             <div className="text-xs uppercase tracking-wide text-muted mb-3">Cropped (36px — app header)</div>
             <div className="flex items-center gap-2.5 bg-[#0d1116] rounded-lg p-3">
-              <MeridianLogo size={36} cropped />
+              <GetNearLogo size={36} cropped />
               <div>
-                <div className="text-base font-semibold tracking-tight">Meridian FX</div>
+                <div className="text-base font-semibold tracking-tight">GetNear</div>
                 <div className="text-[10px] uppercase tracking-widest text-muted">AI Treasury Agent</div>
               </div>
             </div>
@@ -397,16 +397,16 @@ function App() {
           <div className="bg-surface border border-border rounded-xl p-4">
             <div className="text-xs uppercase tracking-wide text-muted mb-3">Cropped sizes: 24 / 36 / 48 / 64</div>
             <div className="flex items-center gap-4 bg-[#0d1116] rounded-lg p-4">
-              <MeridianLogo size={24} cropped />
-              <MeridianLogo size={36} cropped />
-              <MeridianLogo size={48} cropped />
-              <MeridianLogo size={64} cropped />
+              <GetNearLogo size={24} cropped />
+              <GetNearLogo size={36} cropped />
+              <GetNearLogo size={48} cropped />
+              <GetNearLogo size={64} cropped />
             </div>
           </div>
           <div className="bg-surface border border-border rounded-xl p-4">
             <div className="text-xs uppercase tracking-wide text-muted mb-3">With Background (app icon)</div>
             <div className="flex justify-center">
-              <MeridianLogo size={160} withBackground />
+              <GetNearLogo size={160} withBackground />
             </div>
           </div>
         </div>

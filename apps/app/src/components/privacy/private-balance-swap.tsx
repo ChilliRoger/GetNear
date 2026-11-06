@@ -7,8 +7,8 @@ import { useShieldedBalances } from "@/lib/privacy-hooks";
 import type {
   SwapEstimateResponse,
   PrivateSwapResponse,
-} from "@meridian/shared";
-import { SEPOLIA_TOKEN_META } from "@meridian/shared";
+} from "@getnear/shared";
+import { SEPOLIA_TOKEN_META } from "@getnear/shared";
 import { formatUnits } from "viem";
 
 type StepStatus = "pending" | "in-progress" | "success" | "failed";

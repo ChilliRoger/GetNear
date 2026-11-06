@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card } from "@/components/card";
 import { useShieldHistory } from "@/lib/privacy-hooks";
-import type { ShieldTransaction } from "@meridian/shared";
+import type { ShieldTransaction } from "@getnear/shared";
 
 function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse rounded bg-border ${className}`} />;

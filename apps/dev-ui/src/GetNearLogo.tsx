@@ -1,9 +1,7 @@
-"use client";
-
 import { useEffect, useRef, useCallback } from "react";
 import { geoOrthographic, geoPath, geoGraticule } from "d3-geo";
 
-interface MeridianLogoProps {
+interface GetNearLogoProps {
   /** Width & height in px (square). Default 320. */
   size?: number;
   /** Rotation speed in degrees/frame. Default 0.3. */
@@ -20,7 +18,7 @@ interface MeridianLogoProps {
   className?: string;
 }
 
-export function MeridianLogo({
+export function GetNearLogo({
   size = 320,
   speed = 0.3,
   withBackground = false,
@@ -28,7 +26,7 @@ export function MeridianLogo({
   cropped = false,
   color = "#00d4aa",
   className = "",
-}: MeridianLogoProps) {
+}: GetNearLogoProps) {
   const graticuleRef = useRef<SVGPathElement>(null);
   const rotationRef = useRef(0);
   const rafRef = useRef<number>(0);
@@ -36,9 +34,9 @@ export function MeridianLogo({
   // In cropped mode, the globe is rendered at 2x then we show the top-left quarter
   const globeSize = cropped ? size * 2 : size;
   const scale = (globeSize / 320) * 120;
-  const center: [number, number] = [globeSize / 2, globeSize / 2];
-  const cx = center[0];
-  const cy = center[1];
+  const cx = globeSize / 2;
+  const cy = globeSize / 2;
+  const center: [number, number] = [cx, cy];
 
   const animate = useCallback(() => {
     const el = graticuleRef.current;
@@ -116,7 +114,7 @@ export function MeridianLogo({
         opacity={0.85}
       />
 
-      {/* MERIDIAN — hidden in largeText/cropped modes */}
+      {/* GetNear — hidden in largeText/cropped modes */}
       {!largeText && !cropped && (
         <text
           x={globeSize / 2}
@@ -133,7 +131,7 @@ export function MeridianLogo({
           textLength={100 * gs}
           lengthAdjust="spacing"
         >
-          MERIDIAN
+          GetNear
         </text>
       )}
 

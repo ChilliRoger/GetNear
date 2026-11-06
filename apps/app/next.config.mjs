@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ["@meridian/shared"],
+  transpilePackages: ["@getnear/shared"],
 };
 
 export default nextConfig;

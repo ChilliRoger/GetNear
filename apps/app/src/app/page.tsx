@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { MeridianLogo } from "@/components/meridian-logo";
+import { GetNearLogo } from "@/components/getnear-logo";
 import { SavingsCalculator } from "@/components/savings-calculator";
 import { TerminalReplay } from "@/components/terminal-replay";
 import { LanguageToggle } from "@/components/language-toggle";
@@ -54,10 +54,10 @@ export default function LandingPage() {
       <nav className="relative z-10 border-b border-white/[0.04]">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
           <div className="flex items-center gap-3">
-            <MeridianLogo size={36} cropped />
+            <GetNearLogo size={36} cropped />
             <div>
               <span className="text-sm font-semibold tracking-tight">
-                Meridian
+                GetNear
               </span>
               <span className="ml-1.5 text-[11px] font-medium uppercase tracking-[0.2em] text-[#00d4aa]/60">
                 FX
@@ -71,7 +71,7 @@ export default function LandingPage() {
             </span>
             <LanguageToggle />
             <a
-              href="https://dev.omnipass.world"
+              href="https://"
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-lg bg-white/5 px-4 py-2.5 text-xs font-medium text-white/70 ring-1 ring-inset ring-white/10 transition-all hover:bg-white/10 hover:text-white/90 hover:ring-white/20 min-h-[44px] flex items-center"
@@ -139,7 +139,7 @@ export default function LandingPage() {
               </svg>
             </Link>
             <a
-              href="https://github.com/meridian-fx/meridian-fx"
+              href="https://github.com/getnear/getnear"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 rounded-xl px-5 py-3.5 text-sm font-medium text-muted ring-1 ring-inset ring-white/10 transition-colors hover:bg-white/[0.03] hover:text-foreground"
@@ -228,7 +228,7 @@ export default function LandingPage() {
                 {"           ▼"}
               </div>
 
-              {/* Meridian Agent */}
+              {/* GetNear Agent */}
               <div className="my-2 flex items-center justify-center">
                 <span className="rounded-lg border border-[#00d4aa]/30 bg-[#00d4aa]/[0.06] px-5 py-2.5 text-center shadow-[0_0_20px_rgba(0,212,170,0.08)]">
                   <span className="font-bold text-[#00d4aa]">
@@ -404,26 +404,26 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Meridian column */}
+            {/* GetNear column */}
             <div className="relative rounded-2xl border border-[#00d4aa]/20 bg-[#00d4aa]/[0.02] p-8 shadow-[0_0_40px_rgba(0,212,170,0.04)]">
               <div className="absolute right-4 top-4 rounded-full bg-[#00d4aa]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#00d4aa]">
-                {t("landing.cost_meridian_badge")}
+                {t("landing.cost_GetNear_badge")}
               </div>
               <div className="mb-1 text-sm font-medium text-muted">
-                {t("landing.cost_meridian_label")}
+                {t("landing.cost_GetNear_label")}
               </div>
               <div className="mb-6 font-[family-name:var(--font-geist-mono)] text-4xl font-bold tracking-tight text-[#00d4aa] sm:text-5xl">
-                {t("landing.cost_meridian_fee_pct")}
+                {t("landing.cost_GetNear_fee_pct")}
                 <span className="ml-1 text-base font-normal text-[#00d4aa]/50">
                   {t("landing.cost_avg_fee_label")}
                 </span>
               </div>
               <div className="space-y-3 border-t border-[#00d4aa]/10 pt-6">
-                <ComparisonRow label={t("landing.cost_row_1m")} value={t("landing.cost_row_1m_meridian")} positive />
-                <ComparisonRow label={t("landing.cost_row_settlement")} value={t("landing.cost_row_settlement_meridian")} positive />
-                <ComparisonRow label={t("landing.cost_row_transparency")} value={t("landing.cost_row_transparency_meridian")} positive />
-                <ComparisonRow label={t("landing.cost_row_audit")} value={t("landing.cost_row_audit_meridian")} positive />
-                <ComparisonRow label={t("landing.cost_row_availability")} value={t("landing.cost_row_availability_meridian")} positive />
+                <ComparisonRow label={t("landing.cost_row_1m")} value={t("landing.cost_row_1m_GetNear")} positive />
+                <ComparisonRow label={t("landing.cost_row_settlement")} value={t("landing.cost_row_settlement_GetNear")} positive />
+                <ComparisonRow label={t("landing.cost_row_transparency")} value={t("landing.cost_row_transparency_GetNear")} positive />
+                <ComparisonRow label={t("landing.cost_row_audit")} value={t("landing.cost_row_audit_GetNear")} positive />
+                <ComparisonRow label={t("landing.cost_row_availability")} value={t("landing.cost_row_availability_GetNear")} positive />
               </div>
             </div>
           </div>
@@ -640,7 +640,7 @@ export default function LandingPage() {
                 M
               </div>
               <span className="text-xs font-medium text-muted/60">
-                Meridian FX
+                GetNear
               </span>
             </div>
             <div className="text-center text-xs text-muted/80">
@@ -649,7 +649,7 @@ export default function LandingPage() {
                 ETHGlobal Cannes 2026
               </span>{" "}
               {t("landing.footer_by")}{" "}
-              <span className="font-medium text-muted/80">Team Ippo</span>
+              <span className="font-medium text-muted/80"></span>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-muted/70">
               <span>Chainlink CRE</span>
@@ -664,7 +664,7 @@ export default function LandingPage() {
             </div>
             <div className="mt-2 flex items-center justify-center gap-4">
               <a
-                href="https://github.com/meridian-fx/meridian-fx"
+                href="https://github.com/getnear/getnear"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs text-muted hover:text-accent-blue transition-colors"
@@ -672,7 +672,7 @@ export default function LandingPage() {
                 {t("landing.footer_view_source")}
               </a>
               <a
-                href="https://dev.omnipass.world"
+                href="https://"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs text-muted hover:text-accent-blue transition-colors"

@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { DISPLAY_MULTIPLIER } from "@meridian/shared";
+import { DISPLAY_MULTIPLIER } from "@getnear/shared";
 import { useI18n } from "@/lib/i18n";
 
 const BANK_FEE_DEFAULT = 1.3;
-const MERIDIAN_FEE = 0.05;
+const GetNear_FEE = 0.05;
 
 export function SavingsCalculator() {
   const [volume, setVolume] = useState(50); // millions display
@@ -13,9 +13,9 @@ export function SavingsCalculator() {
   const { t } = useI18n();
 
   const bankCost = volume * DISPLAY_MULTIPLIER * (bankFee / 100);
-  const meridianCost = volume * DISPLAY_MULTIPLIER * (MERIDIAN_FEE / 100);
-  const savings = bankCost - meridianCost;
-  const savingsPct = ((bankFee - MERIDIAN_FEE) / bankFee) * 100;
+  const GetNearCost = volume * DISPLAY_MULTIPLIER * (GetNear_FEE / 100);
+  const savings = bankCost - GetNearCost;
+  const savingsPct = ((bankFee - GetNear_FEE) / bankFee) * 100;
 
   const fmt = (n: number) =>
     n.toLocaleString("en-US", {
@@ -97,12 +97,12 @@ export function SavingsCalculator() {
         <div className="flex items-center justify-between rounded-lg bg-[#0a0a0a] px-4 py-3">
           <div>
             <div className="text-[11px] font-medium uppercase tracking-wide text-[#a3a3a3]">
-              {t("calc.meridian")}
+              {t("calc.GetNear")}
             </div>
-            <div className="text-xs text-[#a3a3a3]/80">~{MERIDIAN_FEE}% {t("calc.fee")}</div>
+            <div className="text-xs text-[#a3a3a3]/80">~{GetNear_FEE}% {t("calc.fee")}</div>
           </div>
           <div className="font-mono text-sm font-semibold text-[#22c55e]">
-            {fmt(meridianCost)}{t("calc.per_yr")}
+            {fmt(GetNearCost)}{t("calc.per_yr")}
           </div>
         </div>
 

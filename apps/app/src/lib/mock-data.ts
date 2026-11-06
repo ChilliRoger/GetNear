@@ -1,4 +1,4 @@
-import type { ExecutionReceipt, PendingTrade, QuoteSnapshot } from "@meridian/shared";
+import type { ExecutionReceipt, PendingTrade, QuoteSnapshot } from "@getnear/shared";
 
 // ── Balances ──────────────────────────────────────────────────────────
 // Raw amounts are 6-decimal USDC/EURC values.

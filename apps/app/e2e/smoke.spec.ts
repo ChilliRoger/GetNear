@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("Smoke tests — every page loads without crash", () => {
   test("landing page renders", async ({ page }) => {
     await page.goto("/");
-    await expect(page).toHaveTitle(/Meridian/);
+    await expect(page).toHaveTitle(/GetNear/);
     // The landing page has a "Launch App" link pointing to /dashboard
     await expect(page.locator('a[href="/dashboard"]').first()).toBeVisible({
       timeout: 10_000,

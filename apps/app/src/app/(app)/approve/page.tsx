@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card } from "@/components/card";
 import { useToast } from "@/components/toast-provider";
 import { usePendingTrades } from "@/lib/hooks";
-import { formatDisplayAmount } from "@meridian/shared";
+import { formatDisplayAmount } from "@getnear/shared";
 import { formatBps } from "@/lib/format";
 import { SAVINGS_BPS } from "@/lib/constants";
 import { useI18n } from "@/lib/i18n";

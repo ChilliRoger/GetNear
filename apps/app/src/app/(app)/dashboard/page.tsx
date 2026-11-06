@@ -9,7 +9,7 @@ import { ShieldModal } from "@/components/privacy/shield-modal";
 import { ShieldHistory } from "@/components/privacy/shield-history";
 import { useBalances, usePolicy, useTreasuryBalances } from "@/lib/hooks";
 import { usePublicBalances } from "@/lib/privacy-hooks";
-import { formatDisplayAmount } from "@meridian/shared";
+import { formatDisplayAmount } from "@getnear/shared";
 import { formatDisplayAmountFromString, formatBps } from "@/lib/format";
 import { SAVINGS_BPS } from "@/lib/constants";
 import { useI18n } from "@/lib/i18n";
@@ -736,7 +736,7 @@ function PriceComparisonWidget({
           {/* Oracle dashboard link */}
           <div className="mt-3 text-center">
             <a
-              href="https://dev.omnipass.world"
+              href="https://"
               target="_blank"
               rel="noopener noreferrer"
               className="text-[11px] text-muted hover:text-accent-blue transition-colors"

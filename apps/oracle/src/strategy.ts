@@ -1,5 +1,5 @@
 /**
- * Timing Score Calculator for Meridian FX Oracle
+ * Timing Score Calculator for GetNear Oracle
  *
  * Computes a 0-100 score indicating how favorable the current moment is
  * for executing a swap chunk.  Three weighted factors:
