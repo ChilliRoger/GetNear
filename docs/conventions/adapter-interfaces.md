@@ -1,6 +1,6 @@
 # Adapter Interfaces
 
-The adapter pattern is how Meridian handles risky external dependencies. Every integration with an uncertain API, SDK, or chain uses this pattern so primary and fallback implementations can be swapped with zero consuming-code changes.
+The adapter pattern is how GetNear handles risky external dependencies. Every integration with an uncertain API, SDK, or chain uses this pattern so primary and fallback implementations can be swapped with zero consuming-code changes.
 
 ---
 
@@ -46,7 +46,7 @@ Swap the address at deploy time to switch implementations.
 
 ---
 
-## Where Boundaries Exist in Meridian
+## Where Boundaries Exist in GetNear
 
 ### 1. Quote Source: Fynd vs Uniswap API
 
@@ -90,7 +90,7 @@ Swap the address at deploy time to switch implementations.
 
 ## Rules for Adding New Adapters
 
-1. Define the interface in `@meridian/shared` if both TypeScript tracks use it
+1. Define the interface in `@getnear/shared` if both TypeScript tracks use it
 2. Define it locally if only one track uses it
 3. Always create a stub that returns realistic mock data
 4. The stub must match the primary implementation's output shape exactly

@@ -1,6 +1,6 @@
 # Sponsor Feedback — ETHGlobal Cannes 2026
 
-Team Ippo / Meridian FX — Autonomous Treasury FX Agent
+ / GetNear — Autonomous Treasury FX Agent
 
 We built a multi-sponsor integration (Chainlink CRE + Uniswap V3 + Arc + World ID + Unlink) and want to share honest developer feedback for each sponsor's tools. We hope this helps improve the hackathon experience for future builders.
 
@@ -178,4 +178,4 @@ We built a multi-sponsor integration (Chainlink CRE + Uniswap V3 + Arc + World I
 
 ---
 
-*Generated during ETHGlobal Cannes 2026 by Team Ippo (Meridian FX). We're happy to discuss any of these points in detail.*
+*Generated during ETHGlobal Cannes 2026 by  (GetNear). We're happy to discuss any of these points in detail.*

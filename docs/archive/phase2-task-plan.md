@@ -15,7 +15,7 @@
 
 All other work depends on these. Must complete first.
 
-- **0.1** Add shared types to @meridian/shared (TradeOrder, StrategyResponse, PriceComparison, CRERun, DemoSpeed)
+- **0.1** Add shared types to @getnear/shared (TradeOrder, StrategyResponse, PriceComparison, CRERun, DemoSpeed)
 - **0.2** Modify SwapExecutor.withdraw() to allow CRE + redeploy to Base
 - **0.3** Update constants.ts + config.json with new SwapExecutor address
 - **0.4** Create Oracle SQLite migrations (trade_orders, cre_runs tables)

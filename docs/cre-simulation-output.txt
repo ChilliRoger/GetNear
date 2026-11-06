@@ -11,7 +11,7 @@ Compiling workflow...
 
 2026-04-03T23:36:52Z [SIMULATION] Running trigger trigger=cron-trigger@1.0.0
 2026-04-03T23:36:52Z [USER LOG] Running CronTrigger
-2026-04-03T23:36:52Z [USER LOG] === Meridian Treasury Workflow Start ===
+2026-04-03T23:36:52Z [USER LOG] === GetNear Treasury Workflow Start ===
 2026-04-03T23:36:52Z [USER LOG] Fetching quote from https://trade-api.gateway.uniswap.org/v1/quote
 2026-04-03T23:36:52Z [USER LOG] Quote: rate=868189600000000000 input=5000000 output=4340948
 2026-04-03T23:36:52Z [USER LOG] Reading policy from TreasuryVault on Arc

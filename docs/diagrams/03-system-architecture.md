@@ -6,13 +6,13 @@ The full system map showing all components and their connections.
 
 ```
   ┌──────────────────────────────────────────────────────────────────────────────────────────┐
-  │                              MERIDIAN FX SYSTEM ARCHITECTURE                              │
+  │                              GetNear SYSTEM ARCHITECTURE                              │
   └──────────────────────────────────────────────────────────────────────────────────────────┘
 
   ┌─────────────────────────┐              ┌─────────────────────────┐
   │  World Mini App         │              │  Dev-UI Dashboard       │
   │  (Next.js)              │              │  (Vite + React)         │
-  │  meridian.omnipass.world│              │  dev.omnipass.world     │
+  │  github.com/ChilliRoger/GetNear│              │       │
   │                         │              │                         │
   │  - Trade form + preview │              │  - Oracle readings live │
   │  - INPUT / OUTPUT mode  │              │  - CRE run history      │
@@ -135,8 +135,8 @@ The full system map showing all components and their connections.
 ```mermaid
 graph TB
     subgraph Frontend ["User-Facing Apps"]
-        App["World Mini App<br/>(Next.js)<br/>meridian.omnipass.world<br/><br/>Privacy tabs: Public / Private<br/>Toast notification system<br/>INPUT + OUTPUT mode"]
-        DevUI["Dev-UI Dashboard<br/>(Vite + React)<br/>dev.omnipass.world"]
+        App["World Mini App<br/>(Next.js)<br/>github.com/ChilliRoger/GetNear<br/><br/>Privacy tabs: Public / Private<br/>Toast notification system<br/>INPUT + OUTPUT mode"]
+        DevUI["Dev-UI Dashboard<br/>(Vite + React)<br/>"]
     end
 
     subgraph OracleBox ["Oracle Server (Brain) -- Hono + SQLite, port 38174"]

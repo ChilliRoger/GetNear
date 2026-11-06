@@ -1,4 +1,4 @@
-# Meridian FX — Privacy for Treasury FX
+# GetNear — Privacy for Treasury FX
 
 ## Why Privacy Matters
 
@@ -8,9 +8,9 @@ When a treasury wallet converts $50M/year in USDC to EURC through Uniswap, that 
 
 For a CFO moving millions in stablecoins, this is the equivalent of broadcasting every wire transfer on a public billboard. No traditional bank would operate this way — and neither should on-chain treasury operations.
 
-## What Meridian Does
+## What GetNear Does
 
-Meridian FX integrates the [Unlink SDK](https://www.unlink.xyz/) to give treasuries **selective privacy** for on-chain swaps. The Unlink protocol wraps swap execution so that the treasury's identity is dissociated from the trade — the swap still happens on-chain, transparently, but nobody can link it back to the treasury wallet.
+GetNear integrates the [Unlink SDK](https://www.unlink.xyz/) to give treasuries **selective privacy** for on-chain swaps. The Unlink protocol wraps swap execution so that the treasury's identity is dissociated from the trade — the swap still happens on-chain, transparently, but nobody can link it back to the treasury wallet.
 
 This is not about hiding transactions. It is about hiding **who** is behind them.
 
@@ -41,7 +41,7 @@ This design is intentional. Amounts, tokens, and the target DEX remain visible �
 - **SDK**: `@unlink-xyz/sdk` (`0.0.2-canary.0`)
 - **Network**: Base Sepolia (chain 84532, production-path ready)
 - **Pool address**: `0x647f...0482`
-- **Privacy sidecar**: Runs alongside the Meridian oracle server, proxied through the app's API routes
+- **Privacy sidecar**: Runs alongside the GetNear oracle server, proxied through the app's API routes
 - **Frontend**: Dedicated "Private Treasury" tab with deposit/execute/withdraw progress tracking
 
 ## On-Chain Proof (Base Sepolia)
@@ -79,7 +79,7 @@ Consider a corporate treasury doing $50M/year in USDC-to-EURC conversions. Witho
 
 Competitors and MEV operators aggregate this data to front-run trades, copy strategy, or extract value. With Unlink, those same observers see swaps flowing through the privacy pool — they know *a swap happened*, but they cannot identify *who* is behind it.
 
-The treasury retains full auditability through Meridian's on-chain audit trail on Arc. Internal compliance sees everything. External observers see the trade, but not the trader.
+The treasury retains full auditability through GetNear's on-chain audit trail on Arc. Internal compliance sees everything. External observers see the trade, but not the trader.
 
 ---
 

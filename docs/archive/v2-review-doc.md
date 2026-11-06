@@ -1,4 +1,4 @@
-# Meridian FX v2 Review
+# GetNear v2 Review
 
 Consolidated code review built from a three-wave sub-agent pass plus local validation across contracts, shared types/constants, the app, the dev UI, the oracle server, and the treasury CRE workflow.
 
@@ -12,7 +12,7 @@ In scope:
 - `apps/app/src`
 - `apps/dev-ui/src`
 - `apps/oracle/src`
-- `meridian-cre/treasury`
+- `GetNear-cre/treasury`
 
 Context only:
 - `AGENTS.md`
@@ -22,7 +22,7 @@ Context only:
 Excluded unless directly implicated:
 - `contracts/lib`, `contracts/out`, `contracts/broadcast`, `contracts/cache`
 - `node_modules`, `.next`, `dist`
-- `meridian-cre/nav`, `meridian-cre/por`, generated ABI/code, `binary.wasm`
+- `GetNear-cre/nav`, `GetNear-cre/por`, generated ABI/code, `binary.wasm`
 - secret and env files
 
 ## Baseline Validation Results
@@ -33,7 +33,7 @@ Excluded unless directly implicated:
 - `pnpm lint`
   - Fails in `apps/dev-ui`
   - Also warns that workspace `apps/privacy` is not yet represented in the lockfile
-  - Confirmed hook/type errors in `apps/dev-ui/src/MeridianLogo.tsx` and `apps/dev-ui/src/oracle/CRERunHistory.tsx`
+  - Confirmed hook/type errors in `apps/dev-ui/src/GetNearLogo.tsx` and `apps/dev-ui/src/oracle/CRERunHistory.tsx`
 - `pnpm build`
   - Root build fails because `apps/dev-ui` does not typecheck
   - Current failure set also includes `apps/dev-ui/src/oracle/StrategyDecisionLog.tsx` importing a missing `StrategyDecision` type
@@ -41,11 +41,11 @@ Excluded unless directly implicated:
   - Succeeds, but only meaningfully exercises `packages/shared`
 - `~/.foundry/bin/forge build`
   - Succeeds
-- `cd meridian-cre/treasury && pnpm run typecheck`
+- `cd GetNear-cre/treasury && pnpm run typecheck`
   - Succeeds
 - `cd apps/app && pnpm build`
   - Passed on rerun
-  - Leaves React hook warnings in `apps/app/src/components/meridian-logo.tsx`
+  - Leaves React hook warnings in `apps/app/src/components/getnear-logo.tsx`
 
 ## Must Fix
 
@@ -62,7 +62,7 @@ Excluded unless directly implicated:
   - `contracts/src/SwapExecutor.sol:100`
   - `packages/shared/src/constants.ts:46`
 - Issue:
-  - `TreasuryVault` uses `MIN_TRADE_AMOUNT = 1`, while `SwapExecutor` and `@meridian/shared` use `1_000_000`.
+  - `TreasuryVault` uses `MIN_TRADE_AMOUNT = 1`, while `SwapExecutor` and `@getnear/shared` use `1_000_000`.
   - Arc policy and pending-trade flows can accept sub-$1 amounts that the Base executor will later reject.
 - Why it matters:
   - This breaks a documented repo-wide invariant and can strand trades between approval and execution.
@@ -74,11 +74,11 @@ Excluded unless directly implicated:
 - Subsystem: treasury workflow
 - Source: Wave 1 shared/CRE review, local validation
 - Files:
-  - `meridian-cre/treasury/config.json:14`
-  - `meridian-cre/treasury/workflow.ts:662`
-  - `meridian-cre/treasury/workflow.ts:710`
-  - `meridian-cre/treasury/workflow.ts:725`
-  - `meridian-cre/treasury/workflow.ts:888`
+  - `GetNear-cre/treasury/config.json:14`
+  - `GetNear-cre/treasury/workflow.ts:662`
+  - `GetNear-cre/treasury/workflow.ts:710`
+  - `GetNear-cre/treasury/workflow.ts:725`
+  - `GetNear-cre/treasury/workflow.ts:888`
 - Issue:
   - Because `oracleApiUrl` is configured, the workflow uses `doTreasuryOracle()`.
   - That path never reads Arc policy, never checks the target rate band, never enforces the documented 0.1% Chainlink-vs-quote sanity check, and never distinguishes auto-execute from approval-required trades before executing on Base.
@@ -97,7 +97,7 @@ Excluded unless directly implicated:
   - `apps/app/src/app/(app)/approve/page.tsx:41`
   - `apps/oracle/src/index.ts:565`
   - `apps/oracle/src/index.ts:570`
-  - `meridian-cre/treasury/workflow.ts:624`
+  - `GetNear-cre/treasury/workflow.ts:624`
 - Issue:
   - The approve page only calls `/api/verify-worldid` and sets local UI state.
   - It never calls an approval endpoint and never confirms approval on Arc.
@@ -146,11 +146,11 @@ Excluded unless directly implicated:
 - Subsystem: treasury workflow, oracle
 - Source: Wave 1 shared/CRE review, local validation
 - Files:
-  - `meridian-cre/treasury/workflow.ts:727`
-  - `meridian-cre/treasury/workflow.ts:753`
-  - `meridian-cre/treasury/workflow.ts:759`
-  - `meridian-cre/treasury/workflow.ts:826`
-  - `meridian-cre/treasury/workflow.ts:843`
+  - `GetNear-cre/treasury/workflow.ts:727`
+  - `GetNear-cre/treasury/workflow.ts:753`
+  - `GetNear-cre/treasury/workflow.ts:759`
+  - `GetNear-cre/treasury/workflow.ts:826`
+  - `GetNear-cre/treasury/workflow.ts:843`
 - Issue:
   - After swap success, oracle mode writes `minOutput` to Arc and to `/api/trades/:id/fill`.
   - It also records `exchangeRate` as `0n`.
@@ -221,8 +221,8 @@ Excluded unless directly implicated:
 - Subsystem: dev-ui
 - Source: local validation
 - Files:
-  - `apps/dev-ui/src/MeridianLogo.tsx:39`
-  - `apps/dev-ui/src/MeridianLogo.tsx:56`
+  - `apps/dev-ui/src/GetNearLogo.tsx:39`
+  - `apps/dev-ui/src/GetNearLogo.tsx:56`
   - `apps/dev-ui/src/oracle/CRERunHistory.tsx:55`
   - `apps/dev-ui/src/App.tsx:225`
   - `apps/dev-ui/src/BookDepthPage.tsx:263`
@@ -237,7 +237,7 @@ Excluded unless directly implicated:
 - Why it matters:
   - The repo’s root build/lint health is currently red.
 - Recommended action:
-  - Fix the broken state typing in `App.tsx`, the hook ordering in `CRERunHistory.tsx`, the animation callback issue in `MeridianLogo.tsx`, and the incorrect Recharts callback signatures.
+  - Fix the broken state typing in `App.tsx`, the hook ordering in `CRERunHistory.tsx`, the animation callback issue in `GetNearLogo.tsx`, and the incorrect Recharts callback signatures.
 
 ## Should Fix
 
@@ -299,9 +299,9 @@ Excluded unless directly implicated:
 - Subsystem: treasury workflow
 - Source: Wave 1 shared/CRE review
 - Files:
-  - `meridian-cre/treasury/workflow.ts:824`
-  - `meridian-cre/treasury/workflow.ts:831`
-  - `meridian-cre/treasury/workflow.ts:848`
+  - `GetNear-cre/treasury/workflow.ts:824`
+  - `GetNear-cre/treasury/workflow.ts:831`
+  - `GetNear-cre/treasury/workflow.ts:848`
 - Issue:
   - The workflow ignores the status codes from both `/api/trades/:id/fill` and `/api/cre/runs`.
 - Why it matters:
@@ -332,8 +332,8 @@ Excluded unless directly implicated:
 - Subsystem: treasury workflow
 - Source: prior review context, local validation
 - Files:
-  - `meridian-cre/treasury/workflow.ts:39`
-  - `meridian-cre/treasury/config.json:11`
+  - `GetNear-cre/treasury/workflow.ts:39`
+  - `GetNear-cre/treasury/config.json:11`
 - Issue:
   - `poolFee` is part of the config contract but is never read.
 - Why it matters:
@@ -358,7 +358,7 @@ Excluded unless directly implicated:
 - Why it matters:
   - This invites silent drift, but it is secondary to the live approval and policy issues above.
 - Recommended action:
-  - Move canonical treasury addresses and chain config into `@meridian/shared`.
+  - Move canonical treasury addresses and chain config into `@getnear/shared`.
 - Issue-ready stub:
   - Title: `Move app chain and treasury config into shared constants`
   - Owner: app/shared
@@ -372,7 +372,7 @@ Excluded unless directly implicated:
   - `apps/dev-ui/src/oracle/types.ts`
   - `apps/app/src/app/(app)/trade/page.tsx`
   - `apps/oracle/src/index.ts`
-  - `meridian-cre/treasury/workflow.ts`
+  - `GetNear-cre/treasury/workflow.ts`
 - Issue:
   - The current repo has multiple hand-written DTO layers for the same oracle endpoints.
 - Why it matters:

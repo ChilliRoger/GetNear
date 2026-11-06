@@ -78,7 +78,7 @@ PRs #43–46 had automated triage comments posted by `claude-do` and received ta
 
 | # | File | Severity | Status | Detail |
 |---|------|----------|--------|--------|
-| 1 | `meridian-logo.tsx` L41 | LOW | **MISSED** | Array destructuring suggestion for center coordinates — cosmetic only |
+| 1 | `getnear-logo.tsx` L41 | LOW | **MISSED** | Array destructuring suggestion for center coordinates — cosmetic only |
 
 ### PR #51 — `fix: demo-critical polish` (9 comments, 2 review rounds)
 

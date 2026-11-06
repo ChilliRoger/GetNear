@@ -1,4 +1,4 @@
-# Meridian FX — Demo Video Script v2 (4 Minutes)
+# GetNear — Demo Video Script v2 (4 Minutes)
 
 > **Format:** Creatively edited demo video, 4 minutes  
 > **Target tracks:** Unlink ($3K Best Private App + $1K Most Creative Privacy), Uniswap ($10K Best API Integration), Chainlink CRE ($4K Best Workflow)  
@@ -46,11 +46,11 @@ Throughout this script, visual direction is tagged inline:
 
 ---
 
-## [0:40–1:00] THE PIVOT — ENTER MERIDIAN
+## [0:40–1:00] THE PIVOT — ENTER GetNear
 
-**`[TRANSITION: Screen wipes to Meridian FX logo on clean background.]`**
+**`[TRANSITION: Screen wipes to GetNear logo on clean background.]`**
 
-> We built Meridian FX. It's an autonomous treasury agent for companies converting between stablecoins — think a European startup receiving USD from American customers and needing to pay suppliers in euros.
+> We built GetNear. It's an autonomous treasury agent for companies converting between stablecoins — think a European startup receiving USD from American customers and needing to pay suppliers in euros.
 
 > It solves both of those failures. It checks three independent price sources before every trade. It splits large orders into timed chunks so you never blow up a pool. It hides your identity on-chain so nobody can front-run you. And when the amount is big enough, a real human still has to approve it.
 
@@ -144,7 +144,7 @@ Throughout this script, visual direction is tagged inline:
 
 > Three weeks ago, someone lost fifty million dollars because they had no execution strategy and no privacy. Everything was in one trade, and the whole market could see it coming.
 
-> Meridian is the answer to that.
+> GetNear is the answer to that.
 
 > Chainlink CRE is the brain — decentralized orchestration running in confidential compute, where not even the node operators can see your strategy.
 
@@ -152,11 +152,11 @@ Throughout this script, visual direction is tagged inline:
 
 > And Unlink is the shield — your treasury's identity is hidden from the market. No front-running. No sandwich attacks. No competitors watching your cash flow.
 
-**`[STATIC: Meridian FX logo. Clean. Confident.]`**
+**`[STATIC: GetNear logo. Clean. Confident.]`**
 
 > Private. Autonomous. Human-verified when it matters. The treasury agent that would have saved fifty million dollars.
 
-> Meridian FX. Team Ippo. ETHGlobal Cannes 2026.
+> GetNear. . ETHGlobal Cannes 2026.
 
 **`[STATIC: URLs — app, dev console, GitHub. Hold for 3 seconds.]`**
 
@@ -167,7 +167,7 @@ Throughout this script, visual direction is tagged inline:
 | Section | Duration | Content |
 |---------|----------|---------|
 | The Hook | 0:00–0:40 (40s) | Horror story, CZ tweet, FinTech Weekly headline, sandwich diagram |
-| The Pivot | 0:40–1:00 (20s) | Meridian intro + architecture overview |
+| The Pivot | 0:40–1:00 (20s) | GetNear intro + architecture overview |
 | Demo A: Trade Setup | 1:00–1:25 (25s) | Trade form + 3-source Oracle on dev dashboard |
 | Demo B: CRE + TWAP | 1:25–2:00 (35s) | CRE ticks, timing scores, confidential compute, chunk breakdown |
 | Demo C: Execution + Privacy | 2:00–2:40 (40s) | Live swap → privacy toggle → Unlink flow |

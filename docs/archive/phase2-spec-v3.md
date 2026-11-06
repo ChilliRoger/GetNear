@@ -1,4 +1,4 @@
-# Meridian FX — Phase 2 Spec v3: Real Trading System
+# GetNear — Phase 2 Spec v3: Real Trading System
 
 **Status:** APPROVED — Ready to execute **Context:** ETHGlobal Cannes 2026, ~15 hours remaining
 **Prerequisite:** Phase 1 complete. v1.0.0 tagged. All PRs merged.
@@ -11,7 +11,7 @@ Changes from v2: Added demo speed mode (clock overlay + 10x CRE), dev-ui oracle/
 
 ```
 ORACLE SERVER (Brain)          CRE SIMULATOR (Hands)         CONTRACTS (Tools)
-apps/oracle                    meridian-cre/treasury          contracts/
+apps/oracle                    GetNear-cre/treasury          contracts/
 
 - Trade orders DB (SQLite)     - Bash loop (flock guarded)    SwapExecutor (Base)
 - 3 price feeds recording      - Reads speed mode from        - executeSwap()
@@ -67,9 +67,9 @@ Each tick:
 
 ```bash
 #!/bin/bash
-# meridian-cre/run-simulator.sh
-LOCKFILE="/tmp/meridian-cre.lock"
-cd /home/claude/code/meridian-fx/meridian-cre
+# GetNear-cre/run-simulator.sh
+LOCKFILE="/tmp/GetNear-cre.lock"
+cd /home/claude/code/getnear/GetNear-cre
 source ../.env
 
 while true; do
@@ -211,7 +211,7 @@ Replace hardcoded $5 auto-swap with Oracle-driven flow:
 **Edit nav:** Add "Trade" tab
 
 ### 4.5 CRE Simulator Service
-- `meridian-cre/run-simulator.sh` with flock guard
+- `GetNear-cre/run-simulator.sh` with flock guard
 - Reads speed from Oracle API
 - Logs each tick to /tmp/cre-loop.log and POST /api/cre/runs
 
@@ -290,7 +290,7 @@ SQLite table + expandable timeline in trade detail UI.
 
 ## 7. Dev-UI: Oracle + CRE Dashboard
 
-**New page in:** `apps/dev-ui/` (existing Vite + React app at dev.omnipass.world)
+**New page in:** `apps/dev-ui/` (existing Vite + React app at )
 
 ### Oracle Dashboard Panel
 - Live price readings: Chainlink, Fynd, Uniswap (auto-refresh)

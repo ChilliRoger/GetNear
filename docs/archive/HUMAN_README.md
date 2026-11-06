@@ -1,4 +1,4 @@
-# Meridian FX — System Overview
+# GetNear — System Overview
 
 Last updated: 2026-04-03
 
@@ -10,7 +10,7 @@ Hackathon project on **Base chain** with **Arc**. Goal: sanity-check DEX swap qu
 
 ```
 Browser
-  └─ https://dev.omnipass.world
+  └─ https://
        └─ Cloudflare Tunnel (ae82df3e...)
             └─ Caddy (:18080)
                  └─ Vite dev server (127.0.0.1:58173)
@@ -21,7 +21,7 @@ Browser
 ## Apps
 
 ### dev-ui (`apps/dev-ui/`)
-Vite 8 + React 19 + TypeScript. Served at `dev.omnipass.world`.
+Vite 8 + React 19 + TypeScript. Served at ``.
 
 Three tabs:
 - **Quote** — swap quote tester. Pick tokens, enter amount, get Fynd quote with route/gas/impact.
@@ -96,7 +96,7 @@ curl http://localhost:58173/api/oracle/health     # Oracle via proxy
 
 ## URLs
 
-- **Dev UI:** https://dev.omnipass.world
+- **Dev UI:** https://
 - **Fynd API:** http://localhost:3000 (internal only)
 - **Oracle API:** http://localhost:38174 (internal only)
 
@@ -116,7 +116,7 @@ Oracle uses `https://mainnet.base.org` for Chainlink reads (separate from Fynd R
 
 Pattern: Cloudflare DNS CNAME → Tunnel → Caddy → local port
 
-- `dev.omnipass.world` → Caddy → `127.0.0.1:58173` (Vite)
+- `` → Caddy → `127.0.0.1:58173` (Vite)
 - Caddy config: `/etc/caddy/Caddyfile`
 - Tunnel config: `/etc/cloudflared/config.yml`
 
@@ -128,7 +128,7 @@ Pattern: Cloudflare DNS CNAME → Tunnel → Caddy → local port
 - Initial monorepo setup (pnpm workspaces + turborepo)
 - Fynd Docker Compose setup, switched from Ethereum to Base chain
 - dev-ui app with swap quote tester (Quote tab)
-- Wired `dev.omnipass.world` through Cloudflare Tunnel + Caddy
+- Wired `` through Cloudflare Tunnel + Caddy
 - Added EURC token, set as default output currency
 - Built oracle server: Chainlink feeds + Fynd USDC/EURC recording to SQLite
 - Added Prices tab (history charts, divergence) and Depth tab (liquidity curves) to dev-ui

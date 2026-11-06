@@ -1,4 +1,4 @@
-# Meridian FX — Phase 2 Spec v2: Real Trading System
+# GetNear — Phase 2 Spec v2: Real Trading System
 
 **Status:** Final Draft **Context:** ETHGlobal Cannes 2026, ~17 hours remaining
 **Prerequisite:** Phase 1 complete (contracts deployed, CRE simulation proven, frontend live)
@@ -11,7 +11,7 @@ Changes from v1: Multi-source oracle moved to 2A. CRE runs as looped simulator w
 
 ```
 ORACLE SERVER (Brain)          CRE SIMULATOR (Hands)         CONTRACTS (Tools)
-apps/oracle                    meridian-cre/treasury          contracts/
+apps/oracle                    GetNear-cre/treasury          contracts/
                                                               
 - Trade orders DB (SQLite)     - Loops every 60s              SwapExecutor (Base)
 - Price feeds (3 sources)      - HTTP GET Oracle: "what to    - executeSwap()
@@ -71,8 +71,8 @@ CRE never blocks. Approval happens outside the workflow:
 
 ```bash
 #!/bin/bash
-# meridian-cre-loop.sh
-cd /home/claude/code/meridian-fx/meridian-cre
+# GetNear-cre-loop.sh
+cd /home/claude/code/getnear/GetNear-cre
 export BASE_RPC="..." ARC_RPC="..." UNISWAP_API_KEY="..."
 
 while true; do
@@ -158,7 +158,7 @@ GET    /api/prices/comparison   Multi-source price comparison
 
 ### 4.3 CRE Workflow Update
 
-**Edit:** `meridian-cre/treasury/workflow.ts`
+**Edit:** `GetNear-cre/treasury/workflow.ts`
 
 Replace the current hardcoded logic with Oracle-driven flow:
 1. HTTP GET Oracle /api/strategy/next
@@ -196,7 +196,7 @@ Open trades list:
 
 ### 4.5 CRE Simulator Service
 
-Create `meridian-cre/run-simulator.sh`:
+Create `GetNear-cre/run-simulator.sh`:
 - Bash loop: simulate --broadcast, sleep 55, repeat
 - Logs to /tmp/cre-loop.log
 - Can run as background process or systemd service

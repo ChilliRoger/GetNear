@@ -2,7 +2,7 @@
 
 Last updated: 2026-04-03 ~4:00 PM ET (hackathon day 1, evening)
 
-## What Is Meridian
+## What Is GetNear
 
 An AI treasury agent for the stablecoin era. It monitors USDC/EURC FX rates, auto-executes small conversions on Uniswap (Base), requires World ID-verified human approval for large trades, and logs everything to Arc. Orchestrated by Chainlink CRE. Target: ETHGlobal Cannes 2026.
 
@@ -13,7 +13,7 @@ An AI treasury agent for the stablecoin era. It monitors USDC/EURC FX rates, aut
 ## What's Built So Far
 
 ### Infrastructure
-- **Monorepo**: pnpm workspaces + turborepo at `/home/claude/code/meridian-fx`
+- **Monorepo**: pnpm workspaces + turborepo at `/home/claude/code/getnear`
 - **Fynd DEX aggregator**: Docker container on Base chain at `localhost:3000`. Quotes USDC↔EURC (and all Base tokens) via Uniswap v3, Aerodrome, PancakeSwap etc. Uniswap booth recommended using this.
 - **Oracle server** (`apps/oracle/`): Hono + viem + better-sqlite3 on port 38174. Records every 30s:
   - EURC/USD from Chainlink (`0xDAe398520e2B67cd3f27aeF9Cf14D93D927f8250`, 8 decimals)
@@ -28,8 +28,8 @@ An AI treasury agent for the stablecoin era. It monitors USDC/EURC FX rates, aut
   - **Prices**: live Chainlink vs Fynd price tiles, history line chart, divergence chart
   - **Depth**: unidirectional liquidity depth curve (6 sizes)
   - **Book**: bidirectional order book depth chart with zoom controls (both sides of the spread)
-- **VPS routing**: `dev.omnipass.world` → Cloudflare Tunnel → Caddy → Vite. Vite proxies `/api/fynd/*` → Fynd and `/api/oracle/*` → oracle server.
-- **Domain**: `omnipass.world` zone in Cloudflare. Only `dev.omnipass.world` has a CNAME so far.
+- **VPS routing**: `` → Cloudflare Tunnel → Caddy → Vite. Vite proxies `/api/fynd/*` → Fynd and `/api/oracle/*` → oracle server.
+- **Domain**: `getnear.world` zone in Cloudflare. Only `` has a CNAME so far.
 
 ### Key Discovery: EURC/USD Chainlink Feed
 Found at `0xDAe398520e2B67cd3f27aeF9Cf14D93D927f8250` on Base (8 decimals). This gives us both a Chainlink oracle price AND a Fynd DEX-derived price for EURC/USD — enabling the sanity check (divergence comparison) that is core to the product narrative.
@@ -63,18 +63,18 @@ c2ebabb  docs: add planning docs
 ### Important but Cuttable
 6. **World ID approval flow** — human-in-the-loop for large trades via World App + IDKit. Strong for World bounty ($8K pivot).
 7. **MiniKit Mini App shell** — turns the dashboard into a World Mini App. Strong narrative.
-8. **Savings calculator** — Track D, visual demo of bank fees vs Meridian.
+8. **Savings calculator** — Track D, visual demo of bank fees vs GetNear.
 9. **Bridge Base→Arc** — optional, drop first if behind.
 
 ## Planning Documents
 
 All 6 planning PDFs are in the repo root (committed in `c2ebabb`):
-- `Meridian Battle Plan.pdf` — **READ FIRST**. Prize strategy, architecture, workstreams, demo script, risk assessment, simplification ladder.
-- `Meridian Overview.pdf` — pitch doc, architecture diagrams, prize tracks.
-- `Meridian Unknowns and PoCs.pdf` — 8 unknowns with severity ratings and PoC plans.
-- `Meridian Technical Spec.pdf` — detailed components, code patterns, CRE workflow pseudocode.
-- `Meridian Pre Hackathon Setup.pdf` — setup checklist with blocker status.
-- `Meridian Submission Plan.pdf` — submission requirements and timeline.
+- `GetNear Battle Plan.pdf` — **READ FIRST**. Prize strategy, architecture, workstreams, demo script, risk assessment, simplification ladder.
+- `GetNear Overview.pdf` — pitch doc, architecture diagrams, prize tracks.
+- `GetNear Unknowns and PoCs.pdf` — 8 unknowns with severity ratings and PoC plans.
+- `GetNear Technical Spec.pdf` — detailed components, code patterns, CRE workflow pseudocode.
+- `GetNear Pre Hackathon Setup.pdf` — setup checklist with blocker status.
+- `GetNear Submission Plan.pdf` — submission requirements and timeline.
 - `tech-spec-fixes.txt` — 11 items of ChatGPT feedback on the tech spec (uncommitted).
 - `docs/project-setup-playbook.md` — the wave-by-wave setup process (how this project was bootstrapped).
 
@@ -131,7 +131,7 @@ curl localhost:38174/health
 
 # Check/start Dev UI
 cd apps/dev-ui && npx vite --host 127.0.0.1  # port 58173
-curl -s -o /dev/null -w "%{http_code}" https://dev.omnipass.world/
+curl -s -o /dev/null -w "%{http_code}" https:///
 ```
 
 ## Recommended Next Steps
@@ -144,7 +144,7 @@ curl -s -o /dev/null -w "%{http_code}" https://dev.omnipass.world/
 
 ## Git
 
-- Remote: `git@github.com:meridian-fx/meridian-fx.git` (origin)
+- Remote: `git@github.com:getnear/getnear.git` (origin)
 - Branch: `main`
 - Git user: configured by user (liam@chaintail.xyz)
 - Timestamps were rewritten to be post-9pm Cannes (CEST) via filter-branch

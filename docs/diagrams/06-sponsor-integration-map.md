@@ -69,7 +69,7 @@ Which sponsor technologies are used and where they integrate.
   │     └── POST /api/verify-worldid from approve page                     │
   │                                                                         │
   │  2. World Mini App Platform                                             │
-  │     ├── meridian.omnipass.world served as World Mini App               │
+  │     ├── github.com/ChilliRoger/GetNear served as World Mini App               │
   │     └── Mobile-first UX inside World App ecosystem                     │
   └─────────────────────────────────────────────────────────────────────────┘
 
@@ -101,7 +101,7 @@ Which sponsor technologies are used and where they integrate.
 
 ```mermaid
 graph TB
-    subgraph System ["Meridian FX System"]
+    subgraph System ["GetNear System"]
         Oracle["Oracle Server<br/>(Brain)"]
         CRE["CRE Simulator<br/>(Hands)"]
         SE["SwapExecutor<br/>(Base)"]
@@ -128,7 +128,7 @@ graph TB
 
     subgraph World ["WORLD"]
         WorldID["World ID<br/>Human verification<br/>for large trades"]
-        MiniApp["Mini App Platform<br/>meridian.omnipass.world"]
+        MiniApp["Mini App Platform<br/>github.com/ChilliRoger/GetNear"]
     end
 
     subgraph UnlinkBox ["UNLINK (Active)"]

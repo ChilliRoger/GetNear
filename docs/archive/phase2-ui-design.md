@@ -1,4 +1,4 @@
-# Meridian FX Phase 2 — Frontend Design Plan
+# GetNear Phase 2 — Frontend Design Plan
 
 ## Design System Reference
 
@@ -745,7 +745,7 @@ These are needed for the Uniswap and Fynd source indicators, and for the trade p
 ## 10. Formatting Conventions
 
 **All monetary amounts:**
-- Use `formatDisplayAmount()` from `@meridian/shared` — this handles the x1M multiplier.
+- Use `formatDisplayAmount()` from `@getnear/shared` — this handles the x1M multiplier.
 - Raw amounts in the input fields show the actual on-chain value (e.g., "5").
 - Display amounts show the multiplied value (e.g., "$5,000,000").
 - Always use `font-tabular` class for numeric values.

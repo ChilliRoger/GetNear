@@ -1,4 +1,4 @@
-# Meridian FX — Phase 2 Spec: Real Trading System
+# GetNear — Phase 2 Spec: Real Trading System
 
 **Status:** Draft v1 **Context:** ETHGlobal Cannes 2026, ~18 hours remaining
 **Prerequisite:** Phase 1 complete (contracts deployed, CRE workflow simulated, frontend live with real on-chain reads)
@@ -8,10 +8,10 @@
 ## 1. What We're Building
 
 ### One-Liner
-Upgrade Meridian from a demo dashboard to a working trade execution system — real balances, real trade submission, intelligent swap timing, and live fill tracking.
+Upgrade GetNear from a demo dashboard to a working trade execution system — real balances, real trade submission, intelligent swap timing, and live fill tracking.
 
 ### Why Now
-Phase 1 proved the architecture works. But the dashboard shows mock trades and the CRE workflow executes a single hardcoded amount. Judges will notice. Phase 2 makes Meridian feel like a product you could actually use: submit a trade, watch it fill, see your real positions change.
+Phase 1 proved the architecture works. But the dashboard shows mock trades and the CRE workflow executes a single hardcoded amount. Judges will notice. Phase 2 makes GetNear feel like a product you could actually use: submit a trade, watch it fill, see your real positions change.
 
 ### Phase 1 vs Phase 2
 
@@ -40,7 +40,7 @@ Oracle Server      Price recording (30s)        -->    + Uniswap spot feed
                                                        + Trade orders DB (SQLite)
                                                        |
 CRE Workflow       Single $5 auto-swap          -->    Read pending orders
-(meridian-cre)     Hardcoded amount                    Pick best chunk size
+(GetNear-cre)     Hardcoded amount                    Pick best chunk size
                                                        Execute with timing score
                                                        Update fill status
                                                        |

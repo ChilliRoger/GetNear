@@ -1,6 +1,6 @@
 # Privacy Flow (Unlink SDK)
 
-How Meridian hides treasury identity for on-chain swaps using the Unlink
+How GetNear hides treasury identity for on-chain swaps using the Unlink
 privacy pool and ZK proofs.
 
 ### ASCII Art

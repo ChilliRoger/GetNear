@@ -1,4 +1,4 @@
-# Meridian FX -- Build Plan
+# GetNear -- Build Plan
 
 **Context:** ETHGlobal Cannes 2026. ~24 hours remaining.
 **Goal:** One real Uniswap swap on Base, logged on Arc, shown in a dashboard, orchestrated by CRE.
@@ -86,7 +86,7 @@ All critical PoCs have been run. No remaining project-killers.
 
 | Phase | What | Deliverable |
 |-------|------|-------------|
-| A1 | Scaffold Next.js 14 app, Tailwind, connect to shared types | App boots, imports from `@meridian/shared` |
+| A1 | Scaffold Next.js 14 app, Tailwind, connect to shared types | App boots, imports from `@getnear/shared` |
 | A2 | Dashboard page: treasury balances (USDC/EURC from both chains), live rate tile, recent trades table | Dashboard renders with mock data |
 | A3 | Approval page: list pending trades from TreasuryVault, approve/reject buttons | Approval flow works with mock data |
 | A4 | Connect to real contracts: read balances from Base + Arc, read events for trade history | Dashboard shows live on-chain data |
@@ -135,7 +135,7 @@ All critical PoCs have been run. No remaining project-killers.
 
 | Phase | What | Deliverable |
 |-------|------|-------------|
-| D1 | Monthly volume slider ($10K-$500K), bank fee (1.3%) vs Meridian (~0.05%), big green savings number | Compelling savings visualization |
+| D1 | Monthly volume slider ($10K-$500K), bank fee (1.3%) vs GetNear (~0.05%), big green savings number | Compelling savings visualization |
 
 **Cut this entirely if behind on Tracks A-C.** It is pure demo polish.
 

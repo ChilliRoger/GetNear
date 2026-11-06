@@ -2,7 +2,7 @@
 
 Instructions for Claude (the orchestrator) to transform planning documents and a repo into a build-ready monorepo with validated architecture, parallel-track infrastructure, and progressive discovery docs.
 
-This process was battle-tested on the OmniPass project (ETHGlobal Cannes 2026). It took ~2 hours wall-clock with heavy parallelization. Every step exists because skipping it caused real pain in past sessions.
+This process was battle-tested on the getnear project (ETHGlobal Cannes 2026). It took ~2 hours wall-clock with heavy parallelization. Every step exists because skipping it caused real pain in past sessions.
 
 ---
 
@@ -64,7 +64,7 @@ I learned this the hard way. When you read "use Flare TEE Extensions" in a techn
 
 **Goal:** Confirm or kill the riskiest assumptions BEFORE writing code.
 
-This is the single highest-ROI step. In OmniPass, ALL THREE research agents returned results that changed the architecture. Without this step, we would have built against three wrong assumptions and had to rewrite everything.
+This is the single highest-ROI step. In getnear, ALL THREE research agents returned results that changed the architecture. Without this step, we would have built against three wrong assumptions and had to rewrite everything.
 
 ### How to identify project-killers
 
@@ -97,7 +97,7 @@ Research whether [specific capability] exists and is usable.
 Include code examples, API endpoints, or model names you find.
 ```
 
-**Key lessons from OmniPass research agents:**
+**Key lessons from getnear research agents:**
 - Be extremely specific in what to investigate. "Tell me about 0G" produces fluff. "Does qwen3-vl-30b accept base64 image input via the OpenAI-compatible API?" produces actionable answers.
 - Ask agents to check SDK source code and GitHub issues, not just docs. Marketing pages lie. The 0G docs said "vision-language services" were live — the SDK source revealed the vision model was text-only.
 - Always include the fallback in the prompt context. The agent can evaluate whether the fallback is viable while researching the primary.
@@ -312,7 +312,7 @@ Critical path: Wave 1 → Wave 2 → Wave 4 → Wave 5 → Wave 8 (~75-110 min).
 
 ## Anti-Patterns
 
-1. **Don't skip PoC validation.** In OmniPass, 3/3 unknowns came back negative or modified. Building without validation would have wasted 10+ hours on wrong assumptions.
+1. **Don't skip PoC validation.** In getnear, 3/3 unknowns came back negative or modified. Building without validation would have wasted 10+ hours on wrong assumptions.
 
 2. **Don't put everything in one AGENTS.md.** Progressive discovery exists because a 2000-line instruction file wastes agent context on irrelevant rules.
 

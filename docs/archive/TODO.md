@@ -16,7 +16,7 @@ A user swapped ~$50M through the Aave frontend, which routed through CoW Swap. T
 
 ## Infrastructure
 
-- [ ] Wire `app.omnipass.world` and `app-dev.omnipass.world` through Cloudflare Tunnel + Caddy
+- [ ] Wire `app.getnear.world` and `app-` through Cloudflare Tunnel + Caddy
 - [ ] Keep Fynd internal-only (no public hostname)
 
 ## App Scaffold
@@ -38,4 +38,4 @@ A user swapped ~$50M through the Aave frontend, which routed through CoW Swap. T
 
 - [ ] Narrow Fynd to Uniswap-only protocols (`--protocols uniswap_v2,uniswap_v3`)
 - [ ] Custom worker pool tuning for Fynd
-- [ ] `ops.omnipass.world` for dashboards/admin
+- [ ] `ops.getnear.world` for dashboards/admin

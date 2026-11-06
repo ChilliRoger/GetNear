@@ -1,6 +1,6 @@
-# Bounty Submissions — Meridian FX
+# Bounty Submissions — GetNear
 
-**Team Ippo | ETHGlobal Cannes 2026**
+** | ETHGlobal Cannes 2026**
 
 A quick-reference guide for judges evaluating each bounty track. Each section explains what we built, where to find the code, on-chain proof, and what to look for in the demo.
 
@@ -14,11 +14,11 @@ A full Chainlink CRE workflow that acts as the autonomous agent brain for a corp
 ### Where to Find the Code
 | Component | Path |
 |-----------|------|
-| CRE workflow (main agent logic) | `meridian-cre/treasury/` |
-| Workflow YAML config | `meridian-cre/treasury/workflow.yaml` |
-| Compiled WASM binary | `meridian-cre/treasury/binary.wasm` |
+| CRE workflow (main agent logic) | `GetNear-cre/treasury/` |
+| Workflow YAML config | `GetNear-cre/treasury/workflow.yaml` |
+| Compiled WASM binary | `GetNear-cre/treasury/binary.wasm` |
 | Oracle strategy engine (HTTP target) | `apps/oracle/` |
-| CRE simulation runner | `meridian-cre/run-simulator.sh` |
+| CRE simulation runner | `GetNear-cre/run-simulator.sh` |
 
 ### On-Chain Proof
 CRE simulation with `--broadcast` executed real swaps on Base mainnet:
@@ -170,7 +170,7 @@ A World ID verification gate that prevents unauthorized approvals of large treas
 
 ## Cross-Cutting: Why 5 Integrations Matter
 
-Meridian is not 5 separate demos. It is one product where all 5 sponsor technologies are load-bearing:
+GetNear is not 5 separate demos. It is one product where all 5 sponsor technologies are load-bearing:
 
 ```
 Chainlink CRE (brain)
@@ -199,4 +199,4 @@ Remove any one sponsor and the system breaks:
 
 ---
 
-*Built by Team Ippo at ETHGlobal Cannes 2026. Questions? Find us at the demo booth.*
+*Built by  at ETHGlobal Cannes 2026. Questions? Find us at the demo booth.*

@@ -1,6 +1,6 @@
 # Uniswap Integration Deep-Dive
 
-How Meridian FX uses Uniswap as **both** the primary price oracle **and** the
+How GetNear uses Uniswap as **both** the primary price oracle **and** the
 execution venue. Chainlink validates; Fynd cross-checks; Uniswap executes.
 
 ### ASCII Art

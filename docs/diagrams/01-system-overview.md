@@ -18,7 +18,7 @@ what to do, optionally executes a swap, and reports results back.
   │                       │                                                 │
   │                       v                                                 │
   │    ┌──────────────────────────────────────────────────────────────┐     │
-  │    │  flock -n /tmp/meridian-cre.lock                             │     │
+  │    │  flock -n /tmp/GetNear-cre.lock                             │     │
   │    │  (skip tick if previous still running)                       │     │
   │    │                                                              │     │
   │    │  timeout 90                                                  │     │
@@ -81,7 +81,7 @@ sequenceDiagram
         Bash->>Oracle: GET /api/demo/speed
         Oracle-->>Bash: { sleep: 55 | 5 }
 
-        Bash->>Flock: flock -n /tmp/meridian-cre.lock
+        Bash->>Flock: flock -n /tmp/GetNear-cre.lock
         alt Lock acquired
             Flock->>CRE: timeout 90 cre workflow simulate treasury --broadcast
 

@@ -1,6 +1,6 @@
 # Architecture Decisions
 
-Key decisions made for Meridian FX and the reasoning behind each.
+Key decisions made for GetNear and the reasoning behind each.
 
 ---
 

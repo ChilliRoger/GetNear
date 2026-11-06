@@ -1,6 +1,6 @@
 # Gitflow
 
-Branch strategy for Meridian FX. Designed for parallel agent tracks working on the same repo.
+Branch strategy for GetNear. Designed for parallel agent tracks working on the same repo.
 
 ---
 

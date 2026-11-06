@@ -1,6 +1,6 @@
 # Architecture Diagrams
 
-Reference diagrams for the Meridian FX system. Each diagram is provided in two
+Reference diagrams for the GetNear system. Each diagram is provided in two
 formats: ASCII art (for Excalidraw redrawing) and Mermaid (for auto-rendering).
 
 | # | Diagram | Description |

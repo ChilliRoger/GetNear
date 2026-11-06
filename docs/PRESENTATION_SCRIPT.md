@@ -1,4 +1,4 @@
-# Meridian FX — Presentation Script
+# GetNear — Presentation Script
 
 **Format:** 4-5 minute video demo for ETHGlobal Cannes 2026 submission
 **Target:** Judges evaluating for Uniswap, Chainlink CRE, Arc, World ID, and Base bounties
@@ -24,11 +24,11 @@
 
 ### 0:00 — Hook + Problem (30s)
 
-**Show:** Landing page at meridian.omnipass.world
+**Show:** Landing page at github.com/ChilliRoger/GetNear
 
 > "Last month, someone swapped $50 million through a major DeFi frontend. The quote was mispriced. They got back $37,000. A 99.9% loss, with zero safety checks."
 >
-> "Meridian FX is an autonomous treasury agent that makes sure this never happens. It monitors FX rates, executes at optimal prices, requires human approval for large trades, and logs everything on-chain."
+> "GetNear is an autonomous treasury agent that makes sure this never happens. It monitors FX rates, executes at optimal prices, requires human approval for large trades, and logs everything on-chain."
 
 **Action:** Scroll to stats strip showing ~0.05% fee, 24/7 operation.
 
@@ -38,7 +38,7 @@
 
 **Show:** Architecture section on landing page
 
-> "Here's how it works. Meridian is a Chainlink CRE workflow — a decentralized agent that runs on oracle nodes."
+> "Here's how it works. GetNear is a Chainlink CRE workflow — a decentralized agent that runs on oracle nodes."
 >
 > "Every 60 seconds, it fetches a live Uniswap quote, reads the treasury policy from Arc, checks the balance on Base, and makes a decision: auto-execute, queue for approval, or wait."
 >
@@ -50,7 +50,7 @@
 
 ### 1:00 — Live Dashboard Walkthrough (60s)
 
-**Show:** Dashboard at meridian.omnipass.world/dashboard
+**Show:** Dashboard at github.com/ChilliRoger/GetNear/dashboard
 
 > "This is the live dashboard reading directly from deployed contracts on Base and Arc."
 
@@ -90,7 +90,7 @@
 
 ### 3:00 — Approval Flow + World ID (30s)
 
-**Show:** Approve page at meridian.omnipass.world/approve
+**Show:** Approve page at github.com/ChilliRoger/GetNear/approve
 
 > "For trades above the threshold — in our demo that's displayed as $10 million — the agent doesn't auto-execute. It creates a pending trade on Arc and waits for human approval."
 >
@@ -102,13 +102,13 @@
 
 ### 3:30 — Privacy Mode + Unlink SDK (45s)
 
-**Show:** Trade page Privacy tab at meridian.omnipass.world/trade
+**Show:** Trade page Privacy tab at github.com/ChilliRoger/GetNear/trade
 
 > "Now let me show you why privacy matters for treasury FX. Switch to the Private Treasury tab."
 
 **Action:** Click the "Private Treasury" tab.
 
-> "Imagine a corporate treasury doing $50 million a year in stablecoin conversions. Every swap on a public chain reveals your wallet, your timing, your sizing — competitors and MEV bots can front-run you. Meridian integrates the Unlink SDK to solve this."
+> "Imagine a corporate treasury doing $50 million a year in stablecoin conversions. Every swap on a public chain reveals your wallet, your timing, your sizing — competitors and MEV bots can front-run you. GetNear integrates the Unlink SDK to solve this."
 
 **Action:** Point to the Privacy Comparison card showing Normal vs. Private side by side.
 
@@ -136,9 +136,9 @@
 
 **Show:** Savings calculator on landing page
 
-> "The numbers speak for themselves. On $50 million in annual FX volume, a traditional bank charges about $650,000 in fees. Meridian does it for $25,000. That's $625,000 saved, every year."
+> "The numbers speak for themselves. On $50 million in annual FX volume, a traditional bank charges about $650,000 in fees. GetNear does it for $25,000. That's $625,000 saved, every year."
 >
-> "Meridian FX — autonomous treasury management for the stablecoin era. Built with Uniswap, Chainlink CRE, Arc, World ID, and Base."
+> "GetNear — autonomous treasury management for the stablecoin era. Built with Uniswap, Chainlink CRE, Arc, World ID, and Base."
 
 **Action:** Show sponsor grid at bottom of landing page.
 
