@@ -264,9 +264,8 @@ export default function SettingsPage() {
           {/* Info notice */}
           <div className="rounded-lg border border-border bg-background p-2.5">
             <p className="text-[11px] text-muted">
-              Policy updates are submitted as on-chain transactions to the Arc
-              chain. Changes take effect after transaction confirmation
-              (typically 2-3 seconds).
+              Policy updates are submitted via Sputnik DAO proposals to the FxBudget
+              contract on NEAR testnet. In mock mode, changes take effect immediately.
             </p>
           </div>
 
@@ -305,9 +304,9 @@ export default function SettingsPage() {
           )}
           {txHash && (
             <div className="rounded-lg border border-accent-green/20 bg-accent-green/5 p-3 text-center">
-              <p className="text-xs text-accent-green font-medium">Policy updated on-chain</p>
+              <p className="text-xs text-accent-green font-medium">Policy updated on-chain (Simulated)</p>
               <a
-                href={`https://testnet.arcscan.app/tx/${txHash}`}
+                href={`https://testnet.nearblocks.io/txns/${txHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-1 inline-block font-mono text-[11px] text-accent-blue hover:underline break-all"
@@ -328,10 +327,8 @@ export default function SettingsPage() {
 // ── Token Faucet ──────────────────────────────────────────────────
 
 const FAUCET_TOKENS = [
-  { key: "USDC" as const, symbol: "USDC", label: "Mint 5M", amount: "5000000000000" },
-  { key: "EURC" as const, symbol: "EURC", label: "Mint 5M", amount: "5000000000000" },
-  { key: "WBTC" as const, symbol: "WBTC", label: "Mint 5",  amount: "500000000" },
-  { key: "WETH" as const, symbol: "WETH", label: "Mint 50", amount: "50000000000000000000" },
+  { key: "USDC" as const, symbol: "USDC", label: "Mint 5,000", amount: "5000000000" },
+  { key: "EURC" as const, symbol: "EURC", label: "Mint 5,000", amount: "5000000000" },
 ] as const;
 
 function TokenFaucet() {
@@ -341,31 +338,16 @@ function TokenFaucet() {
   const handleMint = async (token: typeof FAUCET_TOKENS[number]) => {
     if (minting) return;
     setMinting(token.key);
-    try {
-      const res = await fetch("/api/privacy/mint", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: token.key, amount: token.amount }),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      const hashPreview = data.txHash ? ` (${data.txHash.slice(0, 10)}...)` : "";
-      showToast(`Minted ${token.symbol}${hashPreview}`, "success");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Mint failed";
-      showToast(`${token.symbol} mint failed: ${msg}`, "error");
-    } finally {
+    setTimeout(() => {
+      showToast(`Credited ${token.label} ${token.symbol} (Simulated Testnet Faucet)`, "success");
       setMinting(null);
-    }
+    }, 400);
   };
 
   return (
     <Card
-      title="Testnet Token Faucet"
-      subtitle="Mint test tokens on Base Sepolia"
+      title="Testnet Faucet"
+      subtitle="Simulated treasury funds on NEAR Testnet"
       badge={{ label: "TESTNET", color: "amber" }}
     >
       <div className="grid grid-cols-2 gap-3">
@@ -376,10 +358,10 @@ function TokenFaucet() {
               key={token.key}
               onClick={() => handleMint(token)}
               disabled={minting !== null}
-              className="flex flex-col items-center gap-1.5 rounded-xl border border-border bg-background py-4 text-sm font-medium text-foreground transition-all hover:border-purple-500/50 hover:bg-purple-500/5 active:scale-[0.97] disabled:opacity-50"
+              className="flex flex-col items-center gap-1.5 rounded-xl border border-border bg-background py-4 text-sm font-medium text-foreground transition-all hover:border-accent-blue/50 hover:bg-accent-blue/5 active:scale-[0.97] disabled:opacity-50"
             >
               {isLoading ? (
-                <span className="h-5 w-5 animate-spin rounded-full border-2 border-purple-400 border-t-transparent" />
+                <span className="h-5 w-5 animate-spin rounded-full border-2 border-accent-blue border-t-transparent" />
               ) : (
                 <span className="text-base font-semibold">{token.symbol}</span>
               )}

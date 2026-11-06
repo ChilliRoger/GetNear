@@ -3,12 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Card } from "@/components/card";
 import { RateSparkline } from "@/components/rate-sparkline";
-import { PrivacyTabBar } from "@/components/privacy/privacy-tab-bar";
-import { PrivacyDashboard } from "@/components/privacy/privacy-dashboard";
-import { ShieldModal } from "@/components/privacy/shield-modal";
-import { ShieldHistory } from "@/components/privacy/shield-history";
 import { useBalances, usePolicy, useTreasuryBalances } from "@/lib/hooks";
-import { usePublicBalances } from "@/lib/privacy-hooks";
 import { formatDisplayAmount } from "@getnear/shared";
 import { formatDisplayAmountFromString, formatBps } from "@/lib/format";
 import { SAVINGS_BPS } from "@/lib/constants";
@@ -217,13 +212,7 @@ export default function DashboardPage() {
   const strategyLatest = useStrategyLatest();
   const recentTrades = useRecentTrades();
   const { t } = useI18n();
-  const publicBalances = usePublicBalances();
   const [pairView, setPairView] = useState<"USDC_EURC" | "EURC_USDC">("USDC_EURC");
-  const [activeTab, setActiveTab] = useState<"public" | "private">("public");
-  const [shieldTarget, setShieldTarget] = useState<{
-    symbol: string;
-    displayBalance: string;
-  } | null>(null);
   // useTickingTimeAgo moved into LiveTimestamp component to scope per-second re-renders
 
   // #33: Extract 24h price range calculation to useMemo
@@ -256,19 +245,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-4">
-      {/* Tab bar */}
-      <PrivacyTabBar
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        publicLabel={t("tabs.public_treasury")}
-        privateLabel={t("tabs.private_treasury")}
-      />
-
-      {/* Private Treasury tab */}
-      {activeTab === "private" && <PrivacyDashboard />}
-
-      {/* Public Treasury tab */}
-      {activeTab === "public" && (<>
       {/* Oracle offline banner */}
       {price.oracleOffline && (
         <div className="rounded-xl border border-accent-amber/30 bg-accent-amber/10 px-4 py-3">
@@ -362,70 +338,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Base Sepolia Balances — public wallet with Shield buttons */}
-      <Card
-        title="Base Sepolia Balances"
-        subtitle="Testnet treasury"
-        badge={{ label: "PUBLIC", color: "green" }}
-        className="border-l-2 border-l-accent-blue/40"
-      >
-        {publicBalances.loading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-5 w-full" />
-            <Skeleton className="h-5 w-full" />
-            <Skeleton className="h-5 w-full" />
-            <Skeleton className="h-5 w-full" />
-          </div>
-        ) : publicBalances.error ? (
-          <p className="py-2 text-center text-xs text-accent-red">{publicBalances.error}</p>
-        ) : publicBalances.data ? (
-          <div className="space-y-2">
-            {publicBalances.data.balances
-              .filter((b) => ["USDC", "EURC", "WBTC", "WETH"].includes(b.symbol))
-              .map((bal) => (
-                <div key={bal.symbol} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
-                      {bal.symbol}
-                    </span>
-                    <span className="font-tabular text-xs font-semibold text-foreground">
-                      {bal.symbol === 'USDC' ? '$' : bal.symbol === 'EURC' ? '€' : bal.symbol === 'WBTC' ? '₿' : 'Ξ'}
-                      {Number(bal.displayBalance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() =>
-                      setShieldTarget({
-                        symbol: bal.symbol,
-                        displayBalance: bal.displayBalance,
-                      })
-                    }
-                    className="rounded-lg bg-purple-500/15 px-3 py-1 text-[10px] font-semibold text-purple-400 hover:bg-purple-500/25 transition-colors"
-                  >
-                    Shield
-                  </button>
-                </div>
-              ))}
-          </div>
-        ) : (
-          <p className="py-2 text-center text-xs text-muted">No balance data</p>
-        )}
-      </Card>
-
-      {/* Shield history on public tab */}
-      <ShieldHistory />
-
-      {/* Shield modal */}
-      {shieldTarget && (
-        <ShieldModal
-          token={shieldTarget.symbol}
-          maxBalance={shieldTarget.displayBalance}
-          onClose={() => setShieldTarget(null)}
-          onSuccess={() => setShieldTarget(null)}
-        />
-      )}
-
-      {/* Active policy — real data from Arc */}
+      {/* Active policy — testnet contract limits */}
       <Card
         title={t("dashboard.active_policy")}
         badge={{ label: policy.version ? `v${policy.version}` : "LOADING", color: "green" }}
@@ -569,7 +482,6 @@ export default function DashboardPage() {
           </div>
         )}
       </Card>
-      </>)}
     </div>
   );
 }

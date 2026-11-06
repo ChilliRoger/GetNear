@@ -99,3 +99,4 @@ Dashboard <-- RPC reads (testnet) + local decision log (SQLite) + explorer links
 | Price deviation limit | Agent code; value reported on-chain | Software only |
 | Quote authenticity | Nothing | Not verified |
 | Fills | Accounting only | Simulated |
+

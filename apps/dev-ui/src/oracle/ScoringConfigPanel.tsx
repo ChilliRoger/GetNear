@@ -29,26 +29,8 @@ function sliderColor(value: number, max: number): string {
   return 'var(--color-danger)'
 }
 
-function TooltipCard({ text, visible, anchorRef }: { text: string; visible: boolean; anchorRef?: React.RefObject<HTMLElement | null> }) {
+function TooltipCard({ text, visible }: { text: string; visible: boolean }) {
   if (!visible) return null
-
-  // Portal-based tooltip using fixed positioning from anchor bounding rect
-  if (anchorRef?.current) {
-    const rect = anchorRef.current.getBoundingClientRect()
-    const style: React.CSSProperties = {
-      position: 'fixed',
-      left: rect.left + rect.width / 2,
-      top: rect.top - 8,
-      transform: 'translate(-50%, -100%)',
-      zIndex: 9999,
-    }
-    return (
-      <div style={style} className="w-52 px-3 py-2 rounded-lg bg-[#1a1a2e] border border-border shadow-xl text-xs text-muted leading-relaxed pointer-events-none">
-        {text}
-        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-[#1a1a2e] border-r border-b border-border" />
-      </div>
-    )
-  }
 
   return (
     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-52 px-3 py-2 rounded-lg bg-[#1a1a2e] border border-border shadow-xl text-xs text-muted leading-relaxed pointer-events-none">
@@ -76,7 +58,6 @@ function VerticalSlider({
   format?: (v: number) => string
 }) {
   const [showTip, setShowTip] = useState(false)
-  const tipBtnRef = useRef<HTMLButtonElement>(null)
   const info = SLIDER_INFO[id]
   const display = format ? format(value) : String(value)
   const color = sliderColor(value, max)
@@ -87,7 +68,6 @@ function VerticalSlider({
       <div className="flex items-center gap-1">
         <span className="text-xs text-muted font-medium">{info.label}</span>
         <button
-          ref={tipBtnRef}
           type="button"
           className="w-3.5 h-3.5 rounded-full border border-muted/40 text-[9px] text-muted/60 hover:text-accent hover:border-accent transition-colors cursor-pointer flex items-center justify-center leading-none"
           onMouseEnter={() => setShowTip(true)}
@@ -98,7 +78,7 @@ function VerticalSlider({
         </button>
       </div>
 
-      <TooltipCard text={info.desc} visible={showTip} anchorRef={tipBtnRef} />
+      <TooltipCard text={info.desc} visible={showTip} />
 
       {/* Vertical slider */}
       <input
@@ -122,11 +102,9 @@ function VerticalSlider({
 
 function HelpIcon({ tooltip, className }: { tooltip: string; className?: string }) {
   const [show, setShow] = useState(false)
-  const btnRef = useRef<HTMLButtonElement>(null)
   return (
-    <>
+    <span className="relative inline-flex items-center">
       <button
-        ref={btnRef}
         type="button"
         className={`w-3.5 h-3.5 rounded-full border border-muted/40 text-[9px] text-muted/60 hover:text-accent hover:border-accent transition-colors cursor-pointer flex items-center justify-center leading-none ${className ?? ''}`}
         onMouseEnter={() => setShow(true)}
@@ -135,8 +113,8 @@ function HelpIcon({ tooltip, className }: { tooltip: string; className?: string 
       >
         ?
       </button>
-      <TooltipCard text={tooltip} visible={show} anchorRef={btnRef} />
-    </>
+      <TooltipCard text={tooltip} visible={show} />
+    </span>
   )
 }
 
@@ -157,7 +135,7 @@ function AutoExecuteToggle({ value, onChange }: { value: boolean; onChange: (v: 
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs text-muted">Auto-execute</span>
-      <HelpIcon tooltip="When ON, PENDING trades are automatically approved without World ID verification. Turn OFF to demo the approval flow." />
+      <HelpIcon tooltip="When ON, PENDING trades are automatically approved without council approval. Turn OFF to demo the approval flow." />
       <button
         type="button"
         className={`w-10 h-5 rounded-full transition-colors cursor-pointer ${

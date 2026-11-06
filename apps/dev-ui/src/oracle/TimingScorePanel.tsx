@@ -72,13 +72,14 @@ export default function TimingScorePanel({ data, loading, error, prices }: Props
 
   // Normalize breakdown: API returns {priceScore, divergenceScore, urgencyScore} object
   // but the UI expects [{name, weight, raw_score}] array
+  const rawBreakdown = data.breakdown as Record<string, number | undefined> | undefined
   const breakdownArray = Array.isArray(data.breakdown)
     ? data.breakdown
-    : data.breakdown && typeof data.breakdown === 'object'
+    : rawBreakdown && typeof rawBreakdown === 'object'
       ? [
-          { name: 'price_vs_avg', weight: 0.4, raw_score: (data.breakdown as any).priceScore ?? 0 },
-          { name: 'source_divergence', weight: 0.2, raw_score: (data.breakdown as any).divergenceScore ?? 0 },
-          { name: 'urgency', weight: 0.4, raw_score: (data.breakdown as any).urgencyScore ?? 0 },
+          { name: 'price_vs_avg', weight: 0.4, raw_score: rawBreakdown.priceScore ?? 0 },
+          { name: 'source_divergence', weight: 0.2, raw_score: rawBreakdown.divergenceScore ?? 0 },
+          { name: 'urgency', weight: 0.4, raw_score: rawBreakdown.urgencyScore ?? 0 },
         ]
       : []
   const hasBreakdown = breakdownArray.length > 0

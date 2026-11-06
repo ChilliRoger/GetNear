@@ -200,3 +200,4 @@ All LISTED: docs home https://docs.near.org/, index https://docs.near.org/llms.t
 ### 8.7 Listed by the owner but deliberately out of scope
 
 Aurora, HOT, Rhea, meme.cooking, HEX, SVRN, OutLayer, GoMining, Agent Market, Gulf Labs and BRRRAIN are not used by GetNear. The agent must not add dependencies or code for them. They do not help a testnet budget-and-approval agent, and listing sponsor tools the code does not use would be misleading. Their links are left out of this pack on purpose; keep them in your own notes.
+

@@ -2,11 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/card";
-import { PrivacyTabBar } from "@/components/privacy/privacy-tab-bar";
-import { PrivateSwapForm } from "@/components/privacy/private-swap-form";
-import { PrivateBalanceSwap } from "@/components/privacy/private-balance-swap";
-import { PrivacyComparison } from "@/components/privacy/privacy-comparison";
-import { PrivacyTxHistory } from "@/components/privacy/privacy-tx-history";
 import { useToast } from "@/components/toast-provider";
 import { useI18n } from "@/lib/i18n";
 import { formatDisplayAmount, DISPLAY_MULTIPLIER, type TradeOrder } from "@getnear/shared";
@@ -53,33 +48,10 @@ function mapApiTrade(raw: ApiTradeOrder): TradeOrder & { timingScore?: number; s
 type MappedTrade = ReturnType<typeof mapApiTrade>;
 
 export default function TradePage() {
-  const [activeTab, setActiveTab] = useState<"public" | "private">("public");
-  const { t } = useI18n();
-
   return (
     <div className="space-y-4">
-      <PrivacyTabBar
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        publicLabel={t("tabs.public_trades")}
-        privateLabel={t("tabs.private_trades")}
-      />
-
-      {activeTab === "public" && (
-        <>
-          <TradeForm />
-          <TradesList />
-        </>
-      )}
-
-      {activeTab === "private" && (
-        <>
-          <PrivateBalanceSwap />
-          <PrivateSwapForm />
-          <PrivacyComparison />
-          <PrivacyTxHistory />
-        </>
-      )}
+      <TradeForm />
+      <TradesList />
     </div>
   );
 }

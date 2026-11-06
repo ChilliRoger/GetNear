@@ -39,3 +39,4 @@ Chunk size = base chunk x urgency ramp (quadratic). Clamped to:
 ## Decision Log
 
 SQLite table, one row per tick. Fields: timestamp, order_id, score (with breakdown), decision (WAIT/EXECUTE), reason, chunk_size, quote_id, deviation_bps.
+

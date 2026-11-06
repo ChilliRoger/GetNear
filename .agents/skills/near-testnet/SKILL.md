@@ -33,3 +33,4 @@ Configured via env vars (see `docs/CONFIG.md`):
 ## Security
 
 Never ask for or print private keys. Always reference env var names (`AGENT_PRIVATE_KEY`). The agent key is a restricted function-call key limited to `execute_chunk` on the FxBudget contract.
+

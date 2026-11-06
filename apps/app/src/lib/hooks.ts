@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { fetchBalances, fetchPolicy, fetchPendingTrades, fetchTreasuryBalances } from "./contracts";
+import { fetchBalances, fetchPolicy, fetchPendingTrades, fetchTreasuryBalances, type ActivePendingTrade } from "./contracts";
 
 // Consecutive failure threshold before slowing polling to 60s
 const FAILURE_THRESHOLD = 3;
@@ -106,19 +106,7 @@ export function usePolicy(interval = 30000) {
 }
 
 export function usePendingTrades(interval = 10000) {
-  const [trades, setTrades] = useState<
-    readonly {
-      tradeId: `0x${string}`;
-      fromAmount: bigint;
-      toAmount: bigint;
-      exchangeRate: bigint;
-      createdAt: bigint;
-      expiresAt: bigint;
-      status: number;
-      approvedBy: `0x${string}`;
-      approvedAt: bigint;
-    }[]
-  >([]);
+  const [trades, setTrades] = useState<ActivePendingTrade[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const failCount = useRef(0);

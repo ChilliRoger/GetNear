@@ -4,18 +4,22 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "build": "tsc --noEmit",
     "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts"
+    "start": "tsx src/index.ts",
+    "lint": "tsc --noEmit",
+    "test": "npx tsx src/strategy.test.ts"
   },
   "dependencies": {
-    "hono": "^4",
+    "@getnear/shared": "workspace:*",
     "@hono/node-server": "^1",
-    "viem": "^2",
-    "better-sqlite3": "^11"
+    "better-sqlite3": "^11",
+    "hono": "^4"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7",
-    "typescript": "~5.9.3",
-    "tsx": "^4"
+    "@types/node": "^20",
+    "tsx": "^4",
+    "typescript": "~5.9.3"
   }
 }

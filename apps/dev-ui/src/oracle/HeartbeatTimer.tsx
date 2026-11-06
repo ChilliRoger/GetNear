@@ -26,7 +26,7 @@ export default function HeartbeatTimer({ demoStatus }: Props) {
     }, 500)
 
     return () => clearInterval(id)
-  }, [demoStatus?.nextTickAt, demoStatus?.serverTime, demoStatus?.sleep])
+  }, [demoStatus])
 
   if (!demoStatus) {
     return (

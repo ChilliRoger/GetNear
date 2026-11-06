@@ -5,9 +5,11 @@
     "moduleResolution": "bundler",
     "esModuleInterop": true,
     "strict": true,
-    "outDir": "dist",
-    "rootDir": "src",
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["node", "better-sqlite3"],
+    "paths": {
+      "@getnear/shared": ["../../packages/shared/src/index.ts"]
+    }
   },
   "include": ["src"]
 }

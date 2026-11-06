@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { geoOrthographic, geoPath, geoGraticule } from "d3-geo";
 
 interface GetNearLogoProps {
@@ -38,30 +38,30 @@ export function GetNearLogo({
   const cy = globeSize / 2;
   const center: [number, number] = [cx, cy];
 
-  const animate = useCallback(() => {
-    const el = graticuleRef.current;
-    if (!el) return;
-
-    rotationRef.current += speed;
-
-    const projection = geoOrthographic()
-      .scale(scale)
-      .translate([cx, cy])
-      .clipAngle(90)
-      .rotate([rotationRef.current, -15, 0]);
-
-    const pathGen = geoPath().projection(projection);
-    const graticule = geoGraticule().step([20, 20]);
-
-    el.setAttribute("d", pathGen(graticule()) || "");
-
-    rafRef.current = requestAnimationFrame(animate);
-  }, [scale, cx, cy, speed]);
-
   useEffect(() => {
+    function animate() {
+      const el = graticuleRef.current;
+      if (!el) return;
+
+      rotationRef.current += speed;
+
+      const projection = geoOrthographic()
+        .scale(scale)
+        .translate([cx, cy])
+        .clipAngle(90)
+        .rotate([rotationRef.current, -15, 0]);
+
+      const pathGen = geoPath().projection(projection);
+      const graticule = geoGraticule().step([20, 20]);
+
+      el.setAttribute("d", pathGen(graticule()) || "");
+
+      rafRef.current = requestAnimationFrame(animate);
+    }
+
     rafRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [animate]);
+  }, [scale, cx, cy, speed]);
 
   // Compute initial sphere path (static outline)
   const spherePath = (() => {

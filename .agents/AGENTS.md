@@ -40,3 +40,4 @@ This file contains GetNear-specific rules. It supplements the global rules, not 
 ## Block Discipline
 
 Do only the current prompt block (P0–P14). Note future work in `docs/TODO.md`. Never start the next block without user confirmation.
+

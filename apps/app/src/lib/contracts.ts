@@ -1,146 +1,81 @@
-import { createPublicClient, http, defineChain } from "viem";
-import { base } from "viem/chains";
-import { CONTRACTS, TOKENS } from "@getnear/shared";
+/**
+ * GetNear — Simulated Contract Read Helpers (P2 Mock State)
+ *
+ * All fills and contract reads are SIMULATED.
+ * In P2 (Mock), returns deterministic mock state without blockchain RPC.
+ * In P4/P7/P8, this will be connected to packages/near-client and FxBudget contract views.
+ */
 
-// Arc testnet — no built-in viem chain definition
-const arcTestnet = defineChain({
-  id: 5042002,
-  name: "Arc Testnet",
-  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
-  rpcUrls: {
-    default: {
-      http: [
-        process.env.NEXT_PUBLIC_ARC_RPC || "https://rpc-testnet.arc.money",
-      ],
-    },
-  },
-  blockExplorers: {
-    default: { name: "ArcScan", url: "https://testnet.arcscan.app" },
-  },
-});
+export interface TreasuryBalances {
+  usdcBal: bigint | null
+  eurcBal: bigint | null
+}
 
-export const baseClient = createPublicClient({
-  chain: base,
-  transport: http(
-    process.env.NEXT_PUBLIC_BASE_RPC || "https://base.llamarpc.com"
-  ),
-});
+export interface TreasuryPolicy {
+  threshold: bigint | null
+  rateMin: bigint | null
+  rateMax: bigint | null
+  version: bigint | null
+}
 
-export const arcClient = createPublicClient({
-  chain: arcTestnet,
-  transport: http(
-    process.env.NEXT_PUBLIC_ARC_RPC || "https://rpc-testnet.arc.money"
-  ),
-});
-
-const TREASURY_WALLET = "0xB60679110E14D2291f8105EF002A49809cfB283b" as `0x${string}`;
-
-const erc20BalanceOfAbi = [
-  {
-    type: "function" as const,
-    name: "balanceOf" as const,
-    inputs: [{ name: "account", type: "address" as const }],
-    outputs: [{ name: "", type: "uint256" as const }],
-    stateMutability: "view" as const,
-  },
-] as const;
-
-// --- ABIs (view functions only) ---
-
-const swapExecutorAbi = [
-  {
-    type: "function" as const,
-    name: "getBalances" as const,
-    inputs: [],
-    outputs: [
-      { name: "usdcBal", type: "uint256" as const },
-      { name: "eurcBal", type: "uint256" as const },
-    ],
-    stateMutability: "view" as const,
-  },
-] as const;
-
-const treasuryVaultAbi = [
-  {
-    type: "function" as const,
-    name: "getPolicy" as const,
-    inputs: [],
-    outputs: [
-      { name: "threshold", type: "uint256" as const },
-      { name: "rateMin", type: "uint256" as const },
-      { name: "rateMax", type: "uint256" as const },
-      { name: "version", type: "uint256" as const },
-    ],
-    stateMutability: "view" as const,
-  },
-  {
-    type: "function" as const,
-    name: "getActivePendingTrades" as const,
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "tuple[]" as const,
-        components: [
-          { name: "tradeId", type: "bytes32" as const },
-          { name: "fromAmount", type: "uint256" as const },
-          { name: "toAmount", type: "uint256" as const },
-          { name: "exchangeRate", type: "uint256" as const },
-          { name: "createdAt", type: "uint256" as const },
-          { name: "expiresAt", type: "uint256" as const },
-          { name: "status", type: "uint8" as const },
-          { name: "approvedBy", type: "address" as const },
-          { name: "approvedAt", type: "uint256" as const },
-        ],
-      },
-    ],
-    stateMutability: "view" as const,
-  },
-] as const;
+export interface ActivePendingTrade {
+  tradeId: string
+  fromAmount: bigint
+  toAmount: bigint
+  exchangeRate: bigint
+  createdAt: bigint
+  expiresAt: bigint
+  status: number
+  approvedBy?: string
+  approvedAt?: bigint
+}
 
 // --- Read helpers ---
 
-export async function fetchBalances() {
-  const [usdcBal, eurcBal] = await baseClient.readContract({
-    address: CONTRACTS.SWAP_EXECUTOR_BASE as `0x${string}`,
-    abi: swapExecutorAbi,
-    functionName: "getBalances",
-  });
-  return { usdcBal, eurcBal };
+export async function fetchBalances(): Promise<TreasuryBalances> {
+  // In mock mode, return realistic testnet treasury balances
+  return {
+    usdcBal: 250_000_000_000n, // $250,000 USDC (6 decimals)
+    eurcBal: 120_000_000_000n, // 120,000 EURC (6 decimals)
+  }
 }
 
-export async function fetchPolicy() {
-  const [threshold, rateMin, rateMax, version] = await arcClient.readContract({
-    address: CONTRACTS.TREASURY_VAULT_ARC as `0x${string}`,
-    abi: treasuryVaultAbi,
-    functionName: "getPolicy",
-  });
-  return { threshold, rateMin, rateMax, version };
+export async function fetchPolicy(): Promise<TreasuryPolicy> {
+  return {
+    threshold: 500_000_000n,    // $500 auto-cap (6 decimals)
+    rateMin: 1_050_000_000_000_000_000n, // 1.05 min rate (18 decimals)
+    rateMax: 1_120_000_000_000_000_000n, // 1.12 max rate (18 decimals)
+    version: 1n,
+  }
 }
 
-export async function fetchPendingTrades() {
-  const trades = await arcClient.readContract({
-    address: CONTRACTS.TREASURY_VAULT_ARC as `0x${string}`,
-    abi: treasuryVaultAbi,
-    functionName: "getActivePendingTrades",
-  });
-  return trades;
+interface PendingTradeApiRecord {
+  id: string
+  input_amount?: string
+  desired_output?: string
+  created_at?: number
+  deadline?: number
 }
 
-export async function fetchTreasuryBalances() {
-  const [usdcBal, eurcBal] = await Promise.all([
-    baseClient.readContract({
-      address: TOKENS.USDC_BASE as `0x${string}`,
-      abi: erc20BalanceOfAbi,
-      functionName: "balanceOf",
-      args: [TREASURY_WALLET],
-    }),
-    baseClient.readContract({
-      address: TOKENS.EURC_BASE as `0x${string}`,
-      abi: erc20BalanceOfAbi,
-      functionName: "balanceOf",
-      args: [TREASURY_WALLET],
-    }),
-  ]);
-  return { usdcBal, eurcBal };
+export async function fetchPendingTrades(): Promise<ActivePendingTrade[]> {
+  try {
+    const res = await fetch('/api/oracle/api/trades?status=PENDING')
+    if (!res.ok) return []
+    const orders: PendingTradeApiRecord[] = await res.json()
+    return orders.map((o) => ({
+      tradeId: o.id,
+      fromAmount: BigInt(o.input_amount || '0'),
+      toAmount: BigInt(o.desired_output || '0'),
+      exchangeRate: 1_080_000_000_000_000_000n,
+      createdAt: BigInt(o.created_at || Math.floor(Date.now() / 1000)),
+      expiresAt: BigInt(o.deadline || Math.floor(Date.now() / 1000) + 3600),
+      status: 0, // Pending
+    }))
+  } catch {
+    return []
+  }
+}
+
+export async function fetchTreasuryBalances(): Promise<TreasuryBalances> {
+  return fetchBalances()
 }

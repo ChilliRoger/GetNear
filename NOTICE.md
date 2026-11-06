@@ -7,3 +7,4 @@ Source: https://github.com/pulseplay-stack/meridian-fx
 License: MIT (declared in upstream README; no LICENSE file found in upstream repo root as of Nov 2026)
 
 The upstream code is used in accordance with the MIT license. All original copyright notices are preserved.
+

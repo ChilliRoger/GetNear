@@ -7,20 +7,19 @@ import { TerminalReplay } from "@/components/terminal-replay";
 import { LanguageToggle } from "@/components/language-toggle";
 import { useI18n } from "@/lib/i18n";
 
-/* ─── Sponsor data (name/letter/gradient are brand, i18n keys for role/chain) ─── */
+/* ─── Stack architecture components ─── */
 const sponsors = [
-  { name: "Uniswap", letter: "U", gradient: "from-[#ff007a] to-[#ff5ca0]", roleKey: "landing.sponsor_uniswap_role", chainKey: "landing.sponsor_uniswap_chain" },
-  { name: "Chainlink CRE", letter: "C", gradient: "from-[#375bd2] to-[#5a8dee]", roleKey: "landing.sponsor_chainlink_role", chainKey: "landing.sponsor_chainlink_chain" },
-  { name: "Arc (Circle)", letter: "A", gradient: "from-[#00d4aa] to-[#00f5c4]", roleKey: "landing.sponsor_arc_role", chainKey: "landing.sponsor_arc_chain" },
-  { name: "World ID", letter: "W", gradient: "from-[#1a1a2e] to-[#4a4a6a]", roleKey: "landing.sponsor_worldid_role", chainKey: "landing.sponsor_worldid_chain" },
-  { name: "Base", letter: "B", gradient: "from-[#0052ff] to-[#3377ff]", roleKey: "landing.sponsor_base_role", chainKey: "landing.sponsor_base_chain" },
+  { name: "NEAR Protocol", letter: "N", gradient: "from-[#00ec97] to-[#00c08b]", roleKey: "landing.sponsor_near_role", chainKey: "landing.sponsor_near_chain" },
+  { name: "1Click API", letter: "1", gradient: "from-[#2563eb] to-[#3b82f6]", roleKey: "landing.sponsor_oneclick_role", chainKey: "landing.sponsor_oneclick_chain" },
+  { name: "Sputnik DAO", letter: "S", gradient: "from-[#8b5cf6] to-[#a855f7]", roleKey: "landing.sponsor_dao_role", chainKey: "landing.sponsor_dao_chain" },
+  { name: "FxBudget Contract", letter: "F", gradient: "from-[#00d4aa] to-[#00f5c4]", roleKey: "landing.sponsor_contract_role", chainKey: "landing.sponsor_contract_chain" },
 ];
 
 const steps = [
-  { num: "01", titleKey: "landing.step_monitor", descKey: "landing.step_monitor_desc", tag: "UNISWAP" },
-  { num: "02", titleKey: "landing.step_decide", descKey: "landing.step_decide_desc", tag: "CHAINLINK CRE" },
-  { num: "03", titleKey: "landing.step_execute", descKey: "landing.step_execute_desc", tag: "BASE + WORLD ID" },
-  { num: "04", titleKey: "landing.step_log", descKey: "landing.step_log_desc", tag: "ARC" },
+  { num: "01", titleKey: "landing.step_monitor", descKey: "landing.step_monitor_desc", tag: "1CLICK QUOTES" },
+  { num: "02", titleKey: "landing.step_decide", descKey: "landing.step_decide_desc", tag: "STRATEGY ENGINE" },
+  { num: "03", titleKey: "landing.step_execute", descKey: "landing.step_execute_desc", tag: "RESTRICTED KEY" },
+  { num: "04", titleKey: "landing.step_log", descKey: "landing.step_log_desc", tag: "DAO & EXPLORER" },
 ];
 
 export default function LandingPage() {

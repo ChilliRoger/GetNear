@@ -155,3 +155,4 @@ Before starting P2, confirm:
 5. **Deletion confirmation**: Confirm the following are acceptable to delete permanently from main (they remain in git history via the `pre-hackathon` tag): `contracts/`, `meridian-cre/`, `apps/privacy/`, all Meridian PDFs, `.agents/`, `.claude/`, `skills-lock.json`, `tech-spec-fixes.txt`.
 6. **Reference branch**: Should the EVM/Solidity code be preserved on a separate reference branch, or is the `pre-hackathon` tag in git history sufficient?
 7. **Build**: Confirm whether the upstream ever built cleanly (run `pnpm install --ignore-scripts && pnpm build` with the full EVM stack). If it did not, record that in AUDIT.md instead of fixing it now.
+

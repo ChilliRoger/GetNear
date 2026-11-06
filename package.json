@@ -1,27 +1,23 @@
 {
   "name": "getnear",
   "private": true,
-  "packageManager": "pnpm@10.28.1",
+  "packageManager": "pnpm@12.18.0",
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
-    "app:restart": "fuser -k 3100/tcp 2>/dev/null; sleep 1; cd apps/app && npx next build && npx next start -p 3100",
-    "oracle:restart": "fuser -k 38174/tcp 2>/dev/null; sleep 1; cd apps/oracle && npx tsx src/index.ts",
-    "start": "fuser -k 3100/tcp 38174/tcp 2>/dev/null; sleep 1; concurrently \"cd apps/oracle && npx tsx src/index.ts\" \"cd apps/app && npx next build && npx next start -p 3100\"",
-    "fynd:down": "docker compose down",
-    "fynd:logs": "docker compose logs -f fynd",
-    "fynd:restart": "docker compose restart fynd",
-    "fynd:up": "docker compose up -d fynd",
     "lint": "turbo lint",
-    "stack:down": "docker compose down",
-    "stack:logs": "docker compose logs -f",
-    "stack:up": "docker compose up -d",
     "test": "turbo test"
   },
   "devDependencies": {
-    "turbo": "^2.9.3"
+    "turbo": "^2.9.3",
+    "typescript": "^5.7.0"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["better-sqlite3", "esbuild"]
+    "overrides": {
+      "react": "^18.3.1",
+      "react-dom": "^18.3.1",
+      "@types/react": "^18.3.18",
+      "@types/react-dom": "^18.3.5"
+    }
   }
 }

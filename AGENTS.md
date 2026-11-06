@@ -17,3 +17,4 @@ Key points:
 - Fills are SIMULATED. Always label them as such.
 - Commit locally in small conventional commits. Never push without explicit confirmation.
 - Do only the current block. Note future work in `docs/TODO.md`.
+
