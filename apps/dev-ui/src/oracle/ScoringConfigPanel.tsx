@@ -14,12 +14,12 @@ const DEFAULTS: StrategyConfig = {
 }
 
 const SLIDER_INFO: Record<string, { label: string; short: string; desc: string }> = {
-  swapThreshold:      { label: 'Swap',     short: 'Swap',  desc: 'Minimum composite score to trigger a swap. Lower = more trades execute. At 30, almost any market condition triggers execution.' },
-  aggressiveThreshold:{ label: 'Aggro',    short: 'Aggro', desc: 'Score above this doubles the chunk size for faster fills. The agent becomes more aggressive when confidence is high.' },
-  urgencyOverride:    { label: 'Urgency',  short: 'Urg',   desc: 'If urgency alone exceeds this, force execution regardless of price or divergence. Prevents orders from expiring unfilled.' },
-  weightPrice:        { label: 'Price',    short: 'Price', desc: 'Weight of current-vs-24h-average price in the composite score. Higher = agent waits more for favorable prices.' },
-  weightDivergence:   { label: 'Diverg',   short: 'Div',   desc: 'Weight of source agreement (Chainlink vs Fynd vs Uniswap). Higher = agent waits for price sources to converge.' },
-  weightUrgency:      { label: 'Urgency',  short: 'Urg',   desc: 'Weight of deadline pressure. Higher = agent ramps up execution speed as the deadline approaches.' },
+  swapThreshold: { label: 'Swap', short: 'Swap', desc: 'Minimum composite score to trigger a swap. Lower = more trades execute. At 30, almost any market condition triggers execution.' },
+  aggressiveThreshold: { label: 'Aggro', short: 'Aggro', desc: 'Score above this doubles the chunk size for faster fills. The agent becomes more aggressive when confidence is high.' },
+  urgencyOverride: { label: 'Urgency', short: 'Urg', desc: 'If urgency alone exceeds this, force execution regardless of price or divergence. Prevents orders from expiring unfilled.' },
+  weightPrice: { label: 'Price', short: 'Price', desc: 'Weight of current-vs-24h-average price in the composite score. Higher = agent waits more for favorable prices.' },
+  weightDivergence: { label: 'Diverg', short: 'Div', desc: 'Weight of source agreement (Chainlink vs Fynd vs Uniswap). Higher = agent waits for price sources to converge.' },
+  weightUrgency: { label: 'Urgency', short: 'Urg', desc: 'Weight of deadline pressure. Higher = agent ramps up execution speed as the deadline approaches.' },
 }
 
 function sliderColor(value: number, max: number): string {
@@ -121,9 +121,8 @@ function HelpIcon({ tooltip, className }: { tooltip: string; className?: string 
 function SigmaIndicator({ weightSum, weightOk }: { weightSum: number; weightOk: boolean }) {
   return (
     <div className="flex items-center gap-1">
-      <span className={`text-xs font-mono tabular-nums px-1.5 py-0.5 rounded ${
-        weightOk ? 'text-ok/80 bg-ok/10' : 'text-warn bg-warn/10'
-      }`}>
+      <span className={`text-xs font-mono tabular-nums px-1.5 py-0.5 rounded ${weightOk ? 'text-ok/80 bg-ok/10' : 'text-warn bg-warn/10'
+        }`}>
         {'\u03A3'} = {weightSum.toFixed(2)}{!weightOk && ' \u26A0'}
       </span>
       <HelpIcon tooltip="Sum of the three weight sliders. Should equal 1.00 for proper scoring. If not 1.0, scores will be scaled proportionally." />
@@ -138,14 +137,12 @@ function AutoExecuteToggle({ value, onChange }: { value: boolean; onChange: (v: 
       <HelpIcon tooltip="When ON, PENDING trades are automatically approved without council approval. Turn OFF to demo the approval flow." />
       <button
         type="button"
-        className={`w-10 h-5 rounded-full transition-colors cursor-pointer ${
-          value ? 'bg-accent' : 'bg-border'
-        }`}
+        className={`w-10 h-5 rounded-full transition-colors cursor-pointer ${value ? 'bg-accent' : 'bg-border'
+          }`}
         onClick={() => onChange(!value)}
       >
-        <div className={`w-4 h-4 rounded-full bg-white transition-transform mx-0.5 ${
-          value ? 'translate-x-5' : 'translate-x-0'
-        }`} />
+        <div className={`w-4 h-4 rounded-full bg-white transition-transform mx-0.5 ${value ? 'translate-x-5' : 'translate-x-0'
+          }`} />
       </button>
     </div>
   )
@@ -201,7 +198,7 @@ export default function ScoringConfigPanel() {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(DEFAULTS),
-    }).catch(() => {})
+    }).catch(() => { })
   }, [])
 
   const weightSum = config.weightPrice + config.weightDivergence + config.weightUrgency

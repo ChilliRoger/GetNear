@@ -130,11 +130,10 @@ const pendingQuote: QuoteSnapshot = {
   quoteId: "QTE-0099",
   fromToken: "USDC",
   toToken: "EURC",
-  fromAmount: "50000000", // $50 raw -> $50,000,000 display
-  toAmount: "46175000",
-  exchangeRateX18: "1082800000000000000",
-  executionChain: 8453,
-  quoteMetadataJson: "{}",
+  amountIn: "50000000",
+  amountOut: "46175000",
+  rate: 0.9235,
+  source: "MOCK",
   quotedAt: now - 15 * 60_000,
   expiresAt: now + 45 * 60_000,
 };

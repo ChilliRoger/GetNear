@@ -1,19 +1,8 @@
+import type { QuoteSnapshot } from './domain'
+
 export const OPERATIONAL_MODE = 'hackathon_demo' as const
 
 export type TradeStatus = 'PENDING' | 'APPROVED' | 'EXECUTED' | 'REJECTED'
-
-export interface QuoteSnapshot {
-  quoteId: string
-  fromToken: 'USDC' | 'EURC'
-  toToken: 'USDC' | 'EURC'
-  fromAmount: string          // BigNumber string (6 decimals)
-  toAmount: string            // BigNumber string (6 decimals)
-  exchangeRateX18: string     // Rate as 18-decimal string
-  executionChain: number      // Base mainnet: 8453
-  quoteMetadataJson: string   // Raw JSON from Uniswap API
-  quotedAt: number            // Unix timestamp
-  expiresAt: number           // Quote validity window
-}
 
 export interface TradeDecision {
   action: 'EXECUTE' | 'QUEUE_APPROVAL' | 'WAIT'

@@ -8,9 +8,10 @@ Items noted during P0–P2 for later blocks.
 - [x] P2: Implement MOCK adapters for QuoteSource, ReferenceRateSource, Executor, ApprovalGate.
 - [x] P2: Remove Fynd Docker service from compose.yaml (deleted compose.yaml).
 - [x] P2: Verify pnpm build, pnpm lint, and pnpm test pass after EVM removal.
-- [ ] P3: Define GetNear shared types (Order, Chunk, Decision, QuoteSnapshot, Fill, ProposalRef).
-- [ ] P3: Set up typed config loader (zod) for NEAR env vars.
-- [ ] P3: Write docs/CONFIG.md and update .env.example.
+- [x] P3: Define GetNear shared types (Order, Chunk, Decision, QuoteSnapshot, Fill, ProposalRef).
+- [x] P3: Set up typed config loader (zod) for NEAR env vars.
+- [x] P3: Write docs/CONFIG.md and update .env.example.
+- [x] P3: Utility helpers (yocto, ns, bps, explorer) and unit tests.
 - [ ] P4: Set up NEAR testnet accounts and RPC client.
 - [ ] P5: Fetch 1Click token list; verify euro stablecoin exists; implement dry-quote adapter.
 - [ ] P6: Adapt strategy engine to NEAR quote sources.

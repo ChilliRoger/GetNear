@@ -10,9 +10,14 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx src/utils.test.ts && tsx src/config.test.ts"
   },
   "devDependencies": {
+    "tsx": "^4.21.0",
     "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
   }
 }

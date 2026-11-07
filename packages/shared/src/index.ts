@@ -1,3 +1,6 @@
 export * from './types'
 export * from './constants'
 export * from './adapters'
+export * from './domain'
+export * from './utils'
+export * from './config'
