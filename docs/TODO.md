@@ -12,7 +12,7 @@ Items noted during P0–P2 for later blocks.
 - [x] P3: Set up typed config loader (zod) for NEAR env vars.
 - [x] P3: Write docs/CONFIG.md and update .env.example.
 - [x] P3: Utility helpers (yocto, ns, bps, explorer) and unit tests.
-- [ ] P4: Set up NEAR testnet accounts and RPC client.
+- [x] P4: Set up NEAR testnet accounts and RPC client (@getnear/near-client, check-env script, frontend wallet connect).
 - [ ] P5: Fetch 1Click token list; verify euro stablecoin exists; implement dry-quote adapter.
 - [ ] P6: Adapt strategy engine to NEAR quote sources.
 - [ ] P7: Write Rust FxBudget smart contract.

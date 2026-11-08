@@ -47,3 +47,4 @@ Any invalid variable causes the process to fail immediately on boot.
 1. **Testnet Only**: `loadConfig()` asserts `NEAR_NETWORK_ID === 'testnet'`. Setting `mainnet` throws an uncatchable boot error.
 2. **Secret Masking**: `configSummary()` masks `AGENT_PRIVATE_KEY` and `NEAR_AI_API_KEY`. Raw key values are never returned to logs or API responses.
 3. **Restricted Key Scope**: When configured, `AGENT_PRIVATE_KEY` must only be a function-call access key scoped to receiver `FX_BUDGET_CONTRACT_ID` and method `execute_chunk`. It must never be a full-access key.
+

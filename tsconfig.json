@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@getnear/shared": ["packages/shared/src/index.ts"],
+      "@getnear/near-client": ["packages/near-client/src/index.ts"]
+    }
+  }
+}

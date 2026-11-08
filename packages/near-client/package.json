@@ -1,0 +1,23 @@
+{
+  "name": "@getnear/near-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "tsx src/client.test.ts"
+  },
+  "dependencies": {
+    "@getnear/shared": "workspace:*",
+    "near-api-js": "^7.4.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0"
+  }
+}
