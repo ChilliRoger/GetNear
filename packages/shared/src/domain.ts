@@ -104,9 +104,9 @@ export interface Decision {
 export interface QuoteSnapshot {
   /** Unique quote identifier from the quote provider */
   quoteId: string
-  /** Input token symbol */
+  /** Input token symbol or asset ID */
   fromToken: string
-  /** Output token symbol */
+  /** Output token symbol or asset ID */
   toToken: string
   /** Input amount (atomic units) */
   amountIn: string
@@ -120,6 +120,22 @@ export interface QuoteSnapshot {
   quotedAt: number
   /** Quote validity expiry (Unix ms) */
   expiresAt: number
+  /** Decimals of the input token (e.g. 6 for USDC) */
+  decimalsIn?: number
+  /** Decimals of the output token (e.g. 18 for EURe) */
+  decimalsOut?: number
+  /** Estimated USD value of the input amount if returned by provider */
+  amountInUsd?: string
+  /** Estimated USD value of the output amount if returned by provider */
+  amountOutUsd?: string
+  /** Minimum output amount considering slippage tolerance (atomic units) */
+  minAmountOut?: string
+  /** Estimated execution time in seconds */
+  timeEstimate?: number
+  /** Correlation or request identifier from the quote provider */
+  requestId?: string
+  /** Cryptographic quote signature from the quote provider */
+  signature?: string
 }
 
 // ── Fill ─────────────────────────────────────────────────────────────

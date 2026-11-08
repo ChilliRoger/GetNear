@@ -5,25 +5,22 @@
  * When GETNEAR_MODE === 'mock', mock implementations provide deterministic seeded behavior.
  */
 
+import type { QuoteSnapshot } from './domain.js'
+
 // 1. Quote Source
 export interface QuoteRequest {
   fromToken: string
   toToken: string
   amountIn: string
   slippageToleranceBps?: number
+  dry?: boolean
+  recipient?: string
+  refundTo?: string
+  decimalsIn?: number
+  decimalsOut?: number
 }
 
-export interface QuoteResult {
-  quoteId: string
-  fromToken: string
-  toToken: string
-  amountIn: string
-  amountOut: string
-  rate: number
-  quotedAt: number
-  expiresAt: number
-  source: string
-}
+export interface QuoteResult extends QuoteSnapshot {}
 
 export interface QuoteSource {
   getQuote(request: QuoteRequest): Promise<QuoteResult>
