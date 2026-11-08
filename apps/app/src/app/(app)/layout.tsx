@@ -2,7 +2,6 @@
 
 import { Nav } from "@/components/nav";
 import { GetNearLogo } from "@/components/getnear-logo";
-import { LanguageToggle } from "@/components/language-toggle";
 import { WalletConnectButton } from "@/components/wallet-connect-button";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ToastProvider } from "@/components/toast-provider";
@@ -41,7 +40,6 @@ export default function AppLayout({
             </div>
             <div className="flex items-center gap-2">
               <WalletConnectButton />
-              <LanguageToggle />
             </div>
           </div>
         </header>

@@ -182,6 +182,37 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  apps/agent:
+    dependencies:
+      '@getnear/near-client':
+        specifier: workspace:*
+        version: link:../../packages/near-client
+      '@getnear/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@hono/node-server':
+        specifier: ^1.13.7
+        version: 1.19.12(hono@4.12.10)
+      better-sqlite3:
+        specifier: ^11.7.0
+        version: 11.10.0
+      hono:
+        specifier: ^4.6.14
+        version: 4.12.10
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.12
+        version: 7.6.13
+      '@types/node':
+        specifier: ^22.10.1
+        version: 22.20.5
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   apps/app:
     dependencies:
       '@getnear/near-client':
@@ -1124,6 +1155,9 @@ packages:
 
   '@types/node@20.19.39':
     resolution: {integrity: sha512-orrrD74MBUyK8jOAD/r0+lfa1I2MO6I+vAkmAWzMYbCcgrN4lCrmK52gRFQq/JRxfYPfonkr4b0jcY7Olqdqbw==}
+
+  '@types/node@22.20.5':
+    resolution: {integrity: sha512-U2+DNr+wSjpsTS/wZGYHq7GcwfuSmKiKvoPvK22zwTlRhU91yOniN4qRR5KhIjvif7ysw/dz/hKmfDH0Ris4aA==}
 
   '@types/node@24.12.2':
     resolution: {integrity: sha512-A1sre26ke7HDIuY/M23nd9gfB+nrmhtYyMINbjI1zHJxYteKR6qSMX56FsmjMcDb3SMcjJg5BiRRgOCC/yBD0g==}
@@ -3920,7 +3954,7 @@ snapshots:
 
   '@types/better-sqlite3@7.6.13':
     dependencies:
-      '@types/node': 24.12.2
+      '@types/node': 22.20.5
 
   '@types/d3-array@3.2.2': {}
 
@@ -3961,6 +3995,10 @@ snapshots:
   '@types/node@11.11.6': {}
 
   '@types/node@20.19.39':
+    dependencies:
+      undici-types: 6.21.0
+
+  '@types/node@22.20.5':
     dependencies:
       undici-types: 6.21.0
 

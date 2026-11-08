@@ -17,6 +17,8 @@
     "contract:deploy": "tsx scripts/near/deploy-fx-budget.ts",
     "dao:bootstrap": "tsx scripts/near/bootstrap-dao.ts",
     "agent:add-key": "tsx scripts/near/add-agent-key.ts",
+    "agent:start": "tsx apps/agent/src/index.ts",
+    "agent:test": "tsx apps/agent/tests/agent.test.ts",
     "dao:vote": "tsx scripts/near/vote-proposal.ts",
     "demo:approval": "tsx scripts/near/demo-approval-flow.ts"
   },

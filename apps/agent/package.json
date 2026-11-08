@@ -1,0 +1,24 @@
+{
+  "name": "@getnear/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "tsx tests/agent.test.ts"
+  },
+  "dependencies": {
+    "@getnear/near-client": "workspace:*",
+    "@getnear/shared": "workspace:*",
+    "@hono/node-server": "^1.13.7",
+    "better-sqlite3": "^11.7.0",
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0"
+  }
+}

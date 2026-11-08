@@ -225,67 +225,30 @@ function TradeForm() {
       {/* Preview */}
       <Card title={t("trade.preview")} badge={{ label: "ESTIMATE", color: "blue" }}>
         <div className="grid grid-cols-2 gap-3">
-          {mode === "INPUT" ? (
-            <>
-              <div>
-                <div className="text-[11px] text-muted">{t("trade.you_send")}</div>
-                <div className="font-mono text-xs font-medium text-foreground">{displayAmount}</div>
-              </div>
-              <div>
-                <div className="text-[11px] text-muted">{t("trade.you_receive")}</div>
-                <div className="font-mono text-xs font-medium text-accent-green">
-                  {rateLoading ? (
-                    <span className="inline-block h-4 w-20 animate-pulse rounded bg-border" />
-                  ) : liveRate ? (
-                    <>~{(() => {
-                      // liveRate is EURC/USD (dollars per 1 EURC)
-                      // USDC→EURC: receive = amount / rate; EURC→USDC: receive = amount * rate
-                      const previewRate = direction === "USDC_TO_EURC" ? 1 / liveRate : liveRate;
-                      const receiveCurrency = direction === "USDC_TO_EURC" ? "EUR" : "USD";
-                      return (Number(amount) * previewRate * DISPLAY_MULTIPLIER).toLocaleString("en-US", {
-                        style: "currency",
-                        currency: receiveCurrency,
-                        maximumFractionDigits: 0,
-                      });
-                    })()}</>
-                  ) : (
-                    "—"
-                  )}
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <div>
-                <div className="text-[11px] text-muted">{t("trade.desired_output")}</div>
-                <div className="font-mono text-xs font-medium text-accent-green">{displayAmount}</div>
-              </div>
-              <div>
-                <div className="text-[11px] text-muted">{t("trade.estimated_deposit")}</div>
-                <div className="font-mono text-xs font-medium text-foreground">
-                  {rateLoading ? (
-                    <span className="inline-block h-4 w-20 animate-pulse rounded bg-border" />
-                  ) : liveRate ? (
-                    <>~{(() => {
-                      const isBuyingEurc = direction === "USDC_TO_EURC";
-                      const estimatedInput = isBuyingEurc
-                        ? Number(amount) * liveRate * 1.05
-                        : Number(amount) / liveRate * 1.05;
-                      const depositCurrency = isBuyingEurc ? "USD" : "EUR";
-                      return (estimatedInput * DISPLAY_MULTIPLIER).toLocaleString("en-US", {
-                        style: "currency",
-                        currency: depositCurrency,
-                        maximumFractionDigits: 0,
-                      });
-                    })()}</>
-                  ) : (
-                    "—"
-                  )}
-                </div>
-                <div className="text-[9px] text-muted mt-0.5">{t("trade.buffer_note")}</div>
-              </div>
-            </>
-          )}
+          <div>
+            <div className="text-[11px] text-muted">{t("trade.you_send")}</div>
+            <div className="font-mono text-xs font-medium text-foreground">{displayAmount}</div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted">{t("trade.you_receive")}</div>
+            <div className="font-mono text-xs font-medium text-accent-green">
+              {rateLoading ? (
+                <span className="inline-block h-4 w-20 animate-pulse rounded bg-border" />
+              ) : liveRate ? (
+                <>~{(() => {
+                  const previewRate = direction === "USDC_TO_EURC" ? 1 / liveRate : liveRate;
+                  const receiveCurrency = direction === "USDC_TO_EURC" ? "EUR" : "USD";
+                  return (Number(amount) * previewRate * DISPLAY_MULTIPLIER).toLocaleString("en-US", {
+                    style: "currency",
+                    currency: receiveCurrency,
+                    maximumFractionDigits: 0,
+                  });
+                })()}</>
+              ) : (
+                "—"
+              )}
+            </div>
+          </div>
           <div>
             <div className="text-[11px] text-muted">{t("trade.rate")}</div>
             <div className="font-mono text-xs font-medium text-foreground">

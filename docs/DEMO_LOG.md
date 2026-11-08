@@ -106,3 +106,48 @@ Demonstrates complete lifecycle of an above-cap order:
      ```
    - Proposal #3 Status: `Approved`
    - Order #1 Status: `Active` (Ready for Agent execution)
+
+---
+
+## 6. Autonomous Agent Execution (Block P9)
+
+The autonomous agent runner (`@getnear/agent` in `apps/agent`) monitors active orders via contract views, fetches live 1Click dry-quotes and official ECB rates, evaluates adaptive TWAP strategy, and executes chunks on NEAR testnet using its restricted function-call key:
+
+### Order #1 Execution Trace (250 USDC Total)
+
+| Chunk | Amount In | Simulated Out | Quote Ref | Tx Hash & Explorer Link |
+| :--- | :--- | :--- | :--- | :--- |
+| **#1** | 20.00 USDC | 18.4000 EURe | `sha256:d8a57321e86016d1` | [`5WLUTL3GZX5m7fFqDM6Jd3uA1nHTZiirmbHrDGJBEGMq`](https://testnet.nearblocks.io/txns/5WLUTL3GZX5m7fFqDM6Jd3uA1nHTZiirmbHrDGJBEGMq) |
+| **#2** | 20.00 USDC | 17.7484 EURe | `sha256:749d170d4cfd80fb54244150597fd5c0` | [`2QF4Un9mUov6aThRtxKeQACE7nPGxNqPQvQQnDQrmKVc`](https://testnet.nearblocks.io/txns/2QF4Un9mUov6aThRtxKeQACE7nPGxNqPQvQQnDQrmKVc) |
+| **#3** | 20.00 USDC | 17.7484 EURe | `sha256:e2d2938751269cb9f2c68b545b84994a` | [`EdZqU3PjhgSWGAeVgSF3xoqq9iFKBf5LJF7KZPtuGzzk`](https://testnet.nearblocks.io/txns/EdZqU3PjhgSWGAeVgSF3xoqq9iFKBf5LJF7KZPtuGzzk) |
+
+### On-Chain Event Proof (Chunk #3)
+```json
+{
+  "standard": "nep297",
+  "version": "1.0.0",
+  "event": "chunk_executed",
+  "data": [{
+    "id": 1,
+    "amount_in": "20000000",
+    "executed_in": "60000000",
+    "quote_ref": "sha256:e2d2938751269cb9f2c68b545b84994a",
+    "deviation_bps": -92,
+    "simulated_out": "17748368589286141090",
+    "chunks_count": 3,
+    "status": "Active"
+  }]
+}
+```
+
+### Local Audit & Observability
+- All fills are tracked locally in SQLite (`apps/agent/data/agent.db`) with `is_simulated = 1`.
+- Strategy evaluations and WAIT decisions are logged with granular rationale.
+- Observability REST API server is exposed on port `38175` with endpoints:
+  - `GET /health` — Agent uptime and service status
+  - `GET /status` — Current loop state, order count, and lock status
+  - `GET /fills` — Complete list of simulated fills with transaction hashes
+  - `GET /decisions` — Complete audit trail of WAIT / EXECUTE decisions
+  - `POST /trigger` — Manual tick trigger for ops / testing
+
+

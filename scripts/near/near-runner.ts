@@ -6,7 +6,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 
 export function getNearBin(): string {
   const binaryCandidates = [
@@ -35,22 +35,29 @@ export interface TxResult {
 }
 
 export function extractTxInfo(output: string): { txHash?: string; explorerUrl?: string } {
-  // Look for explorer URL: explorer.testnet.near.org or testnet.nearblocks.io
-  const urlMatch = output.match(/https:\/\/(?:explorer\.testnet\.near\.org\/transactions|testnet\.nearblocks\.io\/txns)\/([1-9A-HJ-NP-Za-km-z]{40,64})/)
+  // Robust ANSI escape code stripping
+  const clean = output.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '')
+
+  // 1. Check for Explorer URL
+  const urlMatch = clean.match(/https:\/\/(?:explorer\.testnet\.near\.org\/transactions|testnet\.nearblocks\.io\/txns)\/([1-9A-HJ-NP-Za-km-z]{32,64})/i)
   if (urlMatch) {
+    const hash = urlMatch[1].trim()
     return {
-      txHash: urlMatch[1],
-      explorerUrl: `https://testnet.nearblocks.io/txns/${urlMatch[1]}`,
+      txHash: hash,
+      explorerUrl: `https://testnet.nearblocks.io/txns/${hash}`,
     }
   }
-  // Look for transaction id pattern
-  const txMatch = output.match(/Transaction ID:\s*([1-9A-HJ-NP-Za-km-z]{40,64})/i)
+
+  // 2. Check for Transaction ID label
+  const txMatch = clean.match(/Transaction ID:\s*([1-9A-HJ-NP-Za-km-z]{32,64})/i)
   if (txMatch) {
+    const hash = txMatch[1].trim()
     return {
-      txHash: txMatch[1],
-      explorerUrl: `https://testnet.nearblocks.io/txns/${txMatch[1]}`,
+      txHash: hash,
+      explorerUrl: `https://testnet.nearblocks.io/txns/${hash}`,
     }
   }
+
   return {}
 }
 
@@ -86,11 +93,16 @@ export function runCallFunction(params: {
     'send',
   ]
 
-  const output = execFileSync(bin, argsList, {
+  const res = spawnSync(bin, argsList, {
     encoding: 'utf-8',
     shell: false,
     maxBuffer: 10 * 1024 * 1024,
   })
+
+  const output = `${res.stdout || ''}\n${res.stderr || ''}`
+  if (res.status !== 0) {
+    throw new Error(`Command failed with status ${res.status}:\n${output}`)
+  }
 
   const { txHash, explorerUrl } = extractTxInfo(output)
   return { stdout: output, txHash, explorerUrl }
@@ -139,11 +151,16 @@ export function runDeployContract(params: {
     'send',
   )
 
-  const output = execFileSync(bin, argsList, {
+  const res = spawnSync(bin, argsList, {
     encoding: 'utf-8',
     shell: false,
     maxBuffer: 10 * 1024 * 1024,
   })
+
+  const output = `${res.stdout || ''}\n${res.stderr || ''}`
+  if (res.status !== 0) {
+    throw new Error(`Command failed with status ${res.status}:\n${output}`)
+  }
 
   const { txHash, explorerUrl } = extractTxInfo(output)
   return { stdout: output, txHash, explorerUrl }
@@ -174,11 +191,16 @@ export function runCreateSubaccount(params: {
     'send',
   ]
 
-  const output = execFileSync(bin, argsList, {
+  const res = spawnSync(bin, argsList, {
     encoding: 'utf-8',
     shell: false,
     maxBuffer: 10 * 1024 * 1024,
   })
+
+  const output = `${res.stdout || ''}\n${res.stderr || ''}`
+  if (res.status !== 0) {
+    throw new Error(`Command failed with status ${res.status}:\n${output}`)
+  }
 
   const { txHash, explorerUrl } = extractTxInfo(output)
   return { stdout: output, txHash, explorerUrl }
@@ -213,11 +235,16 @@ export function runAddRestrictedKey(params: {
     'send',
   ]
 
-  const output = execFileSync(bin, argsList, {
+  const res = spawnSync(bin, argsList, {
     encoding: 'utf-8',
     shell: false,
     maxBuffer: 10 * 1024 * 1024,
   })
+
+  const output = `${res.stdout || ''}\n${res.stderr || ''}`
+  if (res.status !== 0) {
+    throw new Error(`Command failed with status ${res.status}:\n${output}`)
+  }
 
   const { txHash, explorerUrl } = extractTxInfo(output)
   return { stdout: output, txHash, explorerUrl }
