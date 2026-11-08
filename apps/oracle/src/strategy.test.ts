@@ -1,4 +1,13 @@
-import { computeTimingScore, computePriceScore, computeDivergenceScore, computeUrgencyScore, adaptiveChunkSize, type PriceSnapshot, type OrderContext } from './strategy.js'
+import {
+  evaluateStrategy,
+  computePriceScore,
+  computeDivergenceScore,
+  computeUrgencyScore,
+  computeAdaptiveChunkSize,
+  strategyConfig,
+  type MarketInputs,
+  type OrderContext,
+} from './strategy.js'
 
 function assert(condition: boolean, message: string) {
   if (!condition) {
@@ -7,57 +16,166 @@ function assert(condition: boolean, message: string) {
   }
 }
 
-console.log('Running strategy engine smoke tests...')
+console.log('Running GetNear Strategy Engine & Adaptive TWAP Unit Tests (P6)...')
 
-// 1. Price score test
-const buyScore = computePriceScore(1.05, 1.10, 'buy_eurc')
-assert(buyScore > 50, `Buy EURC when price is below average should score > 50 (got ${buyScore})`)
+// ---------------------------------------------------------------------------
+// 1. Component Tests
+// ---------------------------------------------------------------------------
 
-const sellScore = computePriceScore(1.15, 1.10, 'sell_eurc')
-assert(sellScore > 50, `Sell EURC when price is above average should score > 50 (got ${sellScore})`)
+// 1.1 Price Score
+const favorablePrice = computePriceScore(0.92, 0.90) // +2.2% favorable
+assert(favorablePrice === 100, `Favorable price movement should cap at 100 (got ${favorablePrice})`)
 
-// 2. Divergence score test
-const tightSpread = computeDivergenceScore([1.0800, 1.0801, 1.0799])
-assert(tightSpread > 80, `Tight spread (1.85 bps) should yield high score > 80 (got ${tightSpread})`)
+const neutralPrice = computePriceScore(0.90, 0.90)
+assert(neutralPrice === 50, `Equal price should score 50 (got ${neutralPrice})`)
 
-const wideSpread = computeDivergenceScore([1.000, 1.100])
-assert(wideSpread < 50, `Wide spread should yield low score (got ${wideSpread})`)
+const adversePrice = computePriceScore(0.88, 0.90) // -2.2% adverse
+assert(adversePrice === 0, `Adverse price movement should floor at 0 (got ${adversePrice})`)
 
-// 3. Urgency score test
+// 1.2 Divergence Score
+const tightSpread = computeDivergenceScore(0.8950, 0.8956, 120) // -6 bps
+assert(tightSpread.score > 90, `Tight spread should score > 90 (got ${tightSpread.score})`)
+
+const matchingRef = computeDivergenceScore(0.8956, 0.8956, 120)
+assert(matchingRef.score === 100, `Exact match with ref should score 100 (got ${matchingRef.score})`)
+
+// 1.3 Urgency Score
 const lowUrgency = computeUrgencyScore(100, 0, 1000, 1000n, 100n)
-assert(lowUrgency < 50, `Early in order with small fill should have low urgency (got ${lowUrgency})`)
+assert(lowUrgency < 10, `Early in order lifetime with low time progress should have low urgency (got ${lowUrgency})`)
 
-const highUrgency = computeUrgencyScore(900, 0, 1000, 1000n, 100n)
-assert(highUrgency > 50, `Late in order with small fill should have high urgency (got ${highUrgency})`)
+const highUrgency = computeUrgencyScore(950, 0, 1000, 1000n, 100n)
+assert(highUrgency > 70, `Near deadline with unfilled amount should have high urgency (got ${highUrgency})`)
 
-// 4. Composite Timing Score test
-const mockPrices: PriceSnapshot = {
-  chainlinkPrice: 1.08,
-  fyndPrice: 1.08,
-  uniswapPrice: 1.08,
-  avg24hPrice: 1.08,
-}
-const mockOrder: OrderContext = {
-  inputAmount: '10000000',
-  filledAmount: '0',
-  createdAt: 1000,
-  deadline: 2000,
-  fromToken: 'USDC',
-  toToken: 'EURC',
-}
-const result = computeTimingScore(mockPrices, mockOrder, 1500)
-assert(result.score >= 0 && result.score <= 100, `Timing score should be in 0-100 range (got ${result.score})`)
-assert(['SWAP', 'WAIT'].includes(result.action), `Action must be SWAP or WAIT (got ${result.action})`)
+// ---------------------------------------------------------------------------
+// 2. Hard Guards Verification
+// ---------------------------------------------------------------------------
 
-// 5. Adaptive chunk sizing test
-const chunk = adaptiveChunkSize({
-  inputAmount: 1000000n,
+const baseOrder: OrderContext = {
+  id: 'order-1',
+  inputAmount: 100_000_000n, // $100 USDC
   filledAmount: 0n,
-  deadline: 2000,
   createdAt: 1000,
-  timingScore: 80,
-  now: 1500,
-})
-assert(chunk > 0n && chunk <= 1000000n, `Chunk size must be valid (got ${chunk})`)
+  deadline: 2000,
+  maxDeviationBps: 120,
+  status: 'Active',
+  fromToken: 'USDC',
+  toToken: 'EURe',
+}
 
-console.log('✓ All strategy engine smoke tests passed!')
+const baseMarket: MarketInputs = {
+  quoteRate: 0.88756,
+  referenceRate: 0.89566, // -90 bps (within 120 bps limit)
+  avg24hRate: 0.88700,
+  quoteExpiresAt: 2_500_000,
+}
+
+// Guard A: Inactive order
+const pendingOrder: OrderContext = { ...baseOrder, status: 'Pending' }
+const pendingDecision = evaluateStrategy(baseMarket, pendingOrder, 1500)
+assert(pendingDecision.action === 'WAIT', 'Inactive (Pending) order must WAIT')
+assert(pendingDecision.guardFailed === true, 'Guard must flag failure for Pending order')
+
+// Guard B: Missing reference rate
+const noRefMarket: MarketInputs = { ...baseMarket, referenceRate: null }
+const noRefDecision = evaluateStrategy(noRefMarket, baseOrder, 1500)
+assert(noRefDecision.action === 'WAIT', 'Missing reference rate must WAIT')
+assert(noRefDecision.reason.includes('Reference rate unavailable'), 'Reason must explain missing reference')
+
+// Guard C: Expired quote
+const expiredMarket: MarketInputs = { ...baseMarket, quoteExpiresAt: 1_400_000 } // past at now=1500
+const expiredDecision = evaluateStrategy(expiredMarket, baseOrder, 1500)
+assert(expiredDecision.action === 'WAIT', 'Expired quote must WAIT')
+assert(expiredDecision.reason.includes('Quote is expired'), 'Reason must explain expired quote')
+
+// Guard D: Adverse deviation exceeds maxDeviationBps
+const badSpreadMarket: MarketInputs = {
+  quoteRate: 0.87000, // -286 bps adverse from 0.89566
+  referenceRate: 0.89566,
+  avg24hRate: 0.87000,
+}
+const badDevDecision = evaluateStrategy(badSpreadMarket, baseOrder, 1500)
+assert(badDevDecision.action === 'WAIT', 'Excessive adverse deviation must WAIT')
+assert(badDevDecision.guardFailed === true, 'Excessive deviation must trip guard')
+
+// ---------------------------------------------------------------------------
+// 3. Decision Thresholds & Multipliers
+// ---------------------------------------------------------------------------
+
+// 3.1 Aggressive Timing (> 85 score -> 2x chunk)
+const greatMarket: MarketInputs = {
+  quoteRate: 0.91000, // +160 bps favorable
+  referenceRate: 0.89566,
+  avg24hRate: 0.89000,
+  quoteExpiresAt: 3_000_000,
+}
+const aggressiveDecision = evaluateStrategy(greatMarket, baseOrder, 1800)
+assert(aggressiveDecision.action === 'EXECUTE', 'Great conditions must EXECUTE')
+assert(aggressiveDecision.chunkMultiplier === 2, `Score ${aggressiveDecision.score} should trigger 2x chunk`)
+
+// 3.2 Moderate Timing (70–84 score -> 1x chunk)
+const goodMarket: MarketInputs = {
+  quoteRate: 0.89200, // favorable rate vs 24h avg
+  referenceRate: 0.89566,
+  avg24hRate: 0.88700,
+  quoteExpiresAt: 3_000_000,
+}
+const normalDecision = evaluateStrategy(goodMarket, baseOrder, 1850)
+assert(normalDecision.action === 'EXECUTE', `Good conditions should EXECUTE (got score ${normalDecision.score})`)
+assert(normalDecision.chunkMultiplier === 1, 'Normal timing should use 1x chunk')
+
+// 3.3 Urgency Override (Low score + High urgency -> forced EXECUTE)
+const stagnantMarket: MarketInputs = {
+  quoteRate: 0.88500, // below 24h avg
+  referenceRate: 0.89566,
+  avg24hRate: 0.89000,
+  quoteExpiresAt: 3_000_000,
+}
+// Late in order: 990 / 1000 with 0 filled -> urgency > 85
+const forcedDecision = evaluateStrategy(stagnantMarket, baseOrder, 1990)
+assert(forcedDecision.action === 'EXECUTE', 'High urgency near deadline must override low score')
+assert(forcedDecision.reason.includes('overridden by high urgency'), 'Reason must indicate urgency override')
+
+// ---------------------------------------------------------------------------
+// 4. Adaptive Chunk Sizing & Route Clamps
+// ---------------------------------------------------------------------------
+
+// 4.1 Clamp by Route Minimum ($5.00 USDC = 5,000,000 atomic)
+const smallChunk = computeAdaptiveChunkSize({
+  inputAmount: 100_000_000n, // $100
+  filledAmount: 0n,
+  createdAtSec: 1000,
+  deadlineSec: 2000,
+  nowSec: 1010,
+  timingScore: 50,
+})
+assert(
+  smallChunk >= strategyConfig.routeMinimumAtomic,
+  `Chunk ${smallChunk} must be clamped to route minimum of ${strategyConfig.routeMinimumAtomic}`,
+)
+
+// 4.2 Clamp by Max Chunk (20% of $100 = $20 USDC = 20,000,000 atomic)
+const maxChunk = computeAdaptiveChunkSize({
+  inputAmount: 100_000_000n, // $100
+  filledAmount: 0n,
+  createdAtSec: 1000,
+  deadlineSec: 2000,
+  nowSec: 1990, // high urgency
+  timingScore: 90, // aggressive multiplier
+})
+assert(
+  maxChunk <= 20_000_000n,
+  `Chunk ${maxChunk} must not exceed 20% max chunk (20,000,000 atomic)`,
+)
+
+// 4.3 Final sweep of remaining dust
+const dustChunk = computeAdaptiveChunkSize({
+  inputAmount: 100_000_000n,
+  filledAmount: 98_000_000n, // $2.00 left (< $5 route minimum)
+  createdAtSec: 1000,
+  deadlineSec: 2000,
+  nowSec: 1990,
+  timingScore: 80,
+})
+assert(dustChunk === 2_000_000n, `Remaining dust ($2.00) must be swept completely (got ${dustChunk})`)
+
+console.log('✓ All 15 strategy engine and adaptive TWAP tests passed successfully!')

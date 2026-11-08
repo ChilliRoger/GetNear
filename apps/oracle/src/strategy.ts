@@ -1,85 +1,110 @@
 /**
- * Timing Score Calculator for GetNear Oracle
+ * GetNear Strategy Engine & Adaptive TWAP (P6)
  *
- * Computes a 0-100 score indicating how favorable the current moment is
- * for executing a swap chunk.  Three weighted factors:
+ * Computes a 0–100 composite timing score and adaptive TWAP chunk size
+ * for corporate treasury FX execution on NEAR.
  *
- *   1. Price vs 24h average  (40%)  — is the rate favorable right now?
- *   2. Source divergence      (20%)  — do Chainlink / Fynd / Uniswap agree?
- *   3. Urgency               (40%)  — deadline approaching + unfilled amount
+ * Scoring Factors (Configurable 40 / 20 / 40):
+ *   1. Price vs Rolling Average (40%): Is the current quote favorable compared to the 24h trend?
+ *   2. Divergence (20%): How closely does the quote match the ECB reference rate and recent market spread?
+ *   3. Urgency (40%): Time elapsed toward deadline with unfilled order balance (quadratic ramp).
  *
- * Decision thresholds:
- *   score > 85  → SWAP aggressively (2x chunk)
- *   score > 70  → SWAP normal chunk
- *   score < 70  → WAIT  (unless urgency alone > 80, then force swap)
+ * Decision Thresholds:
+ *   score > 85  → EXECUTE aggressively (2x chunk)
+ *   score >= 70 → EXECUTE normal (1x chunk)
+ *   score < 70  → WAIT (hold capital for better conditions, unless urgencyOverride triggered)
+ *
+ * Hard Guards:
+ *   - Order must be Active
+ *   - Reference rate must be available and positive
+ *   - Quote must not be expired
+ *   - Deviation must not exceed order.maxDeviationBps
  */
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export interface PriceSnapshot {
-  /** Latest Chainlink EURC/USD price (e.g. 0.87) */
-  chainlinkPrice: number | null
-  /** Latest Fynd DEX implied EURC/USD price */
-  fyndPrice: number | null
-  /** Latest Uniswap implied EURC/USD price */
-  uniswapPrice: number | null
-  /** 24-hour average Chainlink price for EURC/USD */
-  avg24hPrice: number | null
+export interface MarketInputs {
+  /** Effective rate from QuoteSource (e.g. EURe per USDC: 0.88756) */
+  quoteRate: number
+  /** Official ECB reference rate from ReferenceRateSource (e.g. 0.89566) */
+  referenceRate: number | null
+  /** 24-hour rolling average rate (from historical recordings) */
+  avg24hRate: number | null
+  /** Recent solver quote rates (for local volatility / spread estimation) */
+  recentQuoteRates?: number[]
+  /** Expiration timestamp of the quote (Unix ms) */
+  quoteExpiresAt?: number
+  /** Quote identifier / correlation ID */
+  quoteId?: string
 }
 
 export interface OrderContext {
-  /** Total input amount in atomic units (string for bigint compat) */
-  inputAmount: string
+  id: string
+  /** Total input amount in atomic units */
+  inputAmount: bigint
   /** Amount already filled in atomic units */
-  filledAmount: string
-  /** Unix timestamp when the order was created */
+  filledAmount: bigint
+  /** Creation timestamp (Unix seconds) */
   createdAt: number
-  /** Unix timestamp deadline for the order */
+  /** Deadline timestamp (Unix seconds) */
   deadline: number
-  /** Direction: which token we're buying */
+  /** Max allowable adverse deviation from reference in basis points (e.g. 120 bps) */
+  maxDeviationBps: number
+  /** Current order status: 'Active' | 'Pending' | 'Completed' | 'Expired' | 'Cancelled' */
+  status: string
+  /** From token symbol (e.g. 'USDC') */
   fromToken: string
+  /** To token symbol (e.g. 'EURe') */
   toToken: string
+  /** Explicit maximum chunk size in atomic units (optional, defaults to 20% of order) */
+  maxChunkIn?: bigint
 }
 
 export interface ScoreBreakdown {
   priceScore: number
   divergenceScore: number
   urgencyScore: number
+  total: number
 }
 
-export interface TimingResult {
+export interface StrategyDecision {
+  action: 'EXECUTE' | 'WAIT'
   score: number
   breakdown: ScoreBreakdown
-  action: 'SWAP' | 'WAIT'
-  /** Multiplier on the default chunk size (1 = normal, 2 = aggressive) */
   chunkMultiplier: number
   reason: string
+  deviationBps: number | null
+  guardFailed?: boolean
 }
-
-// ---------------------------------------------------------------------------
-// Runtime-configurable strategy parameters
-// ---------------------------------------------------------------------------
 
 export interface StrategyConfig {
   weightPrice: number
   weightDivergence: number
   weightUrgency: number
-  swapThreshold: number
+  executeThreshold: number
   aggressiveThreshold: number
   urgencyOverride: number
-  autoExecute: boolean
+  defaultMaxDeviationBps: number
+  defaultMaxChunkPercent: number
+  routeMinimumAtomic: bigint
 }
+
+// ---------------------------------------------------------------------------
+// Configuration
+// ---------------------------------------------------------------------------
 
 export let strategyConfig: StrategyConfig = {
   weightPrice: 0.4,
   weightDivergence: 0.2,
   weightUrgency: 0.4,
-  swapThreshold: 30,
-  aggressiveThreshold: 60,
-  urgencyOverride: 80,
-  autoExecute: true,
+  executeThreshold: 70,
+  aggressiveThreshold: 85,
+  urgencyOverride: 85,
+  defaultMaxDeviationBps: 120, // 120 bps tolerance for cross-chain intents
+  defaultMaxChunkPercent: 0.2, // 20% max per chunk
+  routeMinimumAtomic: 5_000_000n, // $5.00 USDC minimum from P5 route probe
 }
 
 export function updateStrategyConfig(partial: Partial<StrategyConfig>) {
@@ -87,285 +112,321 @@ export function updateStrategyConfig(partial: Partial<StrategyConfig>) {
 }
 
 // ---------------------------------------------------------------------------
-// Weights (now read from mutable config)
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Individual score components (each returns 0-100)
+// Component Scoring Functions (0–100)
 // ---------------------------------------------------------------------------
 
 /**
- * Price vs 24h average score.
+ * 1. Price vs Rolling Average Score (40% weight)
  *
- * For USDC → EURC (buying EURC): a *lower* current EURC/USD price means we
- * get more EURC per dollar — that's favorable, so score goes up.
- *
- * For EURC → USDC (selling EURC): a *higher* current EURC/USD price means
- * each EURC is worth more dollars — favorable, score goes up.
- *
- * The score is linearly mapped: 0 bps deviation = 50, ±50 bps = 0 or 100,
- * clamped to [0, 100].
+ * Measures whether current rate is favorable compared to recent historical average.
+ * Higher rate = getting more output per unit input = favorable.
+ * 0% deviation = 50 (neutral).
+ * +0.50% favorable = 100.
+ * -0.50% adverse = 0.
  */
-export function computePriceScore(
-  currentPrice: number,
-  avg24h: number,
-  direction: 'buy_eurc' | 'sell_eurc',
-): number {
-  if (avg24h <= 0 || currentPrice <= 0) return 50 // neutral when data missing
+export function computePriceScore(quoteRate: number, avg24hRate: number | null): number {
+  if (!avg24hRate || avg24hRate <= 0 || quoteRate <= 0) return 50
 
-  // Positive deviationPct means current price is ABOVE the 24h average
-  const deviationPct = ((currentPrice - avg24h) / avg24h) * 100
-
-  // For buying EURC: lower price = better → invert deviation
-  // For selling EURC: higher price = better → use deviation directly
-  const favorableDeviation = direction === 'buy_eurc' ? -deviationPct : deviationPct
-
-  // Map: -0.5% → 0, 0% → 50, +0.5% → 100  (clamped)
-  // That means 50 bps of favorable movement = perfect score
-  const score = 50 + (favorableDeviation / 0.5) * 50
-
+  const deviationPct = ((quoteRate - avg24hRate) / avg24hRate) * 100
+  // Map: -0.5% -> 0, 0% -> 50, +0.5% -> 100
+  const score = 50 + (deviationPct / 0.5) * 50
   return clamp(score, 0, 100)
 }
 
 /**
- * Source divergence score.
+ * 2. Divergence Score (20% weight)
  *
- * Low divergence among available price sources = high confidence = high score.
- * We measure the max spread in basis points among all available prices.
- *
- *   0 bps spread  → 100
- *  50 bps spread  →   0
- *
- * If fewer than 2 sources are available, return 50 (neutral/unknown).
+ * Measures quote alignment with ECB reference rate.
+ * Deviation bps: (quoteRate - refRate) / refRate * 10,000.
+ * If quote is at or above reference rate -> 100 score.
+ * If adverse, scales down linearly against maxDeviationBps budget:
+ *   0 bps adverse  -> 100
+ *   maxDev adverse ->   0
  */
-export function computeDivergenceScore(prices: (number | null)[]): number {
-  const valid = prices.filter((p): p is number => p != null && p > 0)
-  if (valid.length < 2) return 50 // not enough data to judge
+export function computeDivergenceScore(
+  quoteRate: number,
+  referenceRate: number | null,
+  maxDeviationBps: number = strategyConfig.defaultMaxDeviationBps,
+): { score: number; deviationBps: number | null } {
+  if (referenceRate == null || referenceRate <= 0 || quoteRate <= 0) {
+    return { score: 0, deviationBps: null }
+  }
 
-  const min = Math.min(...valid)
-  const max = Math.max(...valid)
-  const avg = valid.reduce((a, b) => a + b, 0) / valid.length
-  const spreadBps = avg > 0 ? ((max - min) / avg) * 10_000 : 0
+  const deviationBps = Math.round(((quoteRate - referenceRate) / referenceRate) * 10_000)
 
-  // Linear: 0 bps → 100, 50 bps → 0
-  const score = 100 - (spreadBps / 50) * 100
-  return clamp(score, 0, 100)
+  if (deviationBps >= 0) {
+    // Quote matches or beats reference rate
+    return { score: 100, deviationBps }
+  }
+
+  // Negative deviation (spread / fee paid)
+  const adverseBps = Math.abs(deviationBps)
+  const budget = Math.max(1, maxDeviationBps)
+  const score = Math.max(0, 100 - (adverseBps / budget) * 100)
+
+  return { score: clamp(score, 0, 100), deviationBps }
 }
 
 /**
- * Urgency score.
+ * 3. Urgency Score (40% weight)
  *
- * `(time_elapsed / total_time) * (amount_remaining / total_amount)`
+ * Quadratic urgency ramp:
+ * `(time_elapsed / total_time)^2 * (remaining_amount / total_amount)`
  *
- * When the deadline is close AND a large portion is still unfilled,
- * urgency is high.  The raw product is 0-1; we scale to 0-100.
- *
- * Edge cases:
- *   - If the order is already past deadline → 100 (maximum urgency)
- *   - If total_time is 0 or negative → 100
+ * As deadline nears, score ramps up quadratically to guarantee completion.
  */
 export function computeUrgencyScore(
-  now: number,
-  createdAt: number,
-  deadline: number,
+  nowSec: number,
+  createdAtSec: number,
+  deadlineSec: number,
   inputAmount: bigint,
   filledAmount: bigint,
 ): number {
-  const totalTime = deadline - createdAt
-  if (totalTime <= 0 || now >= deadline) return 100
+  const totalDuration = deadlineSec - createdAtSec
+  if (totalDuration <= 0 || nowSec >= deadlineSec) return 100
 
-  const elapsed = now - createdAt
-  const timeRatio = clamp(elapsed / totalTime, 0, 1)
+  const elapsed = Math.max(0, nowSec - createdAtSec)
+  const timeProgress = clamp(elapsed / totalDuration, 0, 1)
 
-  const totalAmt = safeNumber(inputAmount)
-  const filledAmt = safeNumber(filledAmount)
-  if (totalAmt <= 0) return 0
-  const remainingRatio = clamp((totalAmt - filledAmt) / totalAmt, 0, 1)
+  const remaining = inputAmount - filledAmount
+  if (remaining <= 0n) return 0
+  const remainingRatio = clamp(Number(remaining) / Math.max(1, Number(inputAmount)), 0, 1)
 
-  const urgency = timeRatio * remainingRatio * 100
+  // Quadratic time acceleration
+  const urgency = timeProgress * timeProgress * remainingRatio * 100
   return clamp(urgency, 0, 100)
 }
 
 // ---------------------------------------------------------------------------
-// Main scoring function
+// Composite Timing Score & Guard Evaluation
 // ---------------------------------------------------------------------------
 
-/**
- * Compute the composite timing score for an order given current market data.
- */
-export function computeTimingScore(
-  prices: PriceSnapshot,
+export function evaluateStrategy(
+  market: MarketInputs,
   order: OrderContext,
-  now?: number,
-): TimingResult {
-  const currentTime = now ?? Math.floor(Date.now() / 1000)
+  nowSec: number = Math.floor(Date.now() / 1000),
+): StrategyDecision {
+  // -------------------------------------------------------------------------
+  // 1. HARD GUARDS (Pre-Conditions)
+  // -------------------------------------------------------------------------
 
-  // Determine swap direction
-  const direction: 'buy_eurc' | 'sell_eurc' =
-    order.toToken === 'EURC' ? 'buy_eurc' : 'sell_eurc'
+  // Guard A: Order Status must be Active
+  const normalizedStatus = order.status.toUpperCase()
+  if (normalizedStatus !== 'ACTIVE' && normalizedStatus !== 'APPROVED' && normalizedStatus !== 'FILLING') {
+    return {
+      action: 'WAIT',
+      score: 0,
+      breakdown: { priceScore: 0, divergenceScore: 0, urgencyScore: 0, total: 0 },
+      chunkMultiplier: 0,
+      reason: `Order is not Active (status: ${order.status})`,
+      deviationBps: null,
+      guardFailed: true,
+    }
+  }
 
-  // --- Pick a representative "current price" (prefer Chainlink, fallback to available) ---
-  const availablePrices = [prices.chainlinkPrice, prices.fyndPrice, prices.uniswapPrice]
-  const validPrices = availablePrices.filter((p): p is number => p != null && p > 0)
-  const currentPrice = validPrices.length > 0
-    ? validPrices.reduce((a, b) => a + b, 0) / validPrices.length
-    : 0
+  // Guard B: Reference rate must be available and positive
+  if (market.referenceRate == null || market.referenceRate <= 0) {
+    return {
+      action: 'WAIT',
+      score: 0,
+      breakdown: { priceScore: 0, divergenceScore: 0, urgencyScore: 0, total: 0 },
+      chunkMultiplier: 0,
+      reason: 'Reference rate unavailable: strategy must WAIT',
+      deviationBps: null,
+      guardFailed: true,
+    }
+  }
 
-  // --- Compute individual scores ---
-  const priceScore = currentPrice > 0 && prices.avg24hPrice != null && prices.avg24hPrice > 0
-    ? computePriceScore(currentPrice, prices.avg24hPrice, direction)
-    : 50 // neutral fallback
+  // Guard C: Quote must not be expired
+  if (market.quoteExpiresAt && market.quoteExpiresAt < nowSec * 1000) {
+    return {
+      action: 'WAIT',
+      score: 0,
+      breakdown: { priceScore: 0, divergenceScore: 0, urgencyScore: 0, total: 0 },
+      chunkMultiplier: 0,
+      reason: 'Quote is expired: waiting for fresh market quote',
+      deviationBps: null,
+      guardFailed: true,
+    }
+  }
 
-  const divergenceScore = computeDivergenceScore(availablePrices)
+  // -------------------------------------------------------------------------
+  // 2. COMPONENT SCORING
+  // -------------------------------------------------------------------------
 
+  const maxDev = order.maxDeviationBps || strategyConfig.defaultMaxDeviationBps
+  const priceScore = computePriceScore(market.quoteRate, market.avg24hRate)
+  const { score: divergenceScore, deviationBps } = computeDivergenceScore(
+    market.quoteRate,
+    market.referenceRate,
+    maxDev,
+  )
   const urgencyScore = computeUrgencyScore(
-    currentTime,
+    nowSec,
     order.createdAt,
     order.deadline,
-    BigInt(order.inputAmount),
-    BigInt(order.filledAmount),
+    order.inputAmount,
+    order.filledAmount,
   )
 
-  // --- Weighted composite (uses runtime-configurable weights) ---
-  const score = Math.round(
+  // Guard D: Max adverse deviation check
+  if (deviationBps !== null && deviationBps < -maxDev) {
+    return {
+      action: 'WAIT',
+      score: 0,
+      breakdown: {
+        priceScore: Math.round(priceScore),
+        divergenceScore: Math.round(divergenceScore),
+        urgencyScore: Math.round(urgencyScore),
+        total: 0,
+      },
+      chunkMultiplier: 0,
+      reason: `Adverse deviation ${deviationBps} bps exceeds order limit of -${maxDev} bps`,
+      deviationBps,
+      guardFailed: true,
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 3. WEIGHTED COMPOSITE SCORE
+  // -------------------------------------------------------------------------
+
+  const totalScore = Math.round(
     priceScore * strategyConfig.weightPrice +
-    divergenceScore * strategyConfig.weightDivergence +
-    urgencyScore * strategyConfig.weightUrgency,
+      divergenceScore * strategyConfig.weightDivergence +
+      urgencyScore * strategyConfig.weightUrgency,
   )
 
   const breakdown: ScoreBreakdown = {
     priceScore: Math.round(priceScore),
     divergenceScore: Math.round(divergenceScore),
     urgencyScore: Math.round(urgencyScore),
+    total: totalScore,
   }
 
-  // --- Decision logic (uses runtime-configurable thresholds) ---
-  let action: 'SWAP' | 'WAIT'
+  // -------------------------------------------------------------------------
+  // 4. DECISION THRESHOLDS
+  // -------------------------------------------------------------------------
+
+  let action: 'EXECUTE' | 'WAIT'
   let chunkMultiplier = 1
   let reason: string
 
-  if (score > strategyConfig.aggressiveThreshold) {
-    action = 'SWAP'
+  if (totalScore >= strategyConfig.aggressiveThreshold) {
+    action = 'EXECUTE'
     chunkMultiplier = 2
-    reason = `Strong signal (score ${score}): aggressive 2x chunk`
-  } else if (score > strategyConfig.swapThreshold) {
-    action = 'SWAP'
+    reason = `Exceptional timing (score ${totalScore} >= ${strategyConfig.aggressiveThreshold}): aggressive 2x chunk`
+  } else if (totalScore >= strategyConfig.executeThreshold) {
+    action = 'EXECUTE'
     chunkMultiplier = 1
-    reason = `Good timing (score ${score}): normal chunk`
-  } else if (urgencyScore > strategyConfig.urgencyOverride) {
-    // Urgency override — deadline pressure forces execution even with low overall score
-    action = 'SWAP'
+    reason = `Favorable timing (score ${totalScore} >= ${strategyConfig.executeThreshold}): normal 1x chunk`
+  } else if (urgencyScore >= strategyConfig.urgencyOverride) {
+    // Deadline pressure overrides score to prevent unexecuted expired orders
+    action = 'EXECUTE'
     chunkMultiplier = 1
-    reason = `Low score (${score}) but high urgency (${Math.round(urgencyScore)}): forced swap`
+    reason = `Low timing score (${totalScore}) overridden by high urgency (${Math.round(
+      urgencyScore,
+    )} >= ${strategyConfig.urgencyOverride}): forced execution`
   } else {
     action = 'WAIT'
     chunkMultiplier = 0
-    reason = `Score ${score} below threshold, waiting for better conditions`
+    reason = `Timing score (${totalScore}) below threshold ${strategyConfig.executeThreshold}: holding capital`
   }
 
-  // Add detail about dominant factor
-  const dominant = priceScore * strategyConfig.weightPrice >= divergenceScore * strategyConfig.weightDivergence &&
-    priceScore * strategyConfig.weightPrice >= urgencyScore * strategyConfig.weightUrgency
-    ? 'price'
-    : urgencyScore * strategyConfig.weightUrgency >= divergenceScore * strategyConfig.weightDivergence
-      ? 'urgency'
-      : 'divergence'
-  reason += ` (dominant factor: ${dominant})`
-
-  return { score, breakdown, action, chunkMultiplier, reason }
+  return {
+    action,
+    score: totalScore,
+    breakdown,
+    chunkMultiplier,
+    reason,
+    deviationBps,
+    guardFailed: false,
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Adaptive TWAP Chunk Sizing
 // ---------------------------------------------------------------------------
 
-/**
- * Default tick interval in seconds between CRE ticks.
- */
-export const TICK_INTERVAL = 30
+export const TICK_INTERVAL_SEC = 30
 
-export interface AdaptiveChunkParams {
-  /** Total order input in atomic units */
+export interface SizingParams {
   inputAmount: bigint
-  /** Amount already filled in atomic units */
   filledAmount: bigint
-  /** Unix timestamp deadline for the order */
-  deadline: number
-  /** Unix timestamp when the order was created */
-  createdAt: number
-  /** Current timing score (0-100) */
+  deadlineSec: number
+  createdAtSec: number
+  nowSec: number
   timingScore: number
-  /** Current unix timestamp */
-  now: number
+  maxChunkIn?: bigint
+  routeMinimumAtomic?: bigint
 }
 
 /**
- * Compute an adaptive TWAP chunk size based on urgency and timing score.
- *
- * Instead of fixed chunks, the system adapts:
- * - **Urgency**: As deadline approaches, chunks get larger (quadratic ramp)
- * - **Score**: Higher timing scores = larger chunks (favorable conditions)
- * - **Remaining amount**: Proportional to what's left to fill
- *
- * Returns the chunk size as a bigint in atomic units.
+ * Computes adaptive chunk size clamped by route minimum, remaining balance,
+ * and maximum chunk constraints.
  */
-export function adaptiveChunkSize(params: AdaptiveChunkParams): bigint {
-  const { inputAmount, filledAmount, deadline, createdAt, timingScore, now } = params
+export function computeAdaptiveChunkSize(params: SizingParams): bigint {
+  const {
+    inputAmount,
+    filledAmount,
+    deadlineSec,
+    createdAtSec,
+    nowSec,
+    timingScore,
+    maxChunkIn,
+    routeMinimumAtomic = strategyConfig.routeMinimumAtomic,
+  } = params
 
-  const remainingAmount = inputAmount - filledAmount
-  if (remainingAmount <= 0n) return 0n
+  const remaining = inputAmount - filledAmount
+  if (remaining <= 0n) return 0n
 
-  const totalDuration = deadline - createdAt
-  const elapsed = now - createdAt
+  const totalDuration = deadlineSec - createdAtSec
+  const elapsed = Math.max(0, nowSec - createdAtSec)
 
-  // Edge case: already past deadline or zero-duration order — return everything
-  if (totalDuration <= 0 || now >= deadline) return remainingAmount
-
-  const timeProgress = clamp(elapsed / totalDuration, 0, 1) // 0.0 to 1.0
-
-  // Base chunk: remaining / estimated ticks left
-  const estimatedTicksLeft = Math.max(1, Math.floor((totalDuration - elapsed) / TICK_INTERVAL))
-  // Use Number for arithmetic then convert back — amounts are within safe integer range for chunk math
-  const remainingNum = safeNumber(remainingAmount)
-  const inputNum = safeNumber(inputAmount)
-  const baseChunk = remainingNum / estimatedTicksLeft
-
-  // Urgency multiplier: quadratic ramp as deadline approaches
-  const urgencyMultiplier = 1.0 + (timeProgress * timeProgress)
-
-  // Score multiplier: favorable conditions = bigger chunks
-  const scoreMultiplier = timingScore > 85 ? 2.0 : timingScore > 70 ? 1.0 : 0.5
-
-  // Adaptive chunk
-  const adaptiveChunk = baseChunk * urgencyMultiplier * scoreMultiplier
-
-  // Clamp: never more than remaining, never less than 1% of total input
-  const minChunk = inputNum * 0.01
-  const maxChunk = remainingNum
-  const finalChunk = clamp(adaptiveChunk, minChunk, maxChunk)
-
-  return BigInt(Math.floor(finalChunk))
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value))
-}
-
-/**
- * Convert BigInt to Number with a safety warning if the value exceeds
- * Number.MAX_SAFE_INTEGER (~9×10^15). For hackathon demo amounts
- * (< $10M USDC = < 10^13 at 6 decimals) this is safe, but the guard
- * protects against unexpected large values.
- *
- * For production: throw instead of warn for amounts > MAX_SAFE_INTEGER
- */
-export function safeNumber(n: bigint): number {
-  if (n > BigInt(Number.MAX_SAFE_INTEGER) || n < BigInt(-Number.MAX_SAFE_INTEGER)) {
-    console.warn(`BigInt ${n.toString()} exceeds safe integer range, precision may be lost`)
+  // Past deadline: sweep whatever is left
+  if (totalDuration <= 0 || nowSec >= deadlineSec) {
+    return remaining
   }
-  return Number(n)
+
+  // Base chunk: distribute remaining amount across estimated remaining ticks
+  const remainingTicks = Math.max(1, Math.floor((totalDuration - elapsed) / TICK_INTERVAL_SEC))
+  const baseChunk = Number(remaining) / remainingTicks
+
+  // Urgency multiplier: quadratic ramp [1.0 -> 2.0]
+  const timeProgress = clamp(elapsed / totalDuration, 0, 1)
+  const urgencyMultiplier = 1.0 + timeProgress * timeProgress
+
+  // Score multiplier: higher timing score = allocate more
+  const scoreMultiplier =
+    timingScore >= strategyConfig.aggressiveThreshold
+      ? 2.0
+      : timingScore >= strategyConfig.executeThreshold
+        ? 1.0
+        : 0.5
+
+  const rawChunk = BigInt(Math.floor(baseChunk * urgencyMultiplier * scoreMultiplier))
+
+  // Upper bound: default 20% of order total (or explicit order maxChunkIn)
+  const defaultMaxChunk = (inputAmount * BigInt(Math.round(strategyConfig.defaultMaxChunkPercent * 100))) / 100n
+  const upperLimit = maxChunkIn && maxChunkIn > 0n ? maxChunkIn : defaultMaxChunk
+
+  let clamped = rawChunk
+  if (clamped > upperLimit) clamped = upperLimit
+  if (clamped > remaining) clamped = remaining
+
+  // Route minimum clamping: ensure at least routeMinimum unless remaining is dust
+  if (clamped < routeMinimumAtomic) {
+    if (remaining <= routeMinimumAtomic) {
+      // Dust sweep: fill remaining balance
+      clamped = remaining
+    } else {
+      clamped = routeMinimumAtomic
+    }
+  }
+
+  return clamped
+}
+
+function clamp(val: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, val))
 }
