@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Card } from "@/components/card";
 import { RateSparkline } from "@/components/rate-sparkline";
+import { LiveQuoteCard } from "@/components/live-quote-card";
 import { useBalances, usePolicy, useTreasuryBalances } from "@/lib/hooks";
 import { formatDisplayAmount } from "@getnear/shared";
 import { formatDisplayAmountFromString, formatBps } from "@/lib/format";
@@ -257,6 +258,9 @@ export default function DashboardPage() {
 
 
 
+
+      {/* Live 1Click Dry Quote & ECB Reference Card (P5) */}
+      <LiveQuoteCard />
 
       {/* Rate display */}
       <Card title={t("dashboard.rate_subtitle")} badge={{ label: <LiveTimestamp timestamp={price.lastUpdated} />, color: price.lastUpdated ? "green" : "blue" }}>
