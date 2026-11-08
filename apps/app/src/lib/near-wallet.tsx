@@ -101,16 +101,28 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
   }) => {
     if (!accountId) throw new Error("Wallet not connected");
 
-    // Generate a deterministic simulated or live testnet transaction receipt
-    const mockHash = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    const explorerUrl = explorerTxUrl(mockHash);
+    const res = await fetch("/api/near/tx", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contractId: params.receiverId,
+        methodName: params.methodName,
+        args: params.args,
+        signerId: accountId,
+        deposit: params.depositYocto ? `${yoctoToNear(params.depositYocto)} NEAR` : "0 NEAR",
+        gas: params.gasUnits || "100.0 Tgas",
+      }),
+    });
 
-    console.log(
-      `[NearWallet] Signed call: ${accountId} -> ${params.receiverId}.${params.methodName}()`,
-      params.args,
-    );
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || "Transaction execution failed on NEAR testnet");
+    }
 
-    return { txHash: mockHash, explorerUrl };
+    return {
+      txHash: data.txHash,
+      explorerUrl: data.explorerUrl || explorerTxUrl(data.txHash),
+    };
   };
 
   return (

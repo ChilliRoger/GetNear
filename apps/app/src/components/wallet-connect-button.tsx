@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNearWallet } from "@/lib/near-wallet";
 import { explorerAccountUrl } from "@getnear/shared";
+import { ExternalLink, Check, ChevronDown } from "lucide-react";
 
 export function WalletConnectButton() {
   const {
@@ -57,6 +58,7 @@ export function WalletConnectButton() {
         {balance && (
           <span className="text-[10px] text-muted">({balance})</span>
         )}
+        <ChevronDown className="h-3 w-3 text-muted" />
       </button>
 
       {isOpen && (
@@ -77,9 +79,10 @@ export function WalletConnectButton() {
               href={explorerAccountUrl(accountId)}
               target="_blank"
               rel="noreferrer"
-              className="mt-1 inline-block text-[11px] text-accent-blue hover:underline"
+              className="mt-1.5 flex items-center gap-1 text-[11px] text-accent-blue hover:underline"
             >
-              View on NearBlocks ↗
+              <span>View on NearBlocks</span>
+              <ExternalLink className="h-3 w-3" />
             </a>
           </div>
 
@@ -102,7 +105,7 @@ export function WalletConnectButton() {
                   }`}
                 >
                   <span className="font-mono text-[11px] truncate">{acc}</span>
-                  {acc === accountId && <span className="text-[10px]">✓</span>}
+                  {acc === accountId && <Check className="h-3 w-3 text-accent-blue" />}
                 </button>
               ))}
             </div>

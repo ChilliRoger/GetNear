@@ -133,3 +133,4 @@ export function getOrderFillsCount(orderId: number): number {
   const row = db.prepare(`SELECT COUNT(*) as cnt FROM agent_fills WHERE order_id = ?`).get(orderId) as any
   return row?.cnt || 0
 }
+

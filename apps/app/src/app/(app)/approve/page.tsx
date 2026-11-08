@@ -1,274 +1,229 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/card";
 import { useToast } from "@/components/toast-provider";
-import { usePendingTrades } from "@/lib/hooks";
-import { formatDisplayAmount } from "@getnear/shared";
-import { formatBps } from "@/lib/format";
-import { SAVINGS_BPS } from "@/lib/constants";
-import { useI18n } from "@/lib/i18n";
+import { useNearWallet } from "@/lib/near-wallet";
+import { explorerAccountUrl } from "@getnear/shared";
+import { RefreshCw, ExternalLink, ShieldCheck } from "lucide-react";
 
-function formatTimeRemaining(expiresAtSec: bigint): string {
-  const diff = Number(expiresAtSec) * 1000 - Date.now();
-  if (diff <= 0) return "Expired";
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 60) return `${minutes}m remaining`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m remaining`;
-}
-
-function formatRateBigInt(rateX18: bigint): string {
-  return (Number(rateX18) / 1e18).toFixed(4);
+interface DaoProposal {
+  id: number;
+  proposer: string;
+  description: string;
+  kind: Record<string, unknown>;
+  status: "InProgress" | "Approved" | "Rejected" | "Removed" | "Expired" | "Moved";
+  votes: Record<string, "Approve" | "Reject" | "Remove">;
+  submission_time: string;
 }
 
 export default function ApprovePage() {
-  const { trades, loading } = usePendingTrades();
-  const [verified, setVerified] = useState<Record<string, boolean>>({});
-  const [verifying, setVerifying] = useState<string | null>(null);
-  const { t } = useI18n();
+  const { accountId, signAndSendTransaction, availableAccounts, connect } = useNearWallet();
   const { showToast } = useToast();
 
-  const handleApprove = async (tradeId: string) => {
-    setVerifying(tradeId);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [votingId, setVotingId] = useState<number | null>(null);
+  const [proposals, setProposals] = useState<DaoProposal[]>([]);
+  const [daoId, setDaoId] = useState("chilliroger-dao.sputnik-v2.testnet");
+
+  const loadProposals = useCallback(async () => {
     try {
-      const res = await fetch(`/api/oracle/api/trades/${tradeId}/approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      const data = await res.json();
-      if (data.ok) {
-        setVerified((prev) => ({ ...prev, [tradeId]: true }));
-        showToast("Order approved by council (simulated DAO vote)", "success");
-      } else {
-        showToast(data.error || t("toast.error"), "error");
+      const res = await fetch("/api/near");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.dao?.proposals) {
+          setProposals(data.dao.proposals);
+        }
+        if (data.dao?.id) {
+          setDaoId(data.dao.id);
+        }
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : t("toast.error");
-      console.error("Verification failed:", e);
-      showToast(msg, "error");
+    } catch (err) {
+      console.warn("Failed to load proposals:", err);
     } finally {
-      setVerifying(null);
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProposals();
+    const interval = setInterval(loadProposals, 10000);
+    return () => clearInterval(interval);
+  }, [loadProposals]);
+
+  const handleVote = async (proposalId: number, action: "VoteApprove" | "VoteReject") => {
+    setVotingId(proposalId);
+    try {
+      const res = await signAndSendTransaction({
+        receiverId: daoId,
+        methodName: "act_proposal",
+        args: {
+          id: proposalId,
+          action,
+        },
+      });
+
+      showToast(`Vote cast successfully: ${action} on Proposal #${proposalId}`, {
+        type: "success",
+        explorerUrl: res.explorerUrl,
+      });
+
+      await loadProposals();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast(`Vote failed: ${msg}`, "error");
+    } finally {
+      setVotingId(null);
     }
   };
 
+  const councilAccounts = availableAccounts.filter((a) => a.includes("council"));
+
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">
-            {t("approve.title")}
-          </h2>
-          <p className="text-xs text-muted">
-            {t("approve.subtitle")}
-          </p>
-        </div>
-        {trades.length > 0 && (
-          <span className="pulse-subtle flex h-6 w-6 items-center justify-center rounded-full bg-accent-amber/20 text-xs font-bold text-accent-amber">
-            {trades.length}
-          </span>
-        )}
-      </div>
-
-      {/* Loading state */}
-      {loading ? (
-        <Card title={t("approve.loading")}>
-          <div className="flex flex-col items-center py-8">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-blue border-t-transparent" />
-            <p className="mt-3 text-xs text-muted">{t("approve.loading_desc")}</p>
-          </div>
-        </Card>
-      ) : trades.length === 0 ? (
-        <Card title={t("approve.all_clear")}>
-          <div className="flex flex-col items-center py-8 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-accent-green/15">
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                className="text-accent-green"
+      {/* 1. Header & Council Switcher */}
+      <Card
+        title="Sputnik DAO Multisig Governance"
+        subtitle="2-of-3 council approval required for orders exceeding 100 USDC auto-cap"
+      >
+        <div className="space-y-3 pt-1 text-xs">
+          <div className="flex items-center justify-between pb-2 border-b border-border">
+            <div>
+              <span className="text-muted">DAO Account: </span>
+              <a
+                href={explorerAccountUrl(daoId)}
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-accent-blue hover:underline inline-flex items-center gap-0.5"
               >
-                <path
-                  d="M9 12l2 2 4-4"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <circle
-                  cx="12"
-                  cy="12"
-                  r="9"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                />
-              </svg>
+                <span>{daoId}</span>
+                <ExternalLink className="h-2.5 w-2.5" />
+              </a>
             </div>
-            <p className="text-sm text-muted">{t("approve.no_pending")}</p>
-            <p className="mt-1 text-[11px] text-muted/60">
-              {t("approve.all_within")}
-            </p>
-          </div>
-        </Card>
-      ) : (
-        trades.map((trade) => {
-          const tradeIdStr = trade.tradeId.slice(0, 10) + "...";
-          return (
-            <Card
-              key={trade.tradeId}
-              title={(() => {
-                // Determine direction from exchange rate: rate > 1 means EURC/USD > 1, so USDC -> EURC
-                const rate = Number(trade.exchangeRate) / 1e18;
-                return rate >= 1 ? "USDC to EURC" : "EURC to USDC";
-              })()}
-              subtitle={tradeIdStr}
-              badge={{ label: t("approve.pending"), color: "amber" }}
+            <button
+              onClick={() => {
+                setRefreshing(true);
+                loadProposals();
+              }}
+              disabled={refreshing}
+              className="flex items-center gap-1 text-muted hover:text-foreground text-[11px]"
             >
-              <div className="space-y-3">
-                {/* Amount */}
-                <div className="rounded-lg bg-background p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted">{t("approve.amount")}</span>
-                    <span className="font-tabular text-lg font-semibold text-foreground">
-                      {formatDisplayAmount(trade.fromAmount)}
-                    </span>
-                  </div>
-                </div>
+              <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
+              <span>Refresh</span>
+            </button>
+          </div>
 
-                {/* Details grid */}
-                <div className="grid grid-cols-2 gap-3">
-                  <DetailRow
-                    label={t("approve.exchange_rate")}
-                    value={formatRateBigInt(trade.exchangeRate)}
-                  />
-                  <DetailRow
-                    label={t("approve.you_receive")}
-                    value={formatDisplayAmount(trade.toAmount, "EUR")}
-                  />
-                  <DetailRow
-                    label={t("approve.projected_savings")}
-                    value={formatBps(SAVINGS_BPS) + " " + t("approve.vs_bank")}
-                    valueColor="text-accent-green"
-                  />
-                  <DetailRow
-                    label={t("approve.expires")}
-                    value={formatTimeRemaining(trade.expiresAt)}
-                    valueColor="text-accent-amber"
-                  />
-                </div>
-
-                {/* Policy context */}
-                <div className="rounded-lg border border-accent-amber/20 bg-accent-amber/5 p-2.5">
-                  <p className="text-[11px] text-accent-amber">
-                    {t("approve.exceeds_threshold")}
-                  </p>
-                </div>
-
-                {/* Verified success banner */}
-                {verified[trade.tradeId] && (
-                  <div className="rounded-lg border border-accent-green/20 bg-accent-green/5 p-2.5">
-                    <p className="text-[11px] text-accent-green">
-                      {t("approve.verified_msg")}
-                    </p>
-                  </div>
-                )}
-
-                {/* Approve button */}
-                <button
-                  onClick={() => handleApprove(trade.tradeId)}
-                  disabled={verifying === trade.tradeId || verified[trade.tradeId]}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent-blue py-3.5 text-sm font-semibold text-white transition-all hover:bg-accent-blue/90 active:scale-[0.98] disabled:opacity-50"
-                >
-                  {verified[trade.tradeId] ? (
-                    <>
-                      <CheckIcon />
-                      {t("approve.btn_approved")}
-                    </>
-                  ) : verifying === trade.tradeId ? (
-                    <>
-                      <LoadingSpinner />
-                      {t("approve.btn_verifying")}
-                    </>
-                  ) : (
-                    <>
-                      <CouncilIcon />
-                      {t("approve.btn_approve")}
-                    </>
-                  )}
-                </button>
-              </div>
-            </Card>
-          );
-        })
-      )}
-
-      {/* Recent approvals section */}
-      <Card title={t("approve.recent_title")} subtitle={t("approve.recent_subtitle")}>
-        <div className="flex flex-col items-center py-4 text-center">
-          <p className="text-xs text-muted/60">
-            {t("approve.recent_empty")}
-          </p>
+          <div>
+            <div className="text-[11px] text-muted mb-1 font-medium">Switch Council Voter:</div>
+            <div className="grid grid-cols-3 gap-2">
+              {councilAccounts.map((acc, idx) => {
+                const isCurrent = acc === accountId;
+                return (
+                  <button
+                    key={acc}
+                    onClick={() => connect(acc)}
+                    className={`rounded-lg py-1.5 px-2 text-center text-xs font-semibold transition-colors border ${
+                      isCurrent
+                        ? "border-accent-blue bg-accent-blue/15 text-accent-blue"
+                        : "border-border bg-background text-muted hover:text-foreground hover:border-zinc-700"
+                    }`}
+                  >
+                    Council {idx + 1}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </Card>
+
+      {/* 2. Proposals List */}
+      <Card
+        title={`DAO Proposals (${proposals.length})`}
+        subtitle="FunctionCall proposals to execute approve_order on fx-budget"
+      >
+        {loading ? (
+          <div className="py-6 text-center text-xs text-muted">Loading proposals from NEAR testnet...</div>
+        ) : proposals.length === 0 ? (
+          <div className="py-6 text-center text-xs text-muted">No proposals found on Sputnik DAO.</div>
+        ) : (
+          <div className="space-y-3 pt-1">
+            {proposals.map((p) => {
+              const approveVotes = Object.values(p.votes).filter((v) => v === "Approve").length;
+              const isApproved = p.status === "Approved";
+              const isProcessing = votingId === p.id;
+              const hasVoted = accountId && p.votes[accountId];
+
+              return (
+                <div key={p.id} className="rounded-xl border border-border bg-background p-3 text-xs">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <ShieldCheck className="h-4 w-4 text-accent-blue" />
+                      <span className="font-mono font-bold text-foreground">Proposal #{p.id}</span>
+                    </div>
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                        isApproved
+                          ? "bg-green-500/15 text-green-400"
+                          : "bg-amber-500/15 text-amber-400"
+                      }`}
+                    >
+                      {p.status} ({approveVotes}/2 Approved)
+                    </span>
+                  </div>
+
+                  <div className="rounded-lg bg-surface p-2 mb-2 font-mono text-[11px] text-zinc-300 break-all border border-border">
+                    {p.description}
+                  </div>
+
+                  <div className="mb-3 text-[11px] text-muted">
+                    <span className="font-medium text-foreground">Signatures: </span>
+                    {Object.keys(p.votes).length === 0 ? (
+                      <span>No votes cast yet</span>
+                    ) : (
+                      <div className="mt-1 space-y-0.5">
+                        {Object.entries(p.votes).map(([voter, vote]) => (
+                          <div key={voter} className="flex items-center justify-between font-mono text-[10px]">
+                            <span className="text-zinc-400">{voter}</span>
+                            <span
+                              className={`font-semibold ${
+                                vote === "Approve" ? "text-green-400" : "text-red-400"
+                              }`}
+                            >
+                              {vote}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {!isApproved && (
+                    <div className="flex gap-2 pt-2 border-t border-border">
+                      <button
+                        onClick={() => handleVote(p.id, "VoteApprove")}
+                        disabled={isProcessing}
+                        className="flex-1 py-1.5 rounded-lg bg-green-500/15 text-green-400 border border-green-500/20 font-semibold hover:bg-green-500/25 disabled:opacity-50 transition-colors"
+                      >
+                        {isProcessing ? "Submitting..." : hasVoted ? "Change Vote to Approve" : "Vote Approve (2-of-3)"}
+                      </button>
+                      <button
+                        onClick={() => handleVote(p.id, "VoteReject")}
+                        disabled={isProcessing}
+                        className="py-1.5 px-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/20 font-semibold hover:bg-red-500/25 disabled:opacity-50 transition-colors"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
     </div>
-  );
-}
-
-function DetailRow({
-  label,
-  value,
-  valueColor = "text-foreground",
-}: {
-  label: string;
-  value: string;
-  valueColor?: string;
-}) {
-  return (
-    <div>
-      <div className="text-[11px] text-muted">{label}</div>
-      <div className={`font-tabular text-xs font-medium ${valueColor}`}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function LoadingSpinner() {
-  return (
-    <svg
-      className="h-4 w-4 animate-spin"
-      viewBox="0 0 24 24"
-      fill="none"
-    >
-      <circle
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeDasharray="31.4"
-        strokeDashoffset="10"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function CouncilIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-accent-green">
-      <circle cx="9" cy="9" r="8" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M6 9l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }

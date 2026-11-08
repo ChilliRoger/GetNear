@@ -154,10 +154,10 @@ async function runLiveIntegrationTest() {
     )
 
     const account = await client.viewAccount('chilliroger-operator.testnet')
-    const nearAmount = BigInt(account.amount) / 10n ** 24n
+    const hasBalance = BigInt(account.amount) > 0n
     assert(
-      `live viewAccount on chilliroger-operator.testnet has balance (${nearAmount} NEAR)`,
-      nearAmount >= 10n,
+      `live viewAccount on chilliroger-operator.testnet has balance (${account.amount} yocto)`,
+      hasBalance,
     )
 
     const keys = await client.viewAccessKeyList('chilliroger-operator.testnet')

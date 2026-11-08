@@ -80,3 +80,4 @@ describe('Agent SQLite Persistence & Provenance', () => {
     assert.equal(saved.score, 85)
   })
 })
+

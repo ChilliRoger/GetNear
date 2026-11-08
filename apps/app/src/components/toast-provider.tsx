@@ -9,8 +9,13 @@ import {
 } from "react";
 import { Toast, type ToastItem, type ToastType } from "./toast";
 
+interface ToastOptions {
+  type?: ToastType;
+  explorerUrl?: string;
+}
+
 interface ToastContextType {
-  showToast: (message: string, type?: ToastType) => void;
+  showToast: (message: string, typeOrOptions?: ToastType | ToastOptions) => void;
 }
 
 const ToastContext = createContext<ToastContextType>({
@@ -24,11 +29,20 @@ let toastCounter = 0;
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
-  const showToast = useCallback((message: string, type: ToastType = "info") => {
+  const showToast = useCallback((message: string, typeOrOptions?: ToastType | ToastOptions) => {
     const id = `toast-${++toastCounter}`;
+    let type: ToastType = "info";
+    let explorerUrl: string | undefined;
+
+    if (typeof typeOrOptions === "string") {
+      type = typeOrOptions;
+    } else if (typeOrOptions && typeof typeOrOptions === "object") {
+      if (typeOrOptions.type) type = typeOrOptions.type;
+      explorerUrl = typeOrOptions.explorerUrl;
+    }
+
     setToasts((prev) => {
-      const next = [...prev, { id, message, type }];
-      // Max 3 visible at a time
+      const next = [...prev, { id, message, type, explorerUrl }];
       return next.length > 3 ? next.slice(-3) : next;
     });
   }, []);

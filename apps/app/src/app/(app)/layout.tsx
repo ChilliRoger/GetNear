@@ -21,7 +21,7 @@ export default function AppLayout({
         {/* Testnet & Simulation Banner */}
         <div className="bg-amber-500/10 border-b border-amber-500/20 px-3 py-1.5 text-center text-xs font-medium text-amber-400 tracking-wider flex items-center justify-center gap-2">
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-          <span>TESTNET · SIMULATED FILLS · MOCK MODE</span>
+          <span>TESTNET · SIMULATED FILLS</span>
         </div>
 
         {/* Header */}

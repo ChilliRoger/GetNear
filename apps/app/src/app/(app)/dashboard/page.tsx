@@ -1,484 +1,446 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/card";
-import { RateSparkline } from "@/components/rate-sparkline";
 import { LiveQuoteCard } from "@/components/live-quote-card";
-import { useBalances, usePolicy, useTreasuryBalances } from "@/lib/hooks";
-import { formatDisplayAmount } from "@getnear/shared";
-import { formatDisplayAmountFromString, formatBps } from "@/lib/format";
-import { SAVINGS_BPS } from "@/lib/constants";
-import { useI18n } from "@/lib/i18n";
+import { useToast } from "@/components/toast-provider";
+import { useNearWallet } from "@/lib/near-wallet";
+import { explorerAccountUrl } from "@getnear/shared";
+import {
+  Shield,
+  ExternalLink,
+  Play,
+  RefreshCw,
+  Vote,
+  CheckCircle2,
+  AlertCircle,
+  PlusCircle,
+  Activity,
+} from "lucide-react";
 
-// ── Live trade types from Oracle API ─────────────────────────────────
-
-interface OracleTrade {
-  id: string;
-  from_token: string;
-  to_token: string;
-  input_amount: string;
-  filled_amount: string | null;
-  output_received: string | null;
-  status: string;
-  created_at: number;
-  updated_at: number;
-  mode?: string;
-  desired_output?: string | null;
-}
-
-function formatTimeAgo(timestampSec: number): string {
-  const diff = Date.now() - timestampSec * 1000;
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-function useRecentTrades() {
-  const [trades, setTrades] = useState<OracleTrade[]>([]);
-  const [loading, setLoading] = useState(true);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const poll = async () => {
-      try {
-        const res = await fetch("/api/oracle/api/trades?status=COMPLETE,FILLING");
-        if (res.ok && !cancelled) {
-          const rows: OracleTrade[] = await res.json();
-          setTrades(rows);
-        }
-      } catch {
-        // Oracle may not be running
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-          timeoutRef.current = setTimeout(poll, 10000);
-        }
-      }
-    };
-
-    poll();
-
-    return () => {
-      cancelled = true;
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, []);
-
-  return { trades, loading };
-}
-
-interface StrategyDecisionSummary {
+interface ContractOrder {
   id: number;
+  requester: string;
+  pair_label: string;
+  total_in: string;
+  executed_in: string;
+  max_chunk_in: string;
+  deadline_ns: number;
+  max_dev_bps: number;
+  status: "Pending" | "Active" | "Completed" | "Expired" | "Cancelled";
+  last_chunk_ns: number;
+  chunks_count: number;
+}
+
+interface DaoProposal {
+  id: number;
+  proposer: string;
+  description: string;
+  kind: Record<string, unknown>;
+  status: "InProgress" | "Approved" | "Rejected" | "Removed" | "Expired" | "Moved";
+  votes: Record<string, "Approve" | "Reject" | "Remove">;
+  submission_time: string;
+}
+
+interface AgentFill {
+  id: number;
+  order_id: number;
+  chunk_index: number;
+  amount_in: string;
+  simulated_out: string;
+  quote_ref: string;
+  deviation_bps: number;
+  tx_hash: string | null;
+  explorer_url: string | null;
+  is_simulated: boolean;
+  timestamp: number;
+}
+
+interface AgentDecision {
+  id: number;
+  order_id: number;
+  timestamp: number;
   score: number;
-  action: string;
+  decision: "EXECUTE" | "WAIT";
   reason: string;
-  chunk_amount: string | null;
-  from_token: string | null;
-}
-
-function useStrategyLatest() {
-  const [latest, setLatest] = useState<StrategyDecisionSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const poll = async () => {
-      try {
-        const res = await fetch("/api/oracle/api/strategy/decisions?limit=5");
-        if (res.ok && !cancelled) {
-          const rows: StrategyDecisionSummary[] = await res.json();
-          setLatest(rows.length > 0 ? rows[0] : null);
-        }
-      } catch {
-        // Oracle may not be running
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-          timeoutRef.current = setTimeout(poll, 5000);
-        }
-      }
-    };
-
-    poll();
-
-    return () => {
-      cancelled = true;
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, []);
-
-  return { latest, loading };
-}
-
-const ORACLE_URL = "/api/oracle";
-
-function usePriceData() {
-  const [comparison, setComparison] = useState<{
-    chainlink: { price: number };
-    fynd: { price: number };
-    uniswap: { price: number };
-    avg24h: number;
-  } | null>(null);
-  const [history, setHistory] = useState<{ timestamp: number; chainlink: number; fynd: number }[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [oracleOffline, setOracleOffline] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const [compRes, histRes] = await Promise.all([
-        fetch(`${ORACLE_URL}/api/prices/comparison`),
-        fetch(`${ORACLE_URL}/prices/history?pair=${encodeURIComponent('EURC/USD')}&hours=24`),
-      ]);
-      const compOk = compRes.ok;
-      const histOk = histRes.ok;
-      if (compOk) {
-        setComparison(await compRes.json());
-        setLastUpdated(Date.now());
-      }
-      if (histOk) {
-        const data = await histRes.json();
-        setHistory(data.points || []);
-      }
-      // If both fail, oracle is offline
-      setOracleOffline(!compOk && !histOk);
-    } catch (err) {
-      console.error('usePriceData load:', err);
-      setOracleOffline(true);
-    }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    load();
-    const id = setInterval(load, 30000);
-    return () => clearInterval(id);
-  }, [load]);
-
-  return { comparison, history, loading, oracleOffline, lastUpdated };
-}
-
-function useTickingTimeAgo(timestamp: number | null) {
-  const [label, setLabel] = useState("");
-
-  useEffect(() => {
-    if (timestamp === null) {
-      setLabel("");
-      return;
-    }
-
-    const update = () => {
-      const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
-      if (seconds < 60) {
-        setLabel(`Updated ${seconds}s ago`);
-      } else {
-        const minutes = Math.floor(seconds / 60);
-        setLabel(`Updated ${minutes}m ago`);
-      }
-    };
-
-    update();
-    const id = setInterval(update, 1000);
-    return () => clearInterval(id);
-  }, [timestamp]);
-
-  return label;
-}
-
-function LiveTimestamp({ timestamp }: { timestamp: number | null }) {
-  const timeAgo = useTickingTimeAgo(timestamp);
-  return <span>{timeAgo || "\u2014"}</span>;
-}
-
-function Skeleton({ className = "" }: { className?: string }) {
-  return (
-    <div
-      className={`animate-pulse rounded bg-border ${className}`}
-    />
-  );
+  chunk_size: string;
+  deviation_bps?: number;
 }
 
 export default function DashboardPage() {
-  const balances = useBalances();
-  const treasury = useTreasuryBalances();
-  const policy = usePolicy();
-  const price = usePriceData();
-  const strategyLatest = useStrategyLatest();
-  const recentTrades = useRecentTrades();
-  const { t } = useI18n();
-  const [pairView, setPairView] = useState<"USDC_EURC" | "EURC_USDC">("USDC_EURC");
-  // useTickingTimeAgo moved into LiveTimestamp component to scope per-second re-renders
+  const { signAndSendTransaction } = useNearWallet();
+  const { showToast } = useToast();
 
-  // #33: Extract 24h price range calculation to useMemo
-  const priceRange24h = useMemo(() => {
-    if (price.history.length === 0) return null;
-    const prices = price.history.map(p => pairView === "USDC_EURC" ? 1 / p.chainlink : p.chainlink);
-    return { min: Math.min(...prices), max: Math.max(...prices) };
-  }, [price.history, pairView]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [submittingOrder, setSubmittingOrder] = useState(false);
+  const [triggeringAgent, setTriggeringAgent] = useState(false);
+  const [votingProposalId, setVotingProposalId] = useState<number | null>(null);
 
-  // Real price from Oracle (EURC/USD = how many USD per 1 EURC)
-  const eurcUsdPrice = price.comparison?.chainlink?.price || 0;
-  // USDC/EURC = 1/eurcUsdPrice (how many EURC per 1 USDC)
-  const usdcEurcRate = eurcUsdPrice > 0 ? 1 / eurcUsdPrice : 0;
-  const displayRate = pairView === "USDC_EURC" ? usdcEurcRate : eurcUsdPrice;
-  const avg24h = price.comparison?.avg24h || 0;
-  const avg24hDisplay = pairView === "USDC_EURC" ? (avg24h > 0 ? 1 / avg24h : 0) : avg24h;
-  const change24h = displayRate - avg24hDisplay;
-  const changePct = avg24hDisplay > 0 ? (change24h / avg24hDisplay) * 100 : 0;
+  // NEAR state
+  const [orders, setOrders] = useState<ContractOrder[]>([]);
+  const [proposals, setProposals] = useState<DaoProposal[]>([]);
+  const [fills, setFills] = useState<AgentFill[]>([]);
+  const [decisions, setDecisions] = useState<AgentDecision[]>([]);
+  const [contractId, setContractId] = useState("fx-budget.chilliroger-operator.testnet");
+  const [daoId, setDaoId] = useState("chilliroger-dao.sputnik-v2.testnet");
 
-  // Format policy values from on-chain (18 decimals for rates, 6 decimals for threshold)
-  const policyThreshold = policy.threshold
-    ? formatDisplayAmount(policy.threshold)
-    : null;
-  const policyRateMin = policy.rateMin
-    ? (Number(policy.rateMin) / 1e18).toFixed(4)
-    : null;
-  const policyRateMax = policy.rateMax
-    ? (Number(policy.rateMax) / 1e18).toFixed(4)
-    : null;
+  // Order intake quick inputs
+  const [orderAmount, setOrderAmount] = useState("50");
+  const [maxChunk, setMaxChunk] = useState("20");
+  const [maxDevBps, setMaxDevBps] = useState("120");
+  const [deadlineHours, setDeadlineHours] = useState("4");
+
+  const numAmount = parseFloat(orderAmount) || 0;
+  const isAboveCap = numAmount > 100;
+
+  const loadData = useCallback(async () => {
+    try {
+      const res = await fetch("/api/near");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.contract?.orders) {
+          setOrders(data.contract.orders);
+        }
+        if (data.contract?.id) {
+          setContractId(data.contract.id);
+        }
+        if (data.dao?.id) {
+          setDaoId(data.dao.id);
+        }
+        if (data.dao?.proposals) {
+          setProposals(data.dao.proposals);
+        }
+        if (data.agent?.fills) {
+          setFills(data.agent.fills);
+        }
+        if (data.agent?.decisions) {
+          setDecisions(data.agent.decisions);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch NEAR state:", err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+    const timer = setInterval(loadData, 12000);
+    return () => clearInterval(timer);
+  }, [loadData]);
+
+  // Handle Quick Order Creation
+  const handleCreateOrder = async (overrideAmount?: string) => {
+    const amtStr = overrideAmount || orderAmount;
+    const amtNum = parseFloat(amtStr);
+    if (!amtNum || amtNum <= 0) {
+      showToast("Please enter a valid amount", "error");
+      return;
+    }
+
+    setSubmittingOrder(true);
+    try {
+      const totalIn = BigInt(Math.round(amtNum * 1e6)).toString();
+      const chunkIn = BigInt(Math.round(parseFloat(maxChunk || "20") * 1e6)).toString();
+      const devBps = parseInt(maxDevBps || "120", 10);
+      const hours = parseFloat(deadlineHours || "4");
+      const deadlineNs = Date.now() * 1_000_000 + Math.round(hours * 3600 * 1_000_000_000);
+
+      const res = await signAndSendTransaction({
+        receiverId: contractId,
+        methodName: "create_order",
+        args: {
+          pair_label: "USDC/EURe",
+          total_in: totalIn,
+          max_chunk_in: chunkIn,
+          deadline_ns: deadlineNs,
+          max_dev_bps: devBps,
+        },
+      });
+
+      const label = amtNum <= 100 ? "Active (Within Auto-Cap)" : "Pending (Submitted to Sputnik DAO)";
+      showToast(`Order created successfully: ${amtNum} USDC [${label}]`, {
+        type: "success",
+        explorerUrl: res.explorerUrl,
+      });
+
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast(`Order creation failed: ${msg}`, "error");
+    } finally {
+      setSubmittingOrder(false);
+    }
+  };
+
+  // Handle Sputnik DAO Vote
+  const handleVote = async (proposalId: number, action: "VoteApprove" | "VoteReject") => {
+    setVotingProposalId(proposalId);
+    try {
+      const res = await signAndSendTransaction({
+        receiverId: daoId,
+        methodName: "act_proposal",
+        args: {
+          id: proposalId,
+          action,
+        },
+      });
+
+      showToast(`Voted ${action} on Proposal #${proposalId}`, {
+        type: "success",
+        explorerUrl: res.explorerUrl,
+      });
+
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast(`Voting failed: ${msg}`, "error");
+    } finally {
+      setVotingProposalId(null);
+    }
+  };
+
+  // Handle Agent Trigger
+  const handleTriggerAgent = async () => {
+    setTriggeringAgent(true);
+    try {
+      const res = await fetch("/api/agent/trigger", { method: "POST" });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast("Autonomous agent tick triggered successfully", "success");
+        await loadData();
+      } else {
+        showToast(data.error || "Agent trigger returned error", "error");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast(`Agent trigger failed: ${msg}`, "error");
+    } finally {
+      setTriggeringAgent(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
-      {/* Oracle offline banner */}
-      {price.oracleOffline && (
-        <div className="rounded-xl border border-accent-amber/30 bg-accent-amber/10 px-4 py-3">
+      {/* 1. System Status & Security Banner */}
+      <div className="rounded-xl border border-border bg-surface p-3 text-xs">
+        <div className="flex items-center justify-between pb-2 mb-2 border-b border-border">
           <div className="flex items-center gap-2">
-            <span className="text-accent-amber text-sm">&#x26A0;</span>
-            <span className="text-xs font-medium text-accent-amber">{t("toast.oracle_offline")}</span>
+            <Shield className="h-4 w-4 text-accent-blue" />
+            <span className="font-semibold text-foreground">NEAR Testnet FX Treasury Agent</span>
+          </div>
+          <button
+            onClick={() => {
+              setRefreshing(true);
+              loadData();
+            }}
+            disabled={refreshing}
+            className="flex items-center gap-1 text-muted hover:text-foreground text-[11px]"
+          >
+            <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
+            <span>Refresh</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 text-[11px]">
+          <div>
+            <span className="text-muted">Contract: </span>
+            <a
+              href={explorerAccountUrl(contractId)}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-accent-blue hover:underline inline-flex items-center gap-0.5"
+            >
+              <span>{contractId.slice(0, 16)}...</span>
+              <ExternalLink className="h-2.5 w-2.5" />
+            </a>
+          </div>
+          <div>
+            <span className="text-muted">Sputnik DAO: </span>
+            <a
+              href={explorerAccountUrl(daoId)}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-accent-blue hover:underline inline-flex items-center gap-0.5"
+            >
+              <span>{daoId.slice(0, 16)}...</span>
+              <ExternalLink className="h-2.5 w-2.5" />
+            </a>
+          </div>
+          <div>
+            <span className="text-muted">Auto-Cap: </span>
+            <span className="font-mono font-medium text-foreground">100.00 USDC</span>
+          </div>
+          <div>
+            <span className="text-muted">Max Chunk: </span>
+            <span className="font-mono font-medium text-foreground">20.00 USDC</span>
           </div>
         </div>
-      )}
-
-
-
-
-      {/* Live 1Click Dry Quote & ECB Reference Card (P5) */}
-      <LiveQuoteCard />
-
-      {/* Rate display */}
-      <Card title={t("dashboard.rate_subtitle")} badge={{ label: <LiveTimestamp timestamp={price.lastUpdated} />, color: price.lastUpdated ? "green" : "blue" }}>
-        {/* Pair toggle — tap to flip */}
-        <button
-          onClick={() => setPairView(pairView === "USDC_EURC" ? "EURC_USDC" : "USDC_EURC")}
-          className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground transition-colors hover:text-accent-blue"
-        >
-          <span>{pairView === "USDC_EURC" ? "USDC → EURC" : "EURC → USDC"}</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-muted">
-            <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-        <div className="flex items-baseline gap-3">
-          {price.loading || displayRate === 0 ? (
-            <Skeleton className="h-8 w-32" />
-          ) : (
-            <>
-              <span className="font-tabular text-2xl font-semibold text-foreground">
-                {displayRate.toFixed(4)}
-              </span>
-              <span
-                className={`font-tabular text-sm font-medium ${
-                  change24h >= 0 ? "text-accent-green" : "text-accent-red"
-                }`}
-              >
-                {change24h >= 0 ? "+" : ""}
-                {change24h.toFixed(4)}{" "}
-                <span className="text-xs text-muted">
-                  ({changePct >= 0 ? "+" : ""}
-                  {changePct.toFixed(2)}%)
-                </span>
-              </span>
-            </>
-          )}
-        </div>
-        <div className="mt-2">
-          <RateSparkline data={price.history} inverted={pairView === "USDC_EURC"} />
-        </div>
-        <div className="mt-2 flex items-center justify-between text-[11px] text-muted">
-          <span>{t("dashboard.range_24h")}</span>
-          <span className="font-tabular">
-            {priceRange24h
-              ? `${priceRange24h.min.toFixed(4)} - ${priceRange24h.max.toFixed(4)}`
-              : "—"}
-          </span>
-        </div>
-      </Card>
-
-      {/* Balance cards — Treasury (wallet) + In Execution (SwapExecutor) */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card title={t("dashboard.treasury")} subtitle={t("dashboard.wallet")} className="border-l-2 border-l-accent-green/40">
-          <div className="space-y-2">
-            <BalanceRow
-              token="USDC"
-              amount={treasury.usdcBal !== null ? formatDisplayAmount(treasury.usdcBal) : null}
-              loading={treasury.loading}
-            />
-            <BalanceRow
-              token="EURC"
-              amount={treasury.eurcBal !== null ? formatDisplayAmount(treasury.eurcBal, "EUR") : null}
-              loading={treasury.loading}
-            />
-          </div>
-        </Card>
-        <Card title={t("dashboard.in_execution")} subtitle="SwapExecutor" className="border-l-2 border-l-accent-blue/40">
-          <div className="space-y-2">
-            <BalanceRow
-              token="USDC"
-              amount={balances.usdcBal !== null ? formatDisplayAmount(balances.usdcBal) : null}
-              loading={balances.loading}
-            />
-            <BalanceRow
-              token="EURC"
-              amount={balances.eurcBal !== null ? formatDisplayAmount(balances.eurcBal, "EUR") : null}
-              loading={balances.loading}
-            />
-          </div>
-        </Card>
       </div>
 
-      {/* Active policy — testnet contract limits */}
-      <Card
-        title={t("dashboard.active_policy")}
-        badge={{ label: policy.version ? `v${policy.version}` : "LOADING", color: "green" }}
-      >
-        <div className="grid grid-cols-3 gap-3">
-          <PolicyStat
-            label={t("dashboard.auto_threshold")}
-            value={policyThreshold}
-            loading={policy.loading}
-          />
-          <PolicyStat
-            label={t("dashboard.rate_min")}
-            value={policyRateMin}
-            loading={policy.loading}
-          />
-          <PolicyStat
-            label={t("dashboard.rate_max")}
-            value={policyRateMax}
-            loading={policy.loading}
-          />
+      {/* 2. Rate Discovery & Timing Score Card */}
+      <LiveQuoteCard />
+
+      {/* 3. Interactive Order Intake Card */}
+      <Card title="Create FX Goal (NEAR Testnet)" subtitle="Auto-executes small orders, requires DAO 2-of-3 approval above $100">
+        <div className="space-y-3 pt-1">
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setOrderAmount("20");
+                handleCreateOrder("20");
+              }}
+              disabled={submittingOrder}
+              className="flex-1 py-1.5 px-2 rounded-lg border border-border bg-surface-hover text-xs font-medium text-foreground hover:border-accent-blue transition-colors text-left"
+            >
+              <div className="font-semibold text-accent-green">Quick Test: $20 USDC</div>
+              <div className="text-[10px] text-muted">Auto-Active (Below $100 cap)</div>
+            </button>
+            <button
+              onClick={() => {
+                setOrderAmount("250");
+                handleCreateOrder("250");
+              }}
+              disabled={submittingOrder}
+              className="flex-1 py-1.5 px-2 rounded-lg border border-border bg-surface-hover text-xs font-medium text-foreground hover:border-amber-500 transition-colors text-left"
+            >
+              <div className="font-semibold text-amber-400">Quick Test: $250 USDC</div>
+              <div className="text-[10px] text-muted">Pending (Needs DAO 2-of-3)</div>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <label className="text-[11px] text-muted block mb-1">Total Amount (USDC)</label>
+              <input
+                type="number"
+                value={orderAmount}
+                onChange={(e) => setOrderAmount(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                placeholder="50"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-muted block mb-1">Max Chunk (USDC)</label>
+              <input
+                type="number"
+                value={maxChunk}
+                onChange={(e) => setMaxChunk(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                placeholder="20"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-muted block mb-1">Max Deviation (bps)</label>
+              <input
+                type="number"
+                value={maxDevBps}
+                onChange={(e) => setMaxDevBps(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                placeholder="120"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-muted block mb-1">Deadline (Hours)</label>
+              <input
+                type="number"
+                value={deadlineHours}
+                onChange={(e) => setDeadlineHours(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                placeholder="4"
+              />
+            </div>
+          </div>
+
+          {/* Dynamic Cap Badge */}
+          <div
+            className={`rounded-lg px-2.5 py-1.5 text-xs flex items-center justify-between ${
+              isAboveCap
+                ? "bg-amber-500/10 border border-amber-500/20 text-amber-400"
+                : "bg-green-500/10 border border-green-500/20 text-green-400"
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              {isAboveCap ? <AlertCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+              <span className="font-medium">
+                {isAboveCap ? "Requires Sputnik DAO Approval" : "Auto-Active Order"}
+              </span>
+            </div>
+            <span className="text-[10px] font-mono opacity-80">
+              {isAboveCap ? "> $100 Auto-Cap" : "<= $100 Auto-Cap"}
+            </span>
+          </div>
+
+          <button
+            onClick={() => handleCreateOrder()}
+            disabled={submittingOrder}
+            className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-accent-blue py-2 text-xs font-semibold text-white hover:bg-accent-blue/90 disabled:opacity-50 transition-colors"
+          >
+            <PlusCircle className="h-3.5 w-3.5" />
+            <span>{submittingOrder ? "Submitting to NEAR Testnet..." : "Submit Order to Testnet"}</span>
+          </button>
         </div>
       </Card>
 
-      {/* Active strategy — latest decision from Oracle */}
-      <Card
-        title={t("strategy.latest")}
-        badge={{
-          label: strategyLatest.latest?.action || "---",
-          color: strategyLatest.latest?.action === "SWAP" ? "green" : "blue",
-        }}
-      >
-        {strategyLatest.loading && !strategyLatest.latest ? (
-          <Skeleton className="h-5 w-full" />
-        ) : strategyLatest.latest ? (
-          <p className="text-sm text-foreground">
-            <span className="font-tabular font-semibold">
-              Score {strategyLatest.latest.score}
-            </span>
-            {" — "}
-            <span className="font-semibold">{strategyLatest.latest.action}</span>
-            {strategyLatest.latest.chunk_amount && (
-              <span className="font-tabular">
-                {" "}{Number(strategyLatest.latest.chunk_amount).toLocaleString()} {strategyLatest.latest.from_token || "USDC"}
-              </span>
-            )}
-            {" "}
-            <span className="text-muted text-xs">
-              ({strategyLatest.latest.reason})
-            </span>
-          </p>
+      {/* 4. On-Chain Active Orders List */}
+      <Card title={`Active & Recent Orders (${orders.length})`} subtitle="On-chain orders retrieved from fx-budget contract views">
+        {loading ? (
+          <div className="py-6 text-center text-xs text-muted">Loading orders from NEAR testnet...</div>
+        ) : orders.length === 0 ? (
+          <div className="py-6 text-center text-xs text-muted">No orders found on testnet. Create one above to test.</div>
         ) : (
-          <p className="text-sm text-muted">{t("strategy.latest_empty")}</p>
-        )}
-      </Card>
-
-      {/* Price comparison widget — all 3 oracle sources */}
-      <PriceComparisonWidget comparison={price.comparison} loading={price.loading} />
-
-      {/* Recent trades — live data from Oracle API */}
-      <Card title={t("dashboard.recent_trades")} subtitle={t("dashboard.last_48h")}>
-        {recentTrades.loading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        ) : recentTrades.trades.length === 0 ? (
-          <div className="flex flex-col items-center py-6 text-center">
-            <p className="text-sm text-muted">No trades yet</p>
-            <p className="mt-1 text-[11px] text-muted/60">
-              Trades will appear here once the CRE agent executes orders.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-0">
-            {recentTrades.trades.map((trade) => {
-              const isComplete = trade.status === "COMPLETE";
-              // Only use input_amount as fallback when the trade is fully complete.
-              // For FILLING trades, filled_amount=null means no fills yet — show "0".
-              const filledAmt = trade.filled_amount || (isComplete ? trade.input_amount : "0");
-              const outputAmt = trade.output_received || "0";
-              // Estimate effective rate from filled/output amounts
-              // Both USDC and EURC are 6-decimal tokens, so raw ratio is correct.
-              // Normalize to always show USDC-per-EURC for consistency with dashboard rate.
-              const filled = Number(filledAmt);
-              const output = Number(outputAmt);
-              const isBuyingEurc = trade.from_token === "USDC" && trade.to_token === "EURC";
-              const effectiveRate = filled > 0 && output > 0
-                ? (isBuyingEurc ? filled / output : output / filled)
-                : 0;
-              // Estimated savings: bank fee minus DEX fee
-              const estimatedSavingsBps = SAVINGS_BPS;
+          <div className="space-y-2.5 pt-1">
+            {orders.map((o) => {
+              const total = Number(o.total_in) / 1e6;
+              const executed = Number(o.executed_in) / 1e6;
+              const pct = total > 0 ? Math.min(100, Math.round((executed / total) * 100)) : 0;
+              const isPending = o.status === "Pending";
+              const isActive = o.status === "Active";
 
               return (
-                <div
-                  key={trade.id}
-                  className="flex items-center justify-between border-b border-border/50 py-2.5 last:border-0"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className={`flex h-7 w-7 items-center justify-center rounded-lg text-[11px] font-bold ${
-                        isComplete
-                          ? "bg-accent-green/15 text-accent-green"
-                          : "bg-accent-blue/15 text-accent-blue"
+                <div key={o.id} className="rounded-xl border border-border bg-background p-3 text-xs">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-foreground">Order #{o.id}</span>
+                      <span className="font-mono text-[11px] text-muted">{o.pair_label}</span>
+                    </div>
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                        isPending
+                          ? "bg-amber-500/15 text-amber-400"
+                          : isActive
+                          ? "bg-green-500/15 text-green-400"
+                          : "bg-zinc-800 text-zinc-400"
                       }`}
                     >
-                      {isComplete ? "C" : "F"}
+                      {o.status}
+                    </span>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="mb-2">
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="text-muted">
+                        Filled: <strong className="text-foreground">{executed.toFixed(2)}</strong> / {total.toFixed(2)} USDC
+                      </span>
+                      <span className="font-mono font-medium text-foreground">{pct}%</span>
                     </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-medium text-foreground">
-                          {trade.from_token} {"->"} {trade.to_token}
-                        </span>
-                        <span className="text-[11px] text-muted">
-                          {trade.id.slice(0, 8)}...
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px] text-muted">
-                        {effectiveRate > 0 && (
-                          <span className="font-tabular">
-                            @ {effectiveRate.toFixed(4)}
-                          </span>
-                        )}
-                        <span>{formatTimeAgo(trade.updated_at)}</span>
-                      </div>
+                    <div className="h-1.5 w-full rounded-full bg-zinc-800 overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-300 ${
+                          pct === 100 ? "bg-green-500" : "bg-accent-blue"
+                        }`}
+                        style={{ width: `${pct}%` }}
+                      />
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-tabular text-xs font-medium text-foreground">
-                      {!isComplete && filledAmt === "0"
-                        ? t("dashboard.pending")
-                        : formatDisplayAmountFromString(filledAmt, trade.from_token === "EURC" ? "EUR" : "USD")}
-                    </div>
-                    <div className="font-tabular text-[11px] text-accent-green">
-                      +{formatBps(estimatedSavingsBps)} {t("dashboard.saved")}
-                    </div>
+
+                  <div className="flex items-center justify-between text-[10px] text-muted">
+                    <span>Chunks Executed: {o.chunks_count}</span>
+                    <span>Max Dev: {o.max_dev_bps} bps</span>
                   </div>
                 </div>
               );
@@ -486,182 +448,163 @@ export default function DashboardPage() {
           </div>
         )}
       </Card>
-    </div>
-  );
-}
 
-function BalanceRow({
-  token,
-  amount,
-  loading,
-}: {
-  token: string;
-  amount: string | null;
-  loading: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
-        {token}
-      </span>
-      {loading || amount === null ? (
-        <Skeleton className="h-4 w-20" />
-      ) : (
-        <span className="font-tabular text-xs font-semibold text-foreground">
-          {amount}
-        </span>
-      )}
-    </div>
-  );
-}
+      {/* 5. Sputnik DAO Council Approvals Card */}
+      <Card
+        title={`Sputnik DAO Council Approvals (${proposals.length})`}
+        subtitle="2-of-3 multisig votes required for orders above $100 auto-cap"
+      >
+        {proposals.length === 0 ? (
+          <div className="py-4 text-center text-xs text-muted">No pending DAO proposals on testnet.</div>
+        ) : (
+          <div className="space-y-2.5 pt-1">
+            {proposals.map((p) => {
+              const approveVotes = Object.values(p.votes).filter((v) => v === "Approve").length;
+              const isApproved = p.status === "Approved";
+              const isVoting = votingProposalId === p.id;
 
-function PolicyStat({
-  label,
-  value,
-  loading,
-}: {
-  label: string;
-  value: string | null;
-  loading: boolean;
-}) {
-  return (
-    <div className="text-center">
-      {loading || value === null ? (
-        <Skeleton className="mx-auto h-5 w-16" />
-      ) : (
-        <div className="font-tabular text-sm font-semibold text-foreground">
-          {value}
-        </div>
-      )}
-      <div className="mt-0.5 text-[11px] text-muted">{label}</div>
-    </div>
-  );
-}
+              return (
+                <div key={p.id} className="rounded-xl border border-border bg-background p-3 text-xs">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <Vote className="h-3.5 w-3.5 text-accent-blue" />
+                      <span className="font-mono font-semibold text-foreground">Proposal #{p.id}</span>
+                    </div>
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                        isApproved ? "bg-green-500/15 text-green-400" : "bg-amber-500/15 text-amber-400"
+                      }`}
+                    >
+                      {p.status} ({approveVotes}/2 votes)
+                    </span>
+                  </div>
 
-// ── Price Comparison Widget ─────────────────────────────────────────
+                  <p className="text-[11px] text-muted mb-2 font-mono break-all">{p.description}</p>
 
-function PriceComparisonWidget({
-  comparison,
-  loading,
-}: {
-  comparison: {
-    chainlink: { price: number };
-    fynd: { price: number };
-    uniswap: { price: number };
-    avg24h: number;
-  } | null;
-  loading: boolean;
-}) {
-  const { t } = useI18n();
+                  <div className="text-[10px] text-muted mb-2">
+                    Votes cast:{" "}
+                    {Object.keys(p.votes).length === 0 ? (
+                      <span>None yet</span>
+                    ) : (
+                      Object.entries(p.votes).map(([voter, vote]) => (
+                        <span key={voter} className="inline-block mr-2 text-foreground font-mono">
+                          {voter.slice(0, 15)}... ({vote})
+                        </span>
+                      ))
+                    )}
+                  </div>
 
-  const sources = comparison
-    ? [
-        { name: t("dashboard.chainlink"), price: comparison.chainlink.price },
-        { name: t("dashboard.fynd"), price: comparison.fynd.price },
-        { name: t("dashboard.uniswap"), price: comparison.uniswap.price },
-      ]
-    : [];
-
-  // Compute average price across all sources
-  const avgPrice =
-    sources.length > 0
-      ? sources.reduce((sum, s) => sum + s.price, 0) / sources.length
-      : 0;
-
-  // Compute divergence in bps for each source from the average
-  const sourcesWithDiv = sources.map((s) => {
-    const divBps = avgPrice > 0 ? Math.abs(((s.price - avgPrice) / avgPrice) * 10000) : 0;
-    return { ...s, divBps };
-  });
-
-  // Max divergence across all pairs
-  const maxDiv =
-    sourcesWithDiv.length > 0
-      ? Math.max(...sourcesWithDiv.map((s) => s.divBps))
-      : 0;
-
-  function divColor(bps: number): string {
-    if (bps < 5) return "text-accent-green";
-    if (bps <= 20) return "text-accent-amber";
-    return "text-accent-red";
-  }
-
-  function divDotColor(bps: number): string {
-    if (bps < 5) return "bg-accent-green";
-    if (bps <= 20) return "bg-accent-amber";
-    return "bg-accent-red";
-  }
-
-  return (
-    <Card
-      title={t("dashboard.price_comparison")}
-      subtitle={t("dashboard.price_comparison_subtitle")}
-      badge={{ label: "EURC/USD", color: "blue" }}
-    >
-      {loading || !comparison ? (
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-full" />
-        </div>
-      ) : (
-        <>
-          {/* Header row */}
-          <div className="mb-1 grid grid-cols-3 text-[11px] font-medium uppercase tracking-wide text-muted">
-            <span>{t("dashboard.source")}</span>
-            <span className="text-right">{t("dashboard.price")}</span>
-            <span className="text-right">{t("dashboard.divergence")}</span>
-          </div>
-
-          {/* Source rows */}
-          <div className="space-y-0">
-            {sourcesWithDiv.map((source) => (
-              <div
-                key={source.name}
-                className="grid grid-cols-3 items-center border-b border-border/50 py-2 last:border-0"
-              >
-                <div className="flex items-center gap-1.5">
-                  <span className={`h-1.5 w-1.5 rounded-full ${divDotColor(source.divBps)}`} />
-                  <span className="text-xs font-medium text-foreground">
-                    {source.name}
-                  </span>
+                  {!isApproved && (
+                    <div className="flex gap-2 pt-1 border-t border-border">
+                      <button
+                        onClick={() => handleVote(p.id, "VoteApprove")}
+                        disabled={isVoting}
+                        className="flex-1 py-1.5 rounded-lg bg-green-500/15 text-green-400 border border-green-500/20 font-semibold hover:bg-green-500/25 disabled:opacity-50 transition-colors"
+                      >
+                        {isVoting ? "Broadcasting vote..." : "Vote Approve (2-of-3)"}
+                      </button>
+                      <button
+                        onClick={() => handleVote(p.id, "VoteReject")}
+                        disabled={isVoting}
+                        className="py-1.5 px-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/20 font-semibold hover:bg-red-500/25 disabled:opacity-50 transition-colors"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <span className="text-right font-tabular text-xs font-semibold text-foreground">
-                  {source.price.toFixed(4)}
-                </span>
-                <span
-                  className={`text-right font-tabular text-xs font-medium ${divColor(source.divBps)}`}
-                >
-                  {source.divBps.toFixed(1)} bps
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
+        )}
+      </Card>
 
-          {/* Max divergence summary */}
-          <div className="mt-2 flex items-center justify-between rounded-lg bg-background px-3 py-1.5">
-            <span className="text-[11px] text-muted">{t("dashboard.max_divergence")}</span>
-            <div className="flex items-center gap-1.5">
-              <span className={`h-2 w-2 rounded-full ${divDotColor(maxDiv)}`} />
-              <span className={`font-tabular text-xs font-bold ${divColor(maxDiv)}`}>
-                {maxDiv.toFixed(1)} bps
-              </span>
+      {/* 6. Agent Ops & Recent Simulated Fills */}
+      <Card
+        title="Agent Runner & Execution Log"
+        subtitle="Simulated accounting fills with verifiable on-chain execute_chunk transactions"
+      >
+        <div className="flex items-center justify-between pb-2 mb-2 border-b border-border">
+          <div className="flex items-center gap-1.5 text-xs">
+            <Activity className="h-3.5 w-3.5 text-green-400" />
+            <span className="font-semibold text-foreground">Loop Status: Active</span>
+          </div>
+          <button
+            onClick={handleTriggerAgent}
+            disabled={triggeringAgent}
+            className="flex items-center gap-1.5 rounded-lg bg-accent-blue/15 px-2.5 py-1 text-xs font-semibold text-accent-blue hover:bg-accent-blue/25 disabled:opacity-50 transition-colors"
+          >
+            <Play className={`h-3 w-3 ${triggeringAgent ? "animate-spin" : ""}`} />
+            <span>{triggeringAgent ? "Executing..." : "Trigger Agent Tick"}</span>
+          </button>
+        </div>
+
+        {/* Fills list */}
+        {fills.length === 0 ? (
+          <div className="py-4 text-center text-xs text-muted">No fills executed yet.</div>
+        ) : (
+          <div className="space-y-1.5">
+            {fills.slice(0, 5).map((f) => {
+              const inAmt = (Number(f.amount_in) / 1e6).toFixed(2);
+              const outAmt = (Number(f.simulated_out) / 1e18).toFixed(4);
+
+              return (
+                <div
+                  key={f.id}
+                  className="flex items-center justify-between rounded-lg border border-border bg-background px-2.5 py-2 text-xs"
+                >
+                  <div>
+                    <div className="font-semibold text-foreground flex items-center gap-1.5">
+                      <span>Chunk #{f.chunk_index} for Order #{f.order_id}</span>
+                      <span className="rounded bg-amber-500/15 px-1 py-0.2 text-[9px] font-bold text-amber-400 uppercase">
+                        Simulated
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-muted font-mono mt-0.5">
+                      {inAmt} USDC &rarr; ~{outAmt} EURe ({f.deviation_bps} bps)
+                    </div>
+                  </div>
+
+                  {f.explorer_url && (
+                    <a
+                      href={f.explorer_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 text-[11px] font-mono text-accent-blue hover:underline"
+                    >
+                      <span>NEARBlocks</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Recent Strategy Decisions */}
+        {decisions.length > 0 && (
+          <div className="mt-3 pt-2.5 border-t border-border">
+            <div className="text-[10px] text-muted uppercase tracking-wider mb-1.5 font-medium">
+              Recent Strategy Decisions
+            </div>
+            <div className="space-y-1">
+              {decisions.slice(0, 3).map((d) => (
+                <div
+                  key={d.id}
+                  className="flex items-center justify-between text-[11px] font-mono text-zinc-400 py-0.5"
+                >
+                  <span className={d.decision === "EXECUTE" ? "text-green-400 font-semibold" : "text-amber-400"}>
+                    [{d.decision}]
+                  </span>
+                  <span className="truncate max-w-[240px] text-zinc-300">{d.reason}</span>
+                  <span className="text-zinc-500 text-[10px]">Score: {d.score}</span>
+                </div>
+              ))}
             </div>
           </div>
-
-          {/* Oracle dashboard link */}
-          <div className="mt-3 text-center">
-            <a
-              href="https://"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[11px] text-muted hover:text-accent-blue transition-colors"
-            >
-              View Oracle Dashboard &rarr;
-            </a>
-          </div>
-        </>
-      )}
-    </Card>
+        )}
+      </Card>
+    </div>
   );
 }

@@ -18,7 +18,7 @@ Items noted during P0–P2 for later blocks.
 - [x] P7: Write Rust FxBudget smart contract (`contracts/fx-budget`), compile release WASM (`res/fx_budget.wasm`), 9-test verification suite, and `docs/CONTRACT.md`.
 - [x] P8: Deploy Sputnik DAO (`chilliroger-dao.sputnik-v2.testnet`), FxBudget (`fx-budget.chilliroger-operator.testnet`), bootstrap proposals, agent restricted key, and above-cap order 2-of-3 approval flow (`docs/DEMO_LOG.md`).
 - [x] P9: Build agent runner (`apps/agent`) with autonomous polling loop, live 1Click & ECB integration, SQLite provenance (`is_simulated = true`), REST observability endpoints, and testnet chunk executions.
-- [ ] P10: Build dashboard and order UI.
+- [x] P10: Build dashboard and order UI (clean, non-gradient, zero emojis, Lucide SVG icons, live testnet transactions for create_order & Sputnik DAO voting, toast alerts with NEARBlocks explorer links, and agent runner controls).
 - [ ] P11 (optional): NEAR AI natural-language order intake.
 - [ ] P12: End-to-end demo, tests, reproducibility.
 - [ ] P13: README and hackathon disclosures.
