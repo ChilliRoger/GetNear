@@ -154,3 +154,4 @@ CREATE TABLE strategy_decisions (
 - `GET /api/strategy/next`: Evaluates the current market and next active order, computes score and chunk size, records to SQLite, and returns structured decision.
 - `GET /api/strategy/decisions?limit=100`: Returns chronological decision log for dashboard transparency.
 - `GET /api/strategy/config` & `PUT /api/strategy/config`: Reads and updates runtime risk thresholds.
+

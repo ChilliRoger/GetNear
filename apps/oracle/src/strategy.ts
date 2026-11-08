@@ -293,8 +293,8 @@ export function evaluateStrategy(
 
   const totalScore = Math.round(
     priceScore * strategyConfig.weightPrice +
-      divergenceScore * strategyConfig.weightDivergence +
-      urgencyScore * strategyConfig.weightUrgency,
+    divergenceScore * strategyConfig.weightDivergence +
+    urgencyScore * strategyConfig.weightUrgency,
   )
 
   const breakdown: ScoreBreakdown = {

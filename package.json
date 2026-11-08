@@ -10,7 +10,9 @@
     "near:check": "tsx scripts/near/check-env.ts",
     "quotes:list": "tsx scripts/quotes/list-tokens.ts",
     "quotes:probe-minimums": "tsx scripts/quotes/probe-minimums.ts",
-    "quotes:check": "tsx scripts/quotes/check-quotes.ts"
+    "quotes:check": "tsx scripts/quotes/check-quotes.ts",
+    "build:contract": "cd contracts/fx-budget && cargo build --target wasm32-unknown-unknown --release",
+    "test:contract": "tsx contracts/fx-budget/tests/contract.test.ts"
   },
   "devDependencies": {
     "tsx": "^4.21.0",

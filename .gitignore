@@ -18,6 +18,11 @@ contracts/cache/
 contracts/lib/binary.wasm
 contracts/broadcast/
 
+# Cargo / Rust build artifacts
+target/
+contracts/fx-budget/target/
+Cargo.lock
+
 # Playwright
 test-results/
 playwright-report/
