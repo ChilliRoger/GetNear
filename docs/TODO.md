@@ -14,7 +14,7 @@ Items noted during P0–P2 for later blocks.
 - [x] P3: Utility helpers (yocto, ns, bps, explorer) and unit tests.
 - [x] P4: Set up NEAR testnet accounts and RPC client (@getnear/near-client, check-env script, frontend wallet connect).
 - [x] P5: 1Click dry-quotes, Frankfurter ECB reference rates, route minimums probed ($1-$5000), LiveQuoteCard UI & CLI probe.
-- [ ] P6: Adapt strategy engine to NEAR quote sources.
+- [x] P6: Strategy engine adapted to 1Click & ECB reference sources, adaptive TWAP with quadratic urgency, hard execution guards, SQLite decision log, and docs/STRATEGY.md.
 - [ ] P7: Write Rust FxBudget smart contract.
 - [ ] P8: Deploy Sputnik DAO and FxBudget to testnet.
 - [ ] P9: Build agent runner with simulated fills.

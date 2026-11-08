@@ -62,7 +62,6 @@ function TradeForm() {
   const { t } = useI18n();
   const { showToast } = useToast();
   const [direction, setDirection] = useState<"USDC_TO_EURC" | "EURC_TO_USDC">("USDC_TO_EURC");
-  const [mode, setMode] = useState<"INPUT" | "OUTPUT">("INPUT");
   const [amount, setAmount] = useState("5");
   const [deadline, setDeadline] = useState(4);
   const [submitting, setSubmitting] = useState(false);
@@ -95,9 +94,7 @@ function TradeForm() {
   const toToken = direction === "USDC_TO_EURC" ? "EURC" : "USDC";
   const parsedAmount = Number(amount);
   const rawAmount = Number.isFinite(parsedAmount) && parsedAmount > 0 ? Math.floor(parsedAmount * 1e6) : 0;
-  const amountCurrency = mode === "INPUT"
-    ? (fromToken === "USDC" ? "USD" : "EUR")
-    : (toToken === "USDC" ? "USD" : "EUR");
+  const amountCurrency = fromToken === "USDC" ? "USD" : "EUR";
   const displayAmount = (Number(amount) * DISPLAY_MULTIPLIER).toLocaleString("en-US", {
     style: "currency",
     currency: amountCurrency,
@@ -109,9 +106,13 @@ function TradeForm() {
     setSubmitting(true);
     try {
       const deadlineTs = Math.floor(Date.now() / 1000) + deadline * 3600;
-      const payload = mode === "OUTPUT"
-        ? { fromToken, toToken, mode: "OUTPUT" as const, desiredOutput: rawAmount.toString(), deadline: deadlineTs }
-        : { fromToken, toToken, inputAmount: rawAmount.toString(), deadline: deadlineTs };
+      const payload = {
+        fromToken,
+        toToken,
+        inputAmount: rawAmount.toString(),
+        deadline: deadlineTs,
+        maxDeviationBps: 120,
+      };
       const res = await fetch(`${ORACLE_URL}/api/trades`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -121,8 +122,8 @@ function TradeForm() {
       const data = await res.json();
       setSubmitted(true);
       showToast(t("toast.trade_submitted"), "success");
-      if (data.status === "PENDING") {
-        showToast("Trade requires approval — go to Approve page to verify with World ID", "info");
+      if (data.status === "Pending" || data.status === "PENDING") {
+        showToast("Order exceeds auto-cap — submitted to Sputnik DAO for 2-of-3 council approval", "info");
       }
       setTimeout(() => setSubmitted(false), 3000);
     } catch (e) {
@@ -140,32 +141,6 @@ function TradeForm() {
         <h2 className="text-lg font-semibold text-foreground">{t("trade.title")}</h2>
         <p className="text-xs text-muted">{t("trade.subtitle")}</p>
       </div>
-
-      {/* Mode toggle */}
-      <Card title={t("trade.mode")}>
-        <div className="flex items-center gap-3">
-          <button
-            className={`flex-1 rounded-lg border py-3 text-center text-sm font-medium transition-colors ${
-              mode === "INPUT"
-                ? "border-accent-blue bg-accent-blue/10 text-accent-blue"
-                : "border-border text-muted"
-            }`}
-            onClick={() => setMode("INPUT")}
-          >
-            {t("trade.mode_input")}
-          </button>
-          <button
-            className={`flex-1 rounded-lg border py-3 text-center text-sm font-medium transition-colors ${
-              mode === "OUTPUT"
-                ? "border-accent-blue bg-accent-blue/10 text-accent-blue"
-                : "border-border text-muted"
-            }`}
-            onClick={() => setMode("OUTPUT")}
-          >
-            {t("trade.mode_output")}
-          </button>
-        </div>
-      </Card>
 
       {/* Direction toggle */}
       <Card title={t("trade.direction")}>
@@ -200,7 +175,7 @@ function TradeForm() {
       </Card>
 
       {/* Amount */}
-      <Card title={mode === "INPUT" ? t("trade.you_send") : t("trade.desired_output")} subtitle={t("trade.multiplier_note")}>
+      <Card title={t("trade.you_send")} subtitle={t("trade.multiplier_note")}>
         <input
           type="number"
           inputMode="decimal"
