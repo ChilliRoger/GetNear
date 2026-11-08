@@ -1,3 +1,10 @@
+/**
+ * GetNear Oracle & Strategy Service (P6)
+ *
+ * Exposes REST API for market prices, strategy decisions, and simulated order management.
+ * Integrates live 1Click dry-quotes and Frankfurter ECB reference rates.
+ */
+
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serve } from '@hono/node-server'
@@ -6,17 +13,19 @@ import { mkdirSync, existsSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 import {
-  MockQuoteSource,
-  MockReferenceRateSource,
+  OneClickQuoteSource,
+  FrankfurterReferenceSource,
+  computeDeviationBps,
+  bpsToPercent,
   MockExecutor,
   MockApprovalGate,
 } from '@getnear/shared'
 import {
-  computeTimingScore,
-  adaptiveChunkSize,
+  evaluateStrategy,
+  computeAdaptiveChunkSize,
   strategyConfig,
   updateStrategyConfig,
-  type PriceSnapshot,
+  type MarketInputs,
   type OrderContext,
 } from './strategy.js'
 
@@ -25,20 +34,21 @@ const DATA_DIR = join(__dirname, '..', 'data')
 const DB_PATH = join(DATA_DIR, 'prices.db')
 const PORT = Number(process.env.PORT || 38174)
 const RECORD_INTERVAL = 30_000 // 30 seconds
-const GETNEAR_MODE = process.env.GETNEAR_MODE || 'mock'
+const GETNEAR_MODE = process.env.GETNEAR_MODE || 'live'
 const DEMO_MODE = process.env.DEMO_MODE !== 'false'
 
-// ---------- Domain Adapters (Mock for P2) ----------
+// ---------- Live & Domain Adapters ----------
 
-const quoteSource = new MockQuoteSource()
-const refRateSource = new MockReferenceRateSource()
+const quoteSource = new OneClickQuoteSource()
+const refRateSource = new FrankfurterReferenceSource()
 const executor = new MockExecutor()
 const approvalGate = new MockApprovalGate()
 
 // Supported stablecoins for GetNear testnet FX
 const SUPPORTED_TOKENS: Record<string, { decimals: number; symbol: string }> = {
   USDC: { decimals: 6, symbol: 'USDC' },
-  EURC: { decimals: 6, symbol: 'EURC' },
+  EURE: { decimals: 18, symbol: 'EURe' },
+  EURC: { decimals: 18, symbol: 'EURe' }, // alias to EURe
 }
 
 // ---------- SQLite Setup ----------
@@ -54,12 +64,11 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp INTEGER NOT NULL,
     pair TEXT NOT NULL,
-    chainlink_price REAL NOT NULL,
-    chainlink_round_id TEXT,
-    chainlink_updated_at INTEGER,
-    fynd_price REAL,
-    fynd_solve_ms INTEGER,
-    uniswap_price REAL
+    ref_price REAL NOT NULL,
+    quote_price REAL NOT NULL,
+    deviation_bps INTEGER,
+    quote_id TEXT,
+    source TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_prices_pair_ts ON prices(pair, timestamp);
 
@@ -71,11 +80,10 @@ db.exec(`
     filled_amount TEXT DEFAULT '0',
     output_received TEXT DEFAULT '0',
     deadline INTEGER NOT NULL,
+    max_dev_bps INTEGER DEFAULT 120,
     status TEXT DEFAULT 'PENDING',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
-    mode TEXT DEFAULT 'INPUT',
-    desired_output TEXT,
     timing_score INTEGER,
     strategy_reason TEXT
   );
@@ -104,13 +112,27 @@ db.exec(`
     urgency_score INTEGER,
     chunk_amount TEXT,
     chunk_multiplier INTEGER,
-    min_output TEXT
+    quote_id TEXT,
+    deviation_bps INTEGER,
+    quote_rate REAL,
+    reference_rate REAL
   );
 `)
 
+// Migration check for trade_orders columns if pre-existing
+try {
+  db.exec('ALTER TABLE trade_orders ADD COLUMN max_dev_bps INTEGER DEFAULT 120;')
+} catch {
+  // column already exists
+}
+
 const insertDecision = db.prepare(
-  `INSERT INTO strategy_decisions (timestamp, order_id, score, action, reason, price_score, divergence_score, urgency_score, chunk_amount, chunk_multiplier, min_output)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  `INSERT INTO strategy_decisions (
+    timestamp, order_id, score, action, reason,
+    price_score, divergence_score, urgency_score,
+    chunk_amount, chunk_multiplier, quote_id,
+    deviation_bps, quote_rate, reference_rate
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 )
 
 const updateOrderStrategy = db.prepare(
@@ -118,47 +140,46 @@ const updateOrderStrategy = db.prepare(
 )
 
 const insertPrice = db.prepare(
-  `INSERT INTO prices (timestamp, pair, chainlink_price, chainlink_round_id, chainlink_updated_at, fynd_price, fynd_solve_ms, uniswap_price)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  `INSERT INTO prices (timestamp, pair, ref_price, quote_price, deviation_bps, quote_id, source)
+   VALUES (?, ?, ?, ?, ?, ?, ?)`
 )
 
-// ---------- Price Recording Loop ----------
+// ---------- Dynamic Market Observation Loop ----------
 
 async function record() {
   try {
     const now = Math.floor(Date.now() / 1000)
 
-    // Fetch quote from QuoteSource (1Click / Mock)
+    // 1. Fetch live dry quote from 1Click
     const quote = await quoteSource.getQuote({
       fromToken: 'USDC',
-      toToken: 'EURC',
-      amountIn: '1000000',
+      toToken: 'EURe',
+      amountIn: '10000000', // $10 USDC probe
+      dry: true,
     })
 
-    // Fetch reference rate from ReferenceRateSource (ECB / Mock)
-    const ref = await refRateSource.getReferenceRate('EUR/USD')
+    // 2. Fetch live reference rate from European Central Bank
+    const ref = await refRateSource.getReferenceRate('USD/EUR')
 
-    // Mid price (EURC/USD = 1 / rate for EURC in USD)
-    const refRate = ref.rate
-    const quoteRate = quote.rate > 0 ? 1 / quote.rate : refRate
-    const secondaryRate = quoteRate * (1 + ((now % 5) - 2) * 0.0005)
+    const devBps = computeDeviationBps(quote.rate, ref.rate)
 
     insertPrice.run(
       now,
-      'EURC/USD',
-      refRate,
-      `ref-${now}`,
-      now,
-      secondaryRate,
-      12,
-      quoteRate
+      'USDC/EURe',
+      ref.rate,
+      quote.rate,
+      devBps,
+      quote.quoteId,
+      `${quote.source} / ${ref.source}`
     )
 
     console.log(
-      `[${new Date().toISOString()}] Recorded EURC/USD: ref=${refRate.toFixed(4)}, quote=${quoteRate.toFixed(4)} (${GETNEAR_MODE.toUpperCase()} DATA)`
+      `[${new Date().toISOString()}] Recorded USDC/EURe: Quote=${quote.rate.toFixed(5)}, Ref=${ref.rate.toFixed(
+        5
+      )}, Dev=${devBps} bps (${bpsToPercent(devBps)})`
     )
   } catch (e) {
-    console.error('Price recording loop error:', e)
+    console.error('[Oracle] Market observation loop error:', (e as Error).message)
   }
 }
 
@@ -169,164 +190,146 @@ app.use('/*', cors())
 
 app.get('/health', (c) => {
   const count = db.prepare('SELECT COUNT(*) as count FROM prices').get() as { count: number }
+  const ordersCount = db.prepare('SELECT COUNT(*) as count FROM trade_orders').get() as { count: number }
   return c.json({
     ok: true,
     mode: GETNEAR_MODE,
-    isMock: GETNEAR_MODE === 'mock',
+    isMock: false,
     simulated: true,
     recordings: count.count,
-    banner: 'TESTNET · SIMULATED FILLS',
+    ordersCount: ordersCount.count,
+    banner: 'TESTNET · DYNAMIC ADAPTIVE TWAP',
   })
 })
 
-app.get('/prices/current', (c) => {
-  const result: Record<string, any> = {}
-  const pairs = db.prepare('SELECT DISTINCT pair FROM prices').all() as { pair: string }[]
-  for (const { pair } of pairs) {
-    const row = db.prepare(
+app.get('/prices/current', async (c) => {
+  try {
+    const latestRow = db.prepare(
       'SELECT * FROM prices WHERE pair = ? ORDER BY timestamp DESC LIMIT 1'
-    ).get(pair) as any
-    if (row) {
-      const divergence = row.fynd_price != null && row.chainlink_price !== row.fynd_price
-        ? Math.abs(row.chainlink_price - row.fynd_price) / row.chainlink_price * 100
-        : null
-      result[pair] = {
-        chainlink: row.chainlink_price,
-        fynd: row.fynd_price,
-        uniswap: row.uniswap_price,
-        divergence_pct: divergence != null ? Math.round(divergence * 1000) / 1000 : null,
-        timestamp: row.timestamp,
-        provenance: GETNEAR_MODE === 'mock' ? 'MOCK DATA' : 'TESTNET',
-      }
+    ).get('USDC/EURe') as any
+
+    if (!latestRow) {
+      // Fetch live directly if DB has no recordings yet
+      const quote = await quoteSource.getQuote({ fromToken: 'USDC', toToken: 'EURe', amountIn: '10000000', dry: true })
+      const ref = await refRateSource.getReferenceRate('USD/EUR')
+      const devBps = computeDeviationBps(quote.rate, ref.rate)
+      return c.json({
+        'USDC/EURe': {
+          quotePrice: quote.rate,
+          refPrice: ref.rate,
+          deviationBps: devBps,
+          deviationPercent: bpsToPercent(devBps),
+          timestamp: Math.floor(Date.now() / 1000),
+          quoteId: quote.quoteId,
+          provenance: '1Click dry-quote & ECB via Frankfurter',
+        },
+      })
     }
+
+    return c.json({
+      'USDC/EURe': {
+        quotePrice: latestRow.quote_price,
+        refPrice: latestRow.ref_price,
+        deviationBps: latestRow.deviation_bps,
+        deviationPercent: bpsToPercent(latestRow.deviation_bps ?? 0),
+        timestamp: latestRow.timestamp,
+        quoteId: latestRow.quote_id,
+        provenance: latestRow.source || '1Click dry-quote & ECB via Frankfurter',
+      },
+    })
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 500)
   }
-  return c.json(result)
 })
 
 app.get('/prices/history', (c) => {
-  const pair = c.req.query('pair') || 'EURC/USD'
+  const pair = c.req.query('pair') || 'USDC/EURe'
   const hours = Math.min(Number(c.req.query('hours') || 24), 168)
   const since = Math.floor(Date.now() / 1000) - hours * 3600
   const rows = db.prepare(
-    'SELECT timestamp, chainlink_price, fynd_price, uniswap_price FROM prices WHERE pair = ? AND timestamp >= ? ORDER BY timestamp ASC'
+    'SELECT timestamp, quote_price, ref_price, deviation_bps FROM prices WHERE pair = ? AND timestamp >= ? ORDER BY timestamp ASC'
   ).all(pair, since) as any[]
+
   const points = rows.map((r: any) => ({
     timestamp: r.timestamp,
-    chainlink: r.chainlink_price,
-    fynd: r.fynd_price,
-    uniswap: r.uniswap_price,
-    divergence_pct: r.fynd_price != null
-      ? Math.round(Math.abs(r.chainlink_price - r.fynd_price) / r.chainlink_price * 100 * 1000) / 1000
-      : null,
+    quotePrice: r.quote_price,
+    refPrice: r.ref_price,
+    deviationBps: r.deviation_bps,
   }))
-  return c.json({ pair, points, mock: GETNEAR_MODE === 'mock' })
+  return c.json({ pair, points, isSimulated: true })
 })
 
-app.get('/depth', async (c) => {
-  const sellSymbol = c.req.query('sell_token') || 'USDC'
-  const buySymbol = c.req.query('buy_token') || 'EURC'
-  const sell = SUPPORTED_TOKENS[sellSymbol]
-  const buy = SUPPORTED_TOKENS[buySymbol]
-  if (!sell || !buy) return c.json({ error: 'Unknown token' }, 400)
+app.get('/api/prices/comparison', async (c) => {
+  try {
+    const latestRow = db.prepare(
+      'SELECT * FROM prices WHERE pair = ? ORDER BY timestamp DESC LIMIT 1'
+    ).get('USDC/EURe') as any
 
-  const amounts = [100, 1000, 10000, 100000, 500000, 1000000]
-  const baseRate = 0.9259
-  const points = amounts.map((humanAmount) => {
-    const buyAmount = humanAmount * baseRate
-    return {
-      sell_amount: humanAmount,
-      buy_amount: Math.round(buyAmount * 1e6) / 1e6,
-      effective_price: baseRate,
-      price_impact_bps: Math.round((humanAmount / 1_000_000) * 10),
-      gas_estimate: 50000,
-    }
-  })
-  return c.json({ sell_token: sellSymbol, buy_token: buySymbol, points, mock: true })
+    const ref = latestRow ? latestRow.ref_price : (await refRateSource.getReferenceRate('USD/EUR')).rate
+    const quote = latestRow ? latestRow.quote_price : (await quoteSource.getQuote({ fromToken: 'USDC', toToken: 'EURe', amountIn: '10000000', dry: true })).rate
+    const devBps = latestRow ? latestRow.deviation_bps : computeDeviationBps(quote, ref)
+
+    return c.json({
+      chainlink: { price: ref, updatedAt: latestRow?.timestamp || Math.floor(Date.now() / 1000) },
+      fynd: { price: quote, updatedAt: latestRow?.timestamp || Math.floor(Date.now() / 1000) },
+      uniswap: { price: quote, updatedAt: latestRow?.timestamp || Math.floor(Date.now() / 1000) },
+      quotePrice: quote,
+      referencePrice: ref,
+      divergenceBps: devBps,
+      avg24h: ref,
+      provenance: '1Click dry-quote & ECB via Frankfurter',
+      isSimulated: true,
+    })
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 500)
+  }
 })
 
-app.get('/depth/book', async (c) => {
-  const baseSymbol = c.req.query('base') || 'EURC'
-  const quoteSymbol = c.req.query('quote') || 'USDC'
-  const sizes = [100, 500, 1000, 5000, 10000, 50000, 100000, 250000, 500000, 1000000]
-  const midPrice = 1.08
-
-  const bids = sizes.map((size) => ({
-    size,
-    base_amount: Math.round((size / midPrice) * 1e6) / 1e6,
-    price: Math.round((midPrice - (size / 10_000_000) * 0.01) * 1e4) / 1e4,
-    price_impact_bps: Math.round((size / 1_000_000) * 12),
-  }))
-
-  const asks = sizes.map((size) => ({
-    size,
-    quote_amount: Math.round(size * midPrice * 1e6) / 1e6,
-    price: Math.round((midPrice + (size / 10_000_000) * 0.01) * 1e4) / 1e4,
-    price_impact_bps: Math.round((size / 1_000_000) * 12),
-  }))
-
-  return c.json({
-    base: baseSymbol,
-    quote: quoteSymbol,
-    bids,
-    asks,
-    mock: true,
-  })
-})
-
-// ---------- Orders / Trades API ----------
+// ---------- Dynamic Order Intake & Management ----------
 
 app.post('/api/trades', async (c) => {
   const body = await c.req.json()
 
-  const validTokens = ['USDC', 'EURC']
-  if (!body.fromToken || !validTokens.includes(body.fromToken)) {
+  const validTokens = ['USDC', 'EURE', 'EURC']
+  const fromUpper = (body.fromToken || 'USDC').toUpperCase()
+  const toUpper = (body.toToken || 'EURE').toUpperCase()
+
+  if (!validTokens.includes(fromUpper)) {
     return c.json({ error: `Invalid fromToken: must be one of ${validTokens.join(', ')}` }, 400)
   }
-  if (!body.toToken || !validTokens.includes(body.toToken)) {
+  if (!validTokens.includes(toUpper)) {
     return c.json({ error: `Invalid toToken: must be one of ${validTokens.join(', ')}` }, 400)
   }
-  if (body.fromToken === body.toToken) {
+  if (fromUpper === toUpper) {
     return c.json({ error: 'fromToken and toToken must be different' }, 400)
   }
   if (body.deadline == null || typeof body.deadline !== 'number' || !Number.isFinite(body.deadline)) {
-    return c.json({ error: 'Invalid deadline: must be a finite integer' }, 400)
+    return c.json({ error: 'Invalid deadline: must be a finite integer timestamp' }, 400)
   }
-
-  const mode = body.mode === 'OUTPUT' ? 'OUTPUT' : 'INPUT'
-  let inputAmount: string
-  let desiredOutput: string | null = null
-
-  if (mode === 'OUTPUT') {
-    if (!body.desiredOutput || typeof body.desiredOutput !== 'string') {
-      return c.json({ error: 'Invalid desiredOutput' }, 400)
-    }
-    desiredOutput = body.desiredOutput
-    const desiredNum = Number(desiredOutput)
-    inputAmount = Math.ceil(desiredNum * 1.08 * 1.05).toString()
-  } else {
-    if (!body.inputAmount || typeof body.inputAmount !== 'string') {
-      return c.json({ error: 'Invalid inputAmount' }, 400)
-    }
-    inputAmount = body.inputAmount
+  if (!body.inputAmount || typeof body.inputAmount !== 'string') {
+    return c.json({ error: 'Invalid inputAmount' }, 400)
   }
 
   const id = crypto.randomUUID()
   const now = Math.floor(Date.now() / 1000)
+  const maxDevBps = Number(body.maxDeviationBps) || strategyConfig.defaultMaxDeviationBps
 
-  // Auto-approve small orders (≤ $500,000 raw = 500,000,000 units), large orders are PENDING for DAO
-  const autoCap = 500_000_000n
-  const initialStatus = BigInt(inputAmount) <= autoCap ? 'APPROVED' : 'PENDING'
+  // Auto-cap: orders <= $100 USDC (100,000,000 atomic) become Active immediately.
+  // Larger orders require Sputnik DAO council approval.
+  const autoCap = 100_000_000n
+  const inputBigInt = BigInt(body.inputAmount)
+  const initialStatus = inputBigInt <= autoCap ? 'Active' : 'Pending'
 
   db.prepare(
-    `INSERT INTO trade_orders (id, from_token, to_token, input_amount, deadline, status, created_at, updated_at, mode, desired_output)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, body.fromToken, body.toToken, inputAmount, body.deadline, initialStatus, now, now, mode, desiredOutput)
+    `INSERT INTO trade_orders (id, from_token, to_token, input_amount, deadline, max_dev_bps, status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, fromUpper, toUpper, body.inputAmount, body.deadline, maxDevBps, initialStatus, now, now)
 
-  if (initialStatus === 'PENDING') {
-    await approvalGate.requestApproval({ orderId: id, totalIn: inputAmount, requester: 'testnet.operator' })
+  if (initialStatus === 'Pending') {
+    await approvalGate.requestApproval({ orderId: id, totalIn: body.inputAmount, requester: 'chilliroger-operator.testnet' })
   }
 
-  return c.json({ id, status: initialStatus, mode, inputAmount, desiredOutput, isSimulated: true }, 201)
+  return c.json({ id, status: initialStatus, inputAmount: body.inputAmount, maxDeviationBps: maxDevBps, isSimulated: true }, 201)
 })
 
 app.get('/api/trades', (c) => {
@@ -352,93 +355,131 @@ app.post('/api/trades/:id/approve', async (c) => {
   const id = c.req.param('id')
   approvalGate.castVote(id, true)
   db.prepare('UPDATE trade_orders SET status = ?, updated_at = ? WHERE id = ?')
-    .run('APPROVED', Math.floor(Date.now() / 1000), id)
-  return c.json({ ok: true, status: 'APPROVED', isSimulated: true })
+    .run('Active', Math.floor(Date.now() / 1000), id)
+  return c.json({ ok: true, status: 'Active', isSimulated: true })
 })
 
 app.post('/api/trades/:id/cancel', (c) => {
   db.prepare('UPDATE trade_orders SET status = ?, updated_at = ? WHERE id = ?')
-    .run('CANCELLED', Math.floor(Date.now() / 1000), c.req.param('id'))
+    .run('Cancelled', Math.floor(Date.now() / 1000), c.req.param('id'))
   return c.json({ ok: true })
 })
 
-app.patch('/api/trades/:id/fill', async (c) => {
-  const body = await c.req.json()
-  const txHash = body.txHash || `mock_tx_${Date.now()}`
+// ---------- Dynamic Strategy Engine Endpoint ----------
 
-  db.prepare(
-    `UPDATE trade_orders SET filled_amount = ?, output_received = ?, status = ?, updated_at = ? WHERE id = ?`
-  ).run(body.filledAmount, body.outputReceived, body.status || 'FILLING', Math.floor(Date.now() / 1000), c.req.param('id'))
-
-  db.prepare(
-    `INSERT INTO cre_runs (started_at, action, order_id, chunk_amount, result, tx_hash, error, duration_ms)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(Math.floor(Date.now() / 1000), 'SWAP', c.req.param('id'), body.chunkAmount || '0', body.status || 'FILLING', txHash, null, 15)
-
-  return c.json({ ok: true, txHash, isSimulated: true })
-})
-
-// ---------- Strategy Decision Engine ----------
-
-app.get('/api/strategy/next', (c) => {
+app.get('/api/strategy/next', async (c) => {
   const now = Math.floor(Date.now() / 1000)
 
-  // Auto-cancel expired orders
-  db.prepare("UPDATE trade_orders SET status = 'CANCELLED', updated_at = ? WHERE status IN ('PENDING', 'APPROVED', 'FILLING') AND deadline < ?")
+  // 1. Auto-expire past deadline orders
+  db.prepare("UPDATE trade_orders SET status = 'Expired', updated_at = ? WHERE status IN ('Pending', 'Active', 'APPROVED', 'FILLING') AND deadline < ?")
     .run(now, now)
 
-  const order = db.prepare(
-    "SELECT * FROM trade_orders WHERE status IN ('APPROVED', 'FILLING') ORDER BY created_at ASC LIMIT 1"
+  // 2. Query next active order
+  const orderRow = db.prepare(
+    "SELECT * FROM trade_orders WHERE status IN ('Active', 'APPROVED', 'FILLING') ORDER BY created_at ASC LIMIT 1"
   ).get() as any
 
-  if (!order) {
-    insertDecision.run(now, null, 0, 'WAIT', 'No pending or active orders', null, null, null, null, null, null)
-    return c.json({ action: 'WAIT' as const, reason: 'No pending or active orders', score: 0 })
+  if (!orderRow) {
+    insertDecision.run(
+      now, null, 0, 'WAIT', 'No active orders in treasury queue',
+      null, null, null, null, null, null, null, null, null
+    )
+    return c.json({ action: 'WAIT' as const, reason: 'No active orders in treasury queue', score: 0 })
   }
 
-  const latestRow = db.prepare(
-    "SELECT * FROM prices WHERE pair = 'EURC/USD' ORDER BY timestamp DESC LIMIT 1"
-  ).get() as any
+  // 3. Fetch fresh market quote & reference dynamically
+  let quoteRate = 0.88756
+  let refRate: number | null = 0.89566
+  let quoteId = `probe_${now}`
+  let quoteExpiresAt = Date.now() + 60_000
 
-  const priceSnapshot: PriceSnapshot = {
-    chainlinkPrice: latestRow?.chainlink_price || 1.08,
-    fyndPrice: latestRow?.fynd_price || 1.08,
-    uniswapPrice: latestRow?.uniswap_price || 1.08,
-    avg24hPrice: latestRow?.chainlink_price || 1.08,
+  try {
+    const q = await quoteSource.getQuote({ fromToken: 'USDC', toToken: 'EURe', amountIn: '10000000', dry: true })
+    const r = await refRateSource.getReferenceRate('USD/EUR')
+    quoteRate = q.rate
+    refRate = r.rate
+    quoteId = q.quoteId
+    quoteExpiresAt = q.expiresAt
+  } catch (err) {
+    console.warn('[Oracle] Fallback to recent DB recording:', (err as Error).message)
+    const latestRow = db.prepare('SELECT * FROM prices WHERE pair = ? ORDER BY timestamp DESC LIMIT 1').get('USDC/EURe') as any
+    if (latestRow) {
+      quoteRate = latestRow.quote_price
+      refRate = latestRow.ref_price
+    }
+  }
+
+  // Rolling 24h average from DB
+  const avgRow = db.prepare('SELECT AVG(ref_price) as avg_price FROM prices WHERE timestamp >= ?').get(now - 86400) as any
+  const avg24h = avgRow?.avg_price || refRate
+
+  const marketInputs: MarketInputs = {
+    quoteRate,
+    referenceRate: refRate,
+    avg24hRate: avg24h,
+    quoteExpiresAt,
+    quoteId,
   }
 
   const orderCtx: OrderContext = {
-    inputAmount: order.input_amount,
-    filledAmount: order.filled_amount || '0',
-    createdAt: order.created_at,
-    deadline: order.deadline,
-    fromToken: order.from_token,
-    toToken: order.to_token,
+    id: orderRow.id,
+    inputAmount: BigInt(orderRow.input_amount),
+    filledAmount: BigInt(orderRow.filled_amount || '0'),
+    createdAt: orderRow.created_at,
+    deadline: orderRow.deadline,
+    maxDeviationBps: orderRow.max_dev_bps || strategyConfig.defaultMaxDeviationBps,
+    status: orderRow.status,
+    fromToken: orderRow.from_token,
+    toToken: orderRow.to_token,
   }
 
-  const timing = computeTimingScore(priceSnapshot, orderCtx, now)
-  const chunkAmount = adaptiveChunkSize({
-    inputAmount: BigInt(order.input_amount),
-    filledAmount: BigInt(order.filled_amount || '0'),
-    deadline: order.deadline,
-    createdAt: order.created_at,
-    timingScore: timing.score,
-    now,
-  })
+  // 4. Evaluate strategy rules & guards
+  const decision = evaluateStrategy(marketInputs, orderCtx, now)
 
+  // 5. Compute adaptive chunk size
+  const chunkAmount = decision.action === 'EXECUTE'
+    ? computeAdaptiveChunkSize({
+        inputAmount: orderCtx.inputAmount,
+        filledAmount: orderCtx.filledAmount,
+        deadlineSec: orderCtx.deadline,
+        createdAtSec: orderCtx.createdAt,
+        nowSec: now,
+        timingScore: decision.score,
+      })
+    : 0n
+
+  // 6. Persist decision to SQLite
   insertDecision.run(
-    now, order.id, timing.score, timing.action, timing.reason,
-    timing.breakdown.priceScore, timing.breakdown.divergenceScore, timing.breakdown.urgencyScore,
-    chunkAmount.toString(), timing.chunkMultiplier, null
+    now,
+    orderRow.id,
+    decision.score,
+    decision.action,
+    decision.reason,
+    decision.breakdown.priceScore,
+    decision.breakdown.divergenceScore,
+    decision.breakdown.urgencyScore,
+    chunkAmount.toString(),
+    decision.chunkMultiplier,
+    quoteId,
+    decision.deviationBps,
+    quoteRate,
+    refRate
   )
 
+  updateOrderStrategy.run(decision.score, decision.reason, now, orderRow.id)
+
   return c.json({
-    action: timing.action,
-    orderId: order.id,
+    action: decision.action,
+    orderId: orderRow.id,
     chunkAmount: chunkAmount.toString(),
-    score: timing.score,
-    reason: timing.reason,
-    breakdown: timing.breakdown,
+    score: decision.score,
+    reason: decision.reason,
+    breakdown: decision.breakdown,
+    deviationBps: decision.deviationBps,
+    deviationPercent: decision.deviationBps !== null ? bpsToPercent(decision.deviationBps) : null,
+    quoteRate,
+    referenceRate: refRate,
+    quoteId,
     isSimulated: true,
   })
 })
@@ -452,33 +493,6 @@ app.get('/api/strategy/decisions', (c) => {
   return c.json(rows)
 })
 
-app.get('/api/prices/comparison', (c) => {
-  const latestRow = db.prepare(
-    "SELECT * FROM prices WHERE pair = 'EURC/USD' ORDER BY timestamp DESC LIMIT 1"
-  ).get() as any
-
-  const refPrice = latestRow?.chainlink_price || 1.08
-  const quotePrice = latestRow?.uniswap_price || 1.0795
-  const secondaryPrice = latestRow?.fynd_price || 1.0805
-
-  return c.json({
-    chainlink: { price: refPrice, updatedAt: latestRow?.timestamp || Math.floor(Date.now() / 1000) },
-    fynd: { price: secondaryPrice, updatedAt: latestRow?.timestamp || Math.floor(Date.now() / 1000) },
-    uniswap: { price: quotePrice, updatedAt: latestRow?.timestamp || Math.floor(Date.now() / 1000) },
-    divergenceBps: Math.round((Math.abs(refPrice - quotePrice) / refPrice) * 10000),
-    avg24h: refPrice,
-    currentVsAvgPct: 0.05,
-    provenance: 'MOCK (Simulated 1Click / ECB)',
-    simulated: true,
-  })
-})
-
-app.get('/api/cre/runs', (c) => {
-  const limit = Number(c.req.query('limit') || 50)
-  const rows = db.prepare('SELECT * FROM cre_runs ORDER BY started_at DESC LIMIT ?').all(limit)
-  return c.json(rows)
-})
-
 app.get('/api/strategy/config', (c) => c.json(strategyConfig))
 
 app.put('/api/strategy/config', async (c) => {
@@ -487,41 +501,13 @@ app.put('/api/strategy/config', async (c) => {
   return c.json(strategyConfig)
 })
 
-// ---------- Demo Mode & Seed Data ----------
+// ---------- Dynamic Fill Simulation Loop ----------
 
-let demoSpeed: { speed: 1 | 10; sleep: number } = { speed: 1, sleep: 20 }
-
-app.get('/api/demo/speed', (c) => c.json(demoSpeed))
-
-app.post('/api/demo/speed', async (c) => {
-  const body = await c.req.json().catch(() => ({}))
-  const speed = body.speed === 10 ? 10 : 1
-  demoSpeed = { speed, sleep: speed === 10 ? 5 : 20 }
-  return c.json(demoSpeed)
-})
-
-app.post('/api/demo/seed', async (c) => {
-  const now = Math.floor(Date.now() / 1000)
-  const orders = [
-    { id: `demo-small-${now}`, from: 'USDC', to: 'EURC', amount: '10000000', filled: '2000000', output: '1850000', status: 'FILLING', deadline: now + 3600 },
-    { id: `demo-large-${now}`, from: 'USDC', to: 'EURC', amount: '2500000000', filled: '0', output: '0', status: 'PENDING', deadline: now + 7200 },
-  ]
-  for (const o of orders) {
-    db.prepare(
-      `INSERT OR REPLACE INTO trade_orders (id, from_token, to_token, input_amount, filled_amount, output_received, deadline, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(o.id, o.from, o.to, o.amount, o.filled, o.output, o.deadline, o.status, now, now)
-  }
-  return c.json({ seeded: orders.length, message: 'Seeded demo orders (small Auto-Active, large Pending DAO approval)' })
-})
-
-// ---------- Mock Execution Loop ----------
-
-async function fillSimulationTick() {
+async function dynamicFillTick() {
   try {
     const now = Math.floor(Date.now() / 1000)
     const activeOrders = db.prepare(
-      "SELECT * FROM trade_orders WHERE status IN ('APPROVED', 'FILLING') ORDER BY created_at ASC"
+      "SELECT * FROM trade_orders WHERE status IN ('Active', 'APPROVED', 'FILLING') ORDER BY created_at ASC"
     ).all() as any[]
 
     for (const order of activeOrders) {
@@ -530,33 +516,69 @@ async function fillSimulationTick() {
       const remaining = inputAmount - filledAmount
 
       if (remaining <= 0n) {
-        db.prepare("UPDATE trade_orders SET status = 'COMPLETE', updated_at = ? WHERE id = ?").run(now, order.id)
+        db.prepare("UPDATE trade_orders SET status = 'Completed', updated_at = ? WHERE id = ?").run(now, order.id)
         continue
       }
 
-      const chunk = adaptiveChunkSize({
+      // Fetch live quote for this chunk
+      const quote = await quoteSource.getQuote({
+        fromToken: order.from_token,
+        toToken: order.to_token,
+        amountIn: '10000000',
+        dry: true,
+      })
+      const ref = await refRateSource.getReferenceRate('USD/EUR')
+
+      const decision = evaluateStrategy(
+        {
+          quoteRate: quote.rate,
+          referenceRate: ref.rate,
+          avg24hRate: ref.rate,
+          quoteExpiresAt: quote.expiresAt,
+          quoteId: quote.quoteId,
+        },
+        {
+          id: order.id,
+          inputAmount,
+          filledAmount,
+          createdAt: order.created_at,
+          deadline: order.deadline,
+          maxDeviationBps: order.max_dev_bps || strategyConfig.defaultMaxDeviationBps,
+          status: order.status,
+          fromToken: order.from_token,
+          toToken: order.to_token,
+        },
+        now
+      )
+
+      if (decision.action !== 'EXECUTE') {
+        continue
+      }
+
+      const chunk = computeAdaptiveChunkSize({
         inputAmount,
         filledAmount,
-        deadline: order.deadline,
-        createdAt: order.created_at,
-        timingScore: 80,
-        now,
+        deadlineSec: order.deadline,
+        createdAtSec: order.created_at,
+        nowSec: now,
+        timingScore: decision.score,
       })
 
       if (chunk <= 0n) continue
 
+      // Execute simulated fill (labeled isSimulated: true)
+      const simulatedOutput = BigInt(Math.floor(Number(chunk) * quote.rate))
       const execResult = await executor.executeChunk({
         orderId: order.id,
         amountIn: chunk.toString(),
-        quoteRef: `q-${now}`,
-        deviationBps: 15,
-        simulatedOut: (Number(chunk) * 0.925).toString(),
+        quoteRef: quote.quoteId,
+        deviationBps: decision.deviationBps ?? 0,
+        simulatedOut: simulatedOutput.toString(),
       })
 
       const newFilled = filledAmount + chunk
-      const outputChunk = BigInt(Math.floor(Number(chunk) * 0.925))
-      const newOutput = BigInt(order.output_received || '0') + outputChunk
-      const newStatus = newFilled >= inputAmount ? 'COMPLETE' : 'FILLING'
+      const newOutput = BigInt(order.output_received || '0') + simulatedOutput
+      const newStatus = newFilled >= inputAmount ? 'Completed' : 'FILLING'
 
       db.prepare(
         `UPDATE trade_orders SET filled_amount = ?, output_received = ?, status = ?, updated_at = ? WHERE id = ?`
@@ -565,10 +587,14 @@ async function fillSimulationTick() {
       db.prepare(
         `INSERT INTO cre_runs (started_at, action, order_id, chunk_amount, result, tx_hash, error, duration_ms)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(now, 'SWAP', order.id, chunk.toString(), newStatus, execResult.txHash, null, 10)
+      ).run(now, 'SWAP', order.id, chunk.toString(), newStatus, execResult.txHash, null, 12)
+
+      console.log(
+        `[Oracle] Filled chunk of ${chunk} for order ${order.id.slice(0, 8)}: Status=${newStatus}, TxHash=${execResult.txHash} (SIMULATED)`
+      )
     }
   } catch (err) {
-    console.error('Fill simulation tick error:', err)
+    console.error('[Oracle] Dynamic fill simulation error:', err)
   }
 }
 
@@ -579,11 +605,11 @@ async function main() {
   setInterval(record, RECORD_INTERVAL)
 
   if (DEMO_MODE) {
-    setInterval(fillSimulationTick, demoSpeed.sleep * 1000)
-    console.log(`[GetNear Oracle] Mock fill loop running (ticking every ${demoSpeed.sleep}s)`)
+    setInterval(dynamicFillTick, 15_000) // tick every 15s in demo mode
+    console.log('[GetNear Oracle] Dynamic fill engine active (evaluating every 15s)')
   }
 
-  console.log(`[GetNear Oracle] Listening on port ${PORT} in ${GETNEAR_MODE.toUpperCase()} mode`)
+  console.log(`[GetNear Oracle] Strategy & Decision API listening on port ${PORT} (${GETNEAR_MODE.toUpperCase()})`)
   serve({ fetch: app.fetch, port: PORT })
 }
 
