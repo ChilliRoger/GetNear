@@ -12,7 +12,13 @@
     "quotes:probe-minimums": "tsx scripts/quotes/probe-minimums.ts",
     "quotes:check": "tsx scripts/quotes/check-quotes.ts",
     "build:contract": "cd contracts/fx-budget && cargo build --target wasm32-unknown-unknown --release",
-    "test:contract": "tsx contracts/fx-budget/tests/contract.test.ts"
+    "test:contract": "tsx contracts/fx-budget/tests/contract.test.ts",
+    "dao:create": "tsx scripts/near/create-dao.ts",
+    "contract:deploy": "tsx scripts/near/deploy-fx-budget.ts",
+    "dao:bootstrap": "tsx scripts/near/bootstrap-dao.ts",
+    "agent:add-key": "tsx scripts/near/add-agent-key.ts",
+    "dao:vote": "tsx scripts/near/vote-proposal.ts",
+    "demo:approval": "tsx scripts/near/demo-approval-flow.ts"
   },
   "devDependencies": {
     "tsx": "^4.21.0",

@@ -175,3 +175,4 @@ cargo build --target wasm32-unknown-unknown --release
 # Run comprehensive test suite
 pnpm test:contract
 ```
+
