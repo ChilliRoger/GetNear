@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import * as assert from 'node:assert/strict'
-import { checkRateLimit, recordClaim, COOLDOWN_MS } from '../src/lib/rate-limit.js'
+import { checkRateLimit, recordClaim, COOLDOWN_MS, formatRemainingTime } from '../src/lib/rate-limit.js'
 
 describe('Faucet Rate Limiter', () => {
   test('allows first claim for a new account', () => {
@@ -19,5 +19,12 @@ describe('Faucet Rate Limiter', () => {
     assert.ok(check.remainingSeconds > 0)
     assert.ok(check.remainingSeconds <= Math.ceil(COOLDOWN_MS / 1000))
     assert.ok(check.reason?.includes(testAccount))
+  })
+
+  test('formats remaining cooldown time strings correctly', () => {
+    assert.equal(formatRemainingTime(45), '45s')
+    assert.equal(formatRemainingTime(125), '2m 5s')
+    assert.equal(formatRemainingTime(3665), '1h 1m')
+    assert.equal(formatRemainingTime(86400), '24h 0m')
   })
 })

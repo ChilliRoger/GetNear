@@ -11,6 +11,8 @@ import {
   Wallet,
   ArrowRight,
   Info,
+  Clock,
+  AlertCircle,
 } from "lucide-react";
 
 interface FaucetGuideModalProps {
@@ -97,6 +99,61 @@ export function FaucetGuideModal({
                   <p>
                     3. Click <strong>Dispense Tokens</strong>. The faucet automatically sponsors your NEP-145 storage deposit and mints 500 tokens in a single on-chain transaction.
                   </p>
+                </div>
+              </div>
+
+              {/* Faucet Limitations & Safety Rules */}
+              <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-lg space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-zinc-100">
+                    <Clock className="w-4 h-4 text-emerald-400" />
+                    <span>Per-User Rate Limits &amp; Allocation Rules</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-zinc-800 text-emerald-400 border border-zinc-700">
+                    24h Cooldown
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11px] text-zinc-400">
+                  <div className="p-3 bg-zinc-950 rounded border border-zinc-800/80 space-y-1">
+                    <div className="font-semibold text-zinc-200 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      <span>Per-Account Limit</span>
+                    </div>
+                    <div className="text-zinc-400 leading-relaxed">
+                      1 claim per NEAR testnet address every 24 hours. Entering a cooled-down account displays an active countdown timer.
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-zinc-950 rounded border border-zinc-800/80 space-y-1">
+                    <div className="font-semibold text-zinc-200 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      <span>Per-IP Protection</span>
+                    </div>
+                    <div className="text-zinc-400 leading-relaxed">
+                      Network-level rate limiting prevents multi-account automated scripts from exhausting operator gas reserves.
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-zinc-950 rounded border border-zinc-800/80 space-y-1">
+                    <div className="font-semibold text-zinc-200 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      <span>Wallet Holding Cap</span>
+                    </div>
+                    <div className="text-zinc-400 leading-relaxed">
+                      Max 2,500 tokens per wallet. If you hold 2,500+ tokens, trade them on GetNear before claiming more.
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-zinc-950 rounded border border-zinc-800/80 space-y-1">
+                    <div className="font-semibold text-zinc-200 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      <span>Sponsored Storage</span>
+                    </div>
+                    <div className="text-zinc-400 leading-relaxed">
+                      Operator pays 0.0125 NEAR storage deposit automatically on your first claim. Recipient must be an active testnet account.
+                    </div>
+                  </div>
                 </div>
               </div>
 

@@ -9,6 +9,7 @@ import {
   Clipboard,
   ChevronDown,
   CheckCircle2,
+  Clock,
 } from "lucide-react";
 import { useToast } from "@/components/toast";
 import { FaucetGuideModal } from "@/components/faucet-guide-modal";
@@ -40,6 +41,74 @@ export default function FaucetHome() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [showContracts, setShowContracts] = useState(false);
+  const [cooldownSeconds, setCooldownSeconds] = useState<number | null>(null);
+
+  const formatCooldown = (seconds: number): string => {
+    if (seconds <= 0) return "0s";
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}h ${m}m ${s}s`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+  };
+
+  // Check cooldown when accountId changes
+  useEffect(() => {
+    const clean = accountId.trim().toLowerCase();
+    if (!clean || !clean.endsWith(".testnet")) {
+      setCooldownSeconds(null);
+      return;
+    }
+
+    // 1. Check local storage cache
+    try {
+      const stored = localStorage.getItem(`getnear_faucet_cooldown_${clean}`);
+      if (stored) {
+        const expiresAt = Number(stored);
+        const remaining = Math.ceil((expiresAt - Date.now()) / 1000);
+        if (remaining > 0) {
+          setCooldownSeconds(remaining);
+          return;
+        } else {
+          localStorage.removeItem(`getnear_faucet_cooldown_${clean}`);
+        }
+      }
+    } catch {}
+
+    // 2. Query server for live rate limit status
+    const controller = new AbortController();
+    fetch(`/api/cooldown?accountId=${encodeURIComponent(clean)}`, { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && typeof data.remainingSeconds === "number" && data.remainingSeconds > 0) {
+          setCooldownSeconds(data.remainingSeconds);
+          try {
+            localStorage.setItem(
+              `getnear_faucet_cooldown_${clean}`,
+              (Date.now() + data.remainingSeconds * 1000).toString()
+            );
+          } catch {}
+        } else {
+          setCooldownSeconds(null);
+        }
+      })
+      .catch(() => {});
+
+    return () => controller.abort();
+  }, [accountId]);
+
+  // Cooldown countdown tick
+  useEffect(() => {
+    if (cooldownSeconds === null || cooldownSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setCooldownSeconds((prev) => {
+        if (prev === null || prev <= 1) return null;
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cooldownSeconds]);
 
   const [status, setStatus] = useState<FaucetStatus>({
     operatorId: "chilliroger-operator.testnet",
@@ -125,6 +194,15 @@ export default function FaucetHome() {
       const data = await res.json();
 
       if (!res.ok || data.error) {
+        if (res.status === 429 && typeof data.remainingSeconds === "number") {
+          setCooldownSeconds(data.remainingSeconds);
+          try {
+            localStorage.setItem(
+              `getnear_faucet_cooldown_${cleanAddress}`,
+              (Date.now() + data.remainingSeconds * 1000).toString()
+            );
+          } catch {}
+        }
         throw new Error(data.error || "Failed to dispense tokens");
       }
 
@@ -133,6 +211,15 @@ export default function FaucetHome() {
         tokens: data.dispensed,
         balances: data.balances,
       });
+
+      // Record 24-hour cooldown on successful claim
+      setCooldownSeconds(24 * 3600);
+      try {
+        localStorage.setItem(
+          `getnear_faucet_cooldown_${cleanAddress}`,
+          (Date.now() + 24 * 3600 * 1000).toString()
+        );
+      } catch {}
 
       showToast("Tokens Dispensed Successfully!", {
         type: "success",
@@ -255,17 +342,40 @@ export default function FaucetHome() {
                   </div>
                 </div>
 
+                {/* Active Rate Limit Cooldown Warning Box */}
+                {cooldownSeconds !== null && cooldownSeconds > 0 && (
+                  <div className="p-3.5 rounded-xl border border-amber-900/60 bg-amber-950/20 text-amber-300 text-xs space-y-1 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between font-semibold">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-4 h-4 text-amber-400" />
+                        <span>Rate Limit Active</span>
+                      </div>
+                      <span className="font-mono text-amber-200 text-[11px] px-2 py-0.5 rounded bg-amber-900/50 border border-amber-700/60">
+                        {formatCooldown(cooldownSeconds)} remaining
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-400/80 leading-relaxed">
+                      This account is currently on cooldown. Faucet is limited to 1 request per address every 24 hours.
+                    </p>
+                  </div>
+                )}
+
                 {/* Main Bright Green CTA Button */}
                 <button
                   type="submit"
-                  disabled={isSubmitting || !accountId}
-                  className="w-full py-4 px-4 rounded-xl bg-[#00ec97] hover:bg-[#00c980] disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-lg shadow-[#00ec97]/10 cursor-pointer"
+                  disabled={isSubmitting || !accountId || (cooldownSeconds !== null && cooldownSeconds > 0)}
+                  className="w-full py-4 px-4 rounded-xl bg-[#00ec97] hover:bg-[#00c980] disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-lg shadow-[#00ec97]/10 cursor-pointer"
                 >
                   {isSubmitting ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin text-black" />
                       <span>Broadcasting On-Chain Transactions...</span>
                     </>
+                  ) : cooldownSeconds !== null && cooldownSeconds > 0 ? (
+                    <span className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-black" />
+                      <span>Cooldown Active ({formatCooldown(cooldownSeconds)})</span>
+                    </span>
                   ) : (
                     <span>
                       Request {tokenChoice === "BOTH" ? "1,000 (USDC + EURe)" : tokenChoice === "USDC" ? "500 USDC" : "500 EURe"}
@@ -273,10 +383,15 @@ export default function FaucetHome() {
                   )}
                 </button>
 
-                {/* Cooldown Note */}
-                <p className="text-[11px] text-zinc-500 text-center">
-                  Note: Limited to one request per address every 10 minutes.
-                </p>
+                {/* Cooldown & Limitation Note */}
+                <div className="space-y-1 text-center">
+                  <p className="text-[11px] text-zinc-400">
+                    Note: Limited to one request per address every 24 hours.
+                  </p>
+                  <p className="text-[10px] text-zinc-500">
+                    Max allocation: 500 tokens/asset &bull; Wallet holding cap: 2,500 tokens
+                  </p>
+                </div>
               </form>
 
               {/* On-Chain Success Receipt Box */}

@@ -8,8 +8,17 @@ interface RateLimitRecord {
   claimsCount: number
 }
 
-// 10 minutes cooldown per account or IP
-export const COOLDOWN_MS = 10 * 60 * 1000
+// 24 hours cooldown per account or IP (Standard crypto faucet frequency)
+export const COOLDOWN_MS = Number(process.env.FAUCET_COOLDOWN_MS) || 24 * 60 * 60 * 1000
+
+export function formatRemainingTime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`
+  const hours = Math.floor(minutes / 60)
+  const remainingMins = minutes % 60
+  return `${hours}h ${remainingMins}m`
+}
 
 const accountCache = new Map<string, RateLimitRecord>()
 const ipCache = new Map<string, RateLimitRecord>()
@@ -47,7 +56,7 @@ export function checkRateLimit(accountId: string, clientIp?: string): RateLimitC
       return {
         allowed: false,
         remainingSeconds,
-        reason: `Account ${accountId} is on cooldown. Please wait ${remainingSeconds}s before requesting again.`,
+        reason: `Account "${accountId}" is on 24-hour cooldown. Please wait ${formatRemainingTime(remainingSeconds)} before requesting again.`,
       }
     }
   }
@@ -62,7 +71,7 @@ export function checkRateLimit(accountId: string, clientIp?: string): RateLimitC
         return {
           allowed: false,
           remainingSeconds,
-          reason: `Too many requests from this IP. Please wait ${remainingSeconds}s before requesting again.`,
+          reason: `Too many requests from this IP address. Please wait ${formatRemainingTime(remainingSeconds)} before requesting again.`,
         }
       }
     }
