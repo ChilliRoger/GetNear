@@ -95,8 +95,8 @@ export function TokenBalanceCard({
             <span>Your USDC Balance</span>
             <span className="text-blue-400 font-mono">6 decimals</span>
           </div>
-          <div className="text-xl font-bold font-mono text-zinc-100">
-            {userUsdc.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <div className="text-xl font-bold font-mono text-zinc-100" suppressHydrationWarning>
+            {userUsdc.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             <span className="text-xs ml-1.5 text-zinc-400 font-normal">USDC</span>
           </div>
           <div className="mt-2 pt-2 border-t border-zinc-800/80 flex items-center justify-between text-xs">
@@ -120,8 +120,8 @@ export function TokenBalanceCard({
             <span>Your EURe Balance</span>
             <span className="text-emerald-400 font-mono">6 decimals</span>
           </div>
-          <div className="text-xl font-bold font-mono text-zinc-100">
-            {userEure.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <div className="text-xl font-bold font-mono text-zinc-100" suppressHydrationWarning>
+            {userEure.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             <span className="text-xs ml-1.5 text-zinc-400 font-normal">EURe</span>
           </div>
           <div className="mt-2 pt-2 border-t border-zinc-800/80 flex items-center justify-between text-xs">
@@ -145,8 +145,8 @@ export function TokenBalanceCard({
             <span>Protocol Vault Reserve</span>
             <ShieldCheck className="w-3.5 h-3.5 text-zinc-500" />
           </div>
-          <div className="text-xl font-bold font-mono text-zinc-100">
-            {vaultEure.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <div className="text-xl font-bold font-mono text-zinc-100" suppressHydrationWarning>
+            {vaultEure.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             <span className="text-xs ml-1.5 text-zinc-400 font-normal">EURe</span>
           </div>
           <div className="mt-2 pt-2 border-t border-zinc-800/80 text-xs text-zinc-500">

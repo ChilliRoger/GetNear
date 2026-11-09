@@ -338,8 +338,8 @@ export default function FaucetHome() {
 
               <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-1 border-t border-zinc-800/60">
                 <span>Updated Balances:</span>
-                <span className="font-mono text-zinc-200">
-                  {lastResult.balances.usdc.toLocaleString()} USDC | {lastResult.balances.eure.toLocaleString()} EURe
+                <span className="font-mono text-zinc-200" suppressHydrationWarning>
+                  {lastResult.balances.usdc.toLocaleString("en-US")} USDC | {lastResult.balances.eure.toLocaleString("en-US")} EURe
                 </span>
               </div>
             </div>
@@ -372,7 +372,7 @@ export default function FaucetHome() {
               </button>
             </div>
             <div className="flex justify-between text-[11px] text-zinc-500 pt-1">
-              <span>Total Minted: {status.usdcTotalSupply.toLocaleString()} USDC</span>
+              <span suppressHydrationWarning>Total Minted: {status.usdcTotalSupply.toLocaleString("en-US")} USDC</span>
               <a
                 href={`https://testnet.nearblocks.io/address/${status.usdcContractId}`}
                 target="_blank"
@@ -408,7 +408,7 @@ export default function FaucetHome() {
               </button>
             </div>
             <div className="flex justify-between text-[11px] text-zinc-500 pt-1">
-              <span>Total Minted: {status.eureTotalSupply.toLocaleString()} EURe</span>
+              <span suppressHydrationWarning>Total Minted: {status.eureTotalSupply.toLocaleString("en-US")} EURe</span>
               <a
                 href={`https://testnet.nearblocks.io/address/${status.eureContractId}`}
                 target="_blank"
@@ -468,3 +468,4 @@ export default function FaucetHome() {
     </div>
   );
 }
+
