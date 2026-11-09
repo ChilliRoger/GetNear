@@ -249,3 +249,39 @@ export function runAddRestrictedKey(params: {
   const { txHash, explorerUrl } = extractTxInfo(output)
   return { stdout: output, txHash, explorerUrl }
 }
+
+export function runTransferNear(params: {
+  receiverId: string
+  amount: string
+  signerId: string
+}): TxResult {
+  const bin = getNearBin()
+  const credPath = getCredentialPath(params.signerId)
+
+  const argsList = [
+    'tokens',
+    params.signerId,
+    'send-near',
+    params.receiverId,
+    params.amount,
+    'network-config',
+    'testnet',
+    'sign-with-access-key-file',
+    credPath,
+    'send',
+  ]
+
+  const res = spawnSync(bin, argsList, {
+    encoding: 'utf-8',
+    shell: false,
+    maxBuffer: 10 * 1024 * 1024,
+  })
+
+  const output = `${res.stdout || ''}\n${res.stderr || ''}`
+  if (res.status !== 0) {
+    throw new Error(`Command failed with status ${res.status}:\n${output}`)
+  }
+
+  const { txHash, explorerUrl } = extractTxInfo(output)
+  return { stdout: output, txHash, explorerUrl }
+}

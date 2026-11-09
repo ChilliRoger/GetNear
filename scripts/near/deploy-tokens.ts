@@ -12,7 +12,7 @@ try {
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 import { NearClient } from '@getnear/near-client'
-import { runCreateSubaccount, runDeployContract, runCallFunction } from './near-runner.js'
+import { runCreateSubaccount, runDeployContract, runCallFunction, runTransferNear } from './near-runner.js'
 
 const OPERATOR_ID = process.env.OPERATOR_ACCOUNT_ID || 'chilliroger-operator.testnet'
 const USDC_ID = `usdc.${OPERATOR_ID}`
@@ -41,8 +41,9 @@ async function deployToken(params: {
   console.log(`────────────────────────────────────────────────────────────`)
 
   // 1. Check or create subaccount
+  let acc: any = null
   try {
-    const acc = await client.viewAccount(accountId)
+    acc = await client.viewAccount(accountId)
     if (acc) {
       console.log(`ℹ Subaccount ${accountId} already exists.`)
     }
@@ -55,44 +56,125 @@ async function deployToken(params: {
     })
     console.log(`✓ Subaccount ${accountId} created!`)
     await new Promise((r) => setTimeout(r, 4000))
+    acc = await client.viewAccount(accountId)
   }
 
-  // 2. Deploy WASM & Initialize
-  console.log(`Deploying fungible_token.wasm to ${accountId}...`)
-  const deployRes = runDeployContract({
-    contractAccountId: accountId,
-    wasmPath: WASM_PATH,
-    initMethod: 'new',
-    initArgs: {
-      owner_id: OPERATOR_ID,
-      total_supply: INITIAL_SUPPLY,
-      metadata: {
-        spec: 'ft-1.0.0',
+  // 1b. Check if account has enough storage balance for the WASM binary (~205KB requires ~2.1 NEAR)
+  if (acc && BigInt(acc.amount) < 2300000000000000000000000n) {
+    console.log(`Account ${accountId} balance is low for bytecode storage. Topping up 1.0 NEAR from ${OPERATOR_ID}...`)
+    runTransferNear({
+      receiverId: accountId,
+      amount: '1.0 NEAR',
+      signerId: OPERATOR_ID,
+    })
+    console.log(`✓ Topped up 1.0 NEAR!`)
+    await new Promise((r) => setTimeout(r, 3000))
+  }
+
+  // 2. Check if already initialized
+  let isInitialized = false
+  try {
+    const meta = await client.callView<any>(accountId, 'ft_metadata', {})
+    if (meta && meta.symbol) {
+      isInitialized = true
+      console.log(`ℹ Contract ${accountId} already initialized with symbol ${meta.symbol}.`)
+    }
+  } catch {}
+
+  if (!isInitialized) {
+    console.log(`Deploying fungible_token.wasm to ${accountId}...`)
+    const deployRes = runDeployContract({
+      contractAccountId: accountId,
+      wasmPath: WASM_PATH,
+      initMethod: 'new',
+      initArgs: {
         name,
         symbol,
-        icon,
-        reference: null,
-        reference_hash: null,
         decimals: 6,
       },
-    },
-    initDeposit: '0 NEAR',
-    initGas: '100.0 Tgas',
-    signerId: accountId,
-  })
+      initDeposit: '0 NEAR',
+      initGas: '100.0 Tgas',
+      signerId: accountId,
+    })
 
-  console.log(`✓ Deployed and initialized ${symbol}! Tx: ${deployRes.txHash || 'confirmed'}`)
-  await new Promise((r) => setTimeout(r, 4000))
+    console.log(`✓ Deployed and initialized ${symbol}! Tx: ${deployRes.txHash || 'confirmed'}`)
+    await new Promise((r) => setTimeout(r, 3000))
 
-  // 3. Verify on-chain metadata & balance
-  const meta = await client.callView<any>(accountId, 'ft_metadata', {})
+    // 3. Set Token Icon
+    if (icon) {
+      try {
+        console.log(`Setting icon for ${symbol}...`)
+        runCallFunction({
+          contractId: accountId,
+          methodName: 'set_icon',
+          args: { icon },
+          deposit: '0 NEAR',
+          gas: '30.0 Tgas',
+          signerId: accountId,
+        })
+        console.log(`✓ Icon set for ${symbol}!`)
+      } catch (err: any) {
+        console.warn(`Could not set icon: ${err.message}`)
+      }
+    }
+  }
+
+  // 4. Register storage deposit for operator if needed
+  try {
+    const storageBal = await client.callView<any>(accountId, 'storage_balance_of', { account_id: OPERATOR_ID })
+    if (!storageBal || BigInt(storageBal.total) === 0n) {
+      console.log(`Registering storage deposit for operator ${OPERATOR_ID}...`)
+      runCallFunction({
+        contractId: accountId,
+        methodName: 'storage_deposit',
+        args: { account_id: OPERATOR_ID, registration_only: false },
+        deposit: '0.0125 NEAR',
+        gas: '30.0 Tgas',
+        signerId: OPERATOR_ID,
+      })
+      console.log(`✓ Storage registered for ${OPERATOR_ID}!`)
+    } else {
+      console.log(`ℹ Operator ${OPERATOR_ID} storage already registered on ${symbol}.`)
+    }
+  } catch (e: any) {
+    console.log(`Registering storage deposit for operator ${OPERATOR_ID}...`)
+    runCallFunction({
+      contractId: accountId,
+      methodName: 'storage_deposit',
+      args: { account_id: OPERATOR_ID, registration_only: false },
+      deposit: '0.0125 NEAR',
+      gas: '30.0 Tgas',
+      signerId: OPERATOR_ID,
+    })
+  }
+
+  // 5. Mint Initial Supply to operator if balance is 0
   const bal = await client.callView<string>(accountId, 'ft_balance_of', { account_id: OPERATOR_ID })
+  if (BigInt(bal || '0') === 0n) {
+    console.log(`Minting initial supply (${Number(INITIAL_SUPPLY) / 1e6} ${symbol}) to ${OPERATOR_ID}...`)
+    runCallFunction({
+      contractId: accountId,
+      methodName: 'mint',
+      args: { account_id: OPERATOR_ID, amount: INITIAL_SUPPLY },
+      deposit: '0 NEAR',
+      gas: '30.0 Tgas',
+      signerId: accountId,
+    })
+    console.log(`✓ Minted ${Number(INITIAL_SUPPLY) / 1e6} ${symbol}!`)
+    await new Promise((r) => setTimeout(r, 2000))
+  } else {
+    console.log(`ℹ Operator already holds ${Number(bal) / 1e6} ${symbol}.`)
+  }
+
+  // 6. Verify on-chain metadata & balance
+  const meta = await client.callView<any>(accountId, 'ft_metadata', {})
+  const finalBal = await client.callView<string>(accountId, 'ft_balance_of', { account_id: OPERATOR_ID })
 
   console.log(`✅ Verified on-chain:`)
   console.log(`   Name: ${meta.name}`)
   console.log(`   Symbol: ${meta.symbol}`)
   console.log(`   Decimals: ${meta.decimals}`)
-  console.log(`   Operator Balance: ${Number(bal) / 1e6} ${meta.symbol}`)
+  console.log(`   Operator Balance: ${Number(finalBal) / 1e6} ${meta.symbol}`)
 }
 
 async function main() {
