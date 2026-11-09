@@ -30,4 +30,13 @@ describe('Serverless NEAR Engine', () => {
     assert.ok(typeof bal === 'number')
     assert.ok(bal >= 0)
   })
+
+  test('validates on-chain account existence (Sybil defense)', async () => {
+    const { verifyAccountExists } = await import('../src/lib/near.js')
+    const realExists = await verifyAccountExists(OPERATOR_ID)
+    assert.equal(realExists, true, 'Operator account should exist on NEAR testnet')
+
+    const fakeExists = await verifyAccountExists('nonexistent-random-xyz-987654.testnet')
+    assert.equal(fakeExists, false, 'Non-existent account must return false')
+  })
 })

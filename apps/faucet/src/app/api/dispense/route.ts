@@ -11,7 +11,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const accountId = body.accountId?.trim().toLowerCase()
     const token = (body.token || 'BOTH').toUpperCase()
-    const amount = Number(body.amount) || 500
+    // Non-tamperable fixed faucet quota
+    const amount = 500
 
     // 1. Validate Account ID format
     if (!accountId || !accountId.endsWith('.testnet')) {
@@ -36,9 +37,11 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 3. Extract client IP
-    const forwarded = req.headers.get('x-forwarded-for')
-    const clientIp = forwarded ? forwarded.split(',')[0].trim() : '127.0.0.1'
+    // 3. Extract client IP (support Vercel x-real-ip and proxy chains)
+    const clientIp =
+      req.headers.get('x-real-ip') ||
+      req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+      '127.0.0.1'
 
     // 4. Check Rate Limit
     const rateCheck = checkRateLimit(accountId, clientIp)
@@ -78,6 +81,11 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     console.error('[API /dispense Exception]:', err)
     const msg = err instanceof Error ? err.message : 'Failed to dispense tokens'
-    return NextResponse.json({ error: msg }, { status: 500 })
+    const isClientError =
+      msg.includes('does not exist') ||
+      msg.includes('holding cap') ||
+      msg.includes('Invalid') ||
+      msg.includes('temporarily low')
+    return NextResponse.json({ error: msg }, { status: isClientError ? 400 : 500 })
   }
 }

@@ -20,6 +20,10 @@ export const EURE_CONTRACT_ID = process.env.EURE_CONTRACT_ID || `eure.${OPERATOR
 export const NETWORK_ID = process.env.NEAR_NETWORK_ID || 'testnet'
 export const RPC_URL = process.env.NEAR_RPC_URL || 'https://rpc.testnet.near.org'
 
+// Security Guardrails
+export const DISPENSE_AMOUNT_PER_TOKEN = 500
+export const MAX_HOLDING_BALANCE_CAP = 2500
+
 // 0.0125 NEAR deposit for NEP-145 storage registration
 const STORAGE_DEPOSIT_YOCTO = 12500000000000000000000n
 const FUNCTION_GAS = 30000000000000n // 30 Tgas
@@ -68,6 +72,24 @@ export async function isStorageRegistered(contractId: string, accountId: string)
       args: { account_id: accountId },
     })
     return Boolean(res && BigInt(res.total || '0') > 0n)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Verify whether an account ID actually exists on NEAR testnet
+ * Prevents Sybil attacks that drain operator NEAR on storage deposits for fake accounts.
+ */
+export async function verifyAccountExists(accountId: string): Promise<boolean> {
+  const provider = getProvider()
+  try {
+    const res: any = await provider.query({
+      request_type: 'view_account',
+      finality: 'final',
+      account_id: accountId,
+    })
+    return Boolean(res && res.amount !== undefined)
   } catch {
     return false
   }
@@ -131,14 +153,18 @@ export async function dispenseTokens(params: {
   amount?: number
 }): Promise<DispenseResult> {
   const { receiverId, token } = params
-  const defaultAmount = params.amount || 500
+  // Strict non-negotiable quota per token
+  const defaultAmount = DISPENSE_AMOUNT_PER_TOKEN
 
   if (!receiverId || !receiverId.endsWith('.testnet')) {
     throw new Error('Invalid account ID: must be a valid NEAR testnet account ending with .testnet')
   }
 
-  const account = getOperatorAccount()
-  const results: DispenseResult['tokens'] = []
+  // 1. Verify recipient account actually exists on NEAR testnet (Sybil defense)
+  const accountExists = await verifyAccountExists(receiverId)
+  if (!accountExists) {
+    throw new Error(`Account "${receiverId}" does not exist on NEAR testnet. Please activate your testnet wallet first.`)
+  }
 
   const tokensToDispense: Array<{ symbol: string; contractId: string }> = []
   if (token === 'USDC' || token === 'BOTH') {
@@ -147,6 +173,35 @@ export async function dispenseTokens(params: {
   if (token === 'EURE' || token === 'BOTH') {
     tokensToDispense.push({ symbol: 'EURe', contractId: EURE_CONTRACT_ID })
   }
+
+  // 2. Enforce holding cap to prevent serverless race conditions and hoarding
+  for (const t of tokensToDispense) {
+    const currentBal = await getTokenBalance(t.contractId, receiverId)
+    if (currentBal >= MAX_HOLDING_BALANCE_CAP) {
+      throw new Error(
+        `Account ${receiverId} already holds ${currentBal.toLocaleString('en-US')} ${t.symbol}. Maximum faucet holding cap is ${MAX_HOLDING_BALANCE_CAP.toLocaleString('en-US')} tokens.`
+      )
+    }
+  }
+
+  // 3. Verify operator has sufficient NEAR gas reserves
+  const provider = getProvider()
+  try {
+    const operatorState: any = await provider.query({
+      request_type: 'view_account',
+      finality: 'final',
+      account_id: OPERATOR_ID,
+    })
+    const operatorNear = Number(BigInt(operatorState.amount || '0') / 10n**22n) / 100
+    if (operatorNear < 0.05) {
+      throw new Error('Faucet operator NEAR reserves are temporarily low. Please try again shortly.')
+    }
+  } catch (err: any) {
+    if (err.message?.includes('temporarily low')) throw err
+  }
+
+  const account = getOperatorAccount()
+  const results: DispenseResult['tokens'] = []
 
   for (const t of tokensToDispense) {
     // 1. Ensure storage registration
