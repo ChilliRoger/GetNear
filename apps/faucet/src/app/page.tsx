@@ -37,7 +37,7 @@ export default function FaucetHome() {
   const { showToast } = useToast();
 
   const [accountId, setAccountId] = useState("");
-  const [tokenChoice, setTokenChoice] = useState<"BOTH" | "USDC" | "EURE">("BOTH");
+  const [tokenChoice, setTokenChoice] = useState<"USDC" | "EURE">("USDC");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [showContracts, setShowContracts] = useState(false);
@@ -329,10 +329,9 @@ export default function FaucetHome() {
                   <div className="relative">
                     <select
                       value={tokenChoice}
-                      onChange={(e) => setTokenChoice(e.target.value as "BOTH" | "USDC" | "EURE")}
+                      onChange={(e) => setTokenChoice(e.target.value as "USDC" | "EURE")}
                       className="w-full appearance-none bg-[#0c0e13] border border-[#222634] focus:border-[#00ec97] rounded-xl px-4 py-3.5 text-sm text-zinc-200 font-medium focus:outline-none transition-colors cursor-pointer"
                     >
-                      <option value="BOTH">Both (500 USDC + 500 EURe)</option>
                       <option value="USDC">USD Coin (500 USDC)</option>
                       <option value="EURE">Euro Stablecoin (500 EURe)</option>
                     </select>
@@ -378,7 +377,7 @@ export default function FaucetHome() {
                     </span>
                   ) : (
                     <span>
-                      Request {tokenChoice === "BOTH" ? "1,000 (USDC + EURe)" : tokenChoice === "USDC" ? "500 USDC" : "500 EURe"}
+                      Request 500 {tokenChoice}
                     </span>
                   )}
                 </button>

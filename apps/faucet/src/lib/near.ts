@@ -149,7 +149,7 @@ export interface DispenseResult {
  */
 export async function dispenseTokens(params: {
   receiverId: string
-  token: 'USDC' | 'EURE' | 'BOTH'
+  token: 'USDC' | 'EURE'
   amount?: number
 }): Promise<DispenseResult> {
   const { receiverId, token } = params
@@ -166,22 +166,17 @@ export async function dispenseTokens(params: {
     throw new Error(`Account "${receiverId}" does not exist on NEAR testnet. Please activate your testnet wallet first.`)
   }
 
-  const tokensToDispense: Array<{ symbol: string; contractId: string }> = []
-  if (token === 'USDC' || token === 'BOTH') {
-    tokensToDispense.push({ symbol: 'USDC', contractId: USDC_CONTRACT_ID })
-  }
-  if (token === 'EURE' || token === 'BOTH') {
-    tokensToDispense.push({ symbol: 'EURe', contractId: EURE_CONTRACT_ID })
-  }
+  const targetToken =
+    token === 'EURE'
+      ? { symbol: 'EURe', contractId: EURE_CONTRACT_ID }
+      : { symbol: 'USDC', contractId: USDC_CONTRACT_ID }
 
   // 2. Enforce holding cap to prevent serverless race conditions and hoarding
-  for (const t of tokensToDispense) {
-    const currentBal = await getTokenBalance(t.contractId, receiverId)
-    if (currentBal >= MAX_HOLDING_BALANCE_CAP) {
-      throw new Error(
-        `Account ${receiverId} already holds ${currentBal.toLocaleString('en-US')} ${t.symbol}. Maximum faucet holding cap is ${MAX_HOLDING_BALANCE_CAP.toLocaleString('en-US')} tokens.`
-      )
-    }
+  const currentBal = await getTokenBalance(targetToken.contractId, receiverId)
+  if (currentBal >= MAX_HOLDING_BALANCE_CAP) {
+    throw new Error(
+      `Account ${receiverId} already holds ${currentBal.toLocaleString('en-US')} ${targetToken.symbol}. Maximum faucet holding cap is ${MAX_HOLDING_BALANCE_CAP.toLocaleString('en-US')} tokens.`
+    )
   }
 
   // 3. Verify operator has sufficient NEAR gas reserves
@@ -203,34 +198,32 @@ export async function dispenseTokens(params: {
   const account = getOperatorAccount()
   const results: DispenseResult['tokens'] = []
 
-  for (const t of tokensToDispense) {
-    // 1. Ensure storage registration
-    await ensureStorageRegistered(t.contractId, receiverId)
+  // Ensure storage registration
+  await ensureStorageRegistered(targetToken.contractId, receiverId)
 
-    // 2. Mint tokens
-    const atomicAmount = (BigInt(defaultAmount) * 1_000_000n).toString()
-    console.log(`[Faucet] Minting ${defaultAmount} ${t.symbol} to ${receiverId}...`)
+  // Mint tokens
+  const atomicAmount = (BigInt(defaultAmount) * 1_000_000n).toString()
+  console.log(`[Faucet] Minting ${defaultAmount} ${targetToken.symbol} to ${receiverId}...`)
 
-    const outcome: any = await account.callFunctionRaw({
-      contractId: t.contractId,
-      methodName: 'mint',
-      args: {
-        account_id: receiverId,
-        amount: atomicAmount,
-      },
-      deposit: 0n,
-      gas: FUNCTION_GAS,
-    })
+  const outcome: any = await account.callFunctionRaw({
+    contractId: targetToken.contractId,
+    methodName: 'mint',
+    args: {
+      account_id: receiverId,
+      amount: atomicAmount,
+    },
+    deposit: 0n,
+    gas: FUNCTION_GAS,
+  })
 
-    const txHash = outcome?.transaction?.hash || outcome?.transaction_outcome?.id || 'tx_confirmed'
-    results.push({
-      symbol: t.symbol,
-      contractId: t.contractId,
-      amount: defaultAmount,
-      txHash,
-      explorerUrl: `https://testnet.nearblocks.io/txns/${txHash}`,
-    })
-  }
+  const txHash = outcome?.transaction?.hash || outcome?.transaction_outcome?.id || 'tx_confirmed'
+  results.push({
+    symbol: targetToken.symbol,
+    contractId: targetToken.contractId,
+    amount: defaultAmount,
+    txHash,
+    explorerUrl: `https://testnet.nearblocks.io/txns/${txHash}`,
+  })
 
   return {
     receiverId,

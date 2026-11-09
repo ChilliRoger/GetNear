@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const accountId = body.accountId?.trim().toLowerCase()
-    const token = (body.token || 'BOTH').toUpperCase()
+    const token = (body.token || 'USDC').toUpperCase()
     // Non-tamperable fixed faucet quota
     const amount = 500
 
@@ -29,10 +29,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 2. Validate token choice
-    if (!['USDC', 'EURE', 'BOTH'].includes(token)) {
+    // 2. Validate token choice (USDC or EURE only)
+    if (!['USDC', 'EURE'].includes(token)) {
       return NextResponse.json(
-        { error: 'Invalid token choice. Select USDC, EURE, or BOTH.' },
+        { error: 'Invalid token choice. Select either USDC or EURE.' },
         { status: 400 },
       )
     }
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     console.log(`[API /dispense] Dispensing ${amount} ${token} to ${accountId}...`)
     const result = await dispenseTokens({
       receiverId: accountId,
-      token: token as 'USDC' | 'EURE' | 'BOTH',
+      token: token as 'USDC' | 'EURE',
       amount,
     })
 
