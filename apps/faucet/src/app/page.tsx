@@ -61,7 +61,7 @@ export default function FaucetHome() {
       return;
     }
 
-    // 1. Check local storage cache
+    // 1. Optimistic check from local storage cache
     try {
       const stored = localStorage.getItem(`getnear_faucet_cooldown_${clean}`);
       if (stored) {
@@ -69,19 +69,18 @@ export default function FaucetHome() {
         const remaining = Math.ceil((expiresAt - Date.now()) / 1000);
         if (remaining > 0) {
           setCooldownSeconds(remaining);
-          return;
         } else {
           localStorage.removeItem(`getnear_faucet_cooldown_${clean}`);
         }
       }
     } catch {}
 
-    // 2. Query server for live rate limit status
+    // 2. Authoritative check from server for this specific account
     const controller = new AbortController();
     fetch(`/api/cooldown?accountId=${encodeURIComponent(clean)}`, { signal: controller.signal })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data && typeof data.remainingSeconds === "number" && data.remainingSeconds > 0) {
+        if (data && typeof data.remainingSeconds === "number" && data.remainingSeconds > 0 && !data.allowed) {
           setCooldownSeconds(data.remainingSeconds);
           try {
             localStorage.setItem(
@@ -90,7 +89,11 @@ export default function FaucetHome() {
             );
           } catch {}
         } else {
+          // Account is allowed: clear cooldown state and remove any stale local storage key
           setCooldownSeconds(null);
+          try {
+            localStorage.removeItem(`getnear_faucet_cooldown_${clean}`);
+          } catch {}
         }
       })
       .catch(() => {});
@@ -194,7 +197,7 @@ export default function FaucetHome() {
       const data = await res.json();
 
       if (!res.ok || data.error) {
-        if (res.status === 429 && typeof data.remainingSeconds === "number") {
+        if (res.status === 429 && typeof data.remainingSeconds === "number" && !data.error?.toLowerCase().includes("rapid")) {
           setCooldownSeconds(data.remainingSeconds);
           try {
             localStorage.setItem(

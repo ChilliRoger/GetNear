@@ -8,8 +8,11 @@ interface RateLimitRecord {
   claimsCount: number
 }
 
-// 24 hours cooldown per account or IP (Standard crypto faucet frequency)
+// 24 hours cooldown strictly per user account (Standard crypto faucet frequency)
 export const COOLDOWN_MS = Number(process.env.FAUCET_COOLDOWN_MS) || 24 * 60 * 60 * 1000
+
+// 15 seconds anti-bot burst throttle per IP (prevents rapid hammering without blocking multi-account testing)
+export const IP_BURST_MS = 15 * 1000
 
 export function formatRemainingTime(seconds: number): string {
   if (seconds < 60) return `${seconds}s`
@@ -32,7 +35,7 @@ setInterval(() => {
     }
   })
   ipCache.forEach((record, key) => {
-    if (now - record.lastClaimTime > COOLDOWN_MS * 2) {
+    if (now - record.lastClaimTime > IP_BURST_MS * 4) {
       ipCache.delete(key)
     }
   })
@@ -44,11 +47,15 @@ export interface RateLimitCheck {
   reason?: string
 }
 
-export function checkRateLimit(accountId: string, clientIp?: string): RateLimitCheck {
+/**
+ * Check whether a specific account is on 24-hour cooldown.
+ * Rate limiting is strictly scoped per user account address.
+ */
+export function checkAccountCooldown(accountId: string): RateLimitCheck {
   const now = Date.now()
+  const clean = accountId.toLowerCase().trim()
+  const accRecord = accountCache.get(clean)
 
-  // 1. Check account rate limit
-  const accRecord = accountCache.get(accountId.toLowerCase())
   if (accRecord) {
     const elapsed = now - accRecord.lastClaimTime
     if (elapsed < COOLDOWN_MS) {
@@ -56,22 +63,39 @@ export function checkRateLimit(accountId: string, clientIp?: string): RateLimitC
       return {
         allowed: false,
         remainingSeconds,
-        reason: `Account "${accountId}" is on 24-hour cooldown. Please wait ${formatRemainingTime(remainingSeconds)} before requesting again.`,
+        reason: `Account "${clean}" is on 24-hour cooldown. Please wait ${formatRemainingTime(remainingSeconds)} before requesting again.`,
       }
     }
   }
 
-  // 2. Check IP rate limit (if provided)
+  return { allowed: true, remainingSeconds: 0 }
+}
+
+/**
+ * Validate dispense request:
+ * 1. Checks per-account 24h cooldown
+ * 2. Checks short 15s IP burst throttle to deter automated bots
+ */
+export function checkRateLimit(accountId: string, clientIp?: string): RateLimitCheck {
+  const now = Date.now()
+
+  // 1. Check strict per-account 24-hour rate limit
+  const accountCheck = checkAccountCooldown(accountId)
+  if (!accountCheck.allowed) {
+    return accountCheck
+  }
+
+  // 2. Short anti-bot rapid burst throttle per IP (15 seconds)
   if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') {
     const ipRecord = ipCache.get(clientIp)
     if (ipRecord) {
       const elapsed = now - ipRecord.lastClaimTime
-      if (elapsed < COOLDOWN_MS) {
-        const remainingSeconds = Math.ceil((COOLDOWN_MS - elapsed) / 1000)
+      if (elapsed < IP_BURST_MS) {
+        const remainingSeconds = Math.ceil((IP_BURST_MS - elapsed) / 1000)
         return {
           allowed: false,
           remainingSeconds,
-          reason: `Too many requests from this IP address. Please wait ${formatRemainingTime(remainingSeconds)} before requesting again.`,
+          reason: `Rapid request detected. Please wait ${remainingSeconds}s before making another request from this network.`,
         }
       }
     }

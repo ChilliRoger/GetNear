@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkRateLimit } from '@/lib/rate-limit'
+import { checkAccountCooldown } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,13 +15,8 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    // Extract client IP
-    const clientIp =
-      req.headers.get('x-real-ip') ||
-      req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
-      '127.0.0.1'
-
-    const rateCheck = checkRateLimit(accountId, clientIp)
+    // Cooldown inspection strictly checks if this user account ID is on 24h cooldown
+    const rateCheck = checkAccountCooldown(accountId)
 
     return NextResponse.json({
       success: true,
