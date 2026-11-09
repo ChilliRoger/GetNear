@@ -8,8 +8,14 @@ import React, {
   useCallback,
   type ReactNode,
 } from "react";
+import type { WalletSelector } from "@near-wallet-selector/core";
+import type { WalletSelectorModal } from "@near-wallet-selector/modal-ui";
 import { NearClient } from "@getnear/near-client";
-import { yoctoToNear, explorerTxUrl } from "@getnear/shared";
+import { yoctoToNear, nearToYocto, explorerTxUrl } from "@getnear/shared";
+
+import "@near-wallet-selector/modal-ui/styles.css";
+
+export type WalletConnectionType = "wallet-selector" | "testnet-role";
 
 export interface NearWalletContextValue {
   accountId: string | null;
@@ -17,9 +23,13 @@ export interface NearWalletContextValue {
   balance: string | null;
   networkId: string;
   isConnecting: boolean;
+  connectionType: WalletConnectionType | null;
+  walletName: string | null;
   availableAccounts: string[];
+  connectRole: (accountId: string) => Promise<void>;
+  openWalletModal: () => void;
   connect: (accountId?: string) => Promise<void>;
-  disconnect: () => void;
+  disconnect: () => Promise<void>;
   signAndSendTransaction: (params: {
     receiverId: string;
     methodName: string;
@@ -37,7 +47,8 @@ const DEFAULT_ACCOUNTS = [
   "chilliroger-council3.testnet",
 ];
 
-const STORAGE_KEY = "getnear_connected_account";
+const STORAGE_ACCOUNT_KEY = "getnear_connected_account";
+const STORAGE_TYPE_KEY = "getnear_connection_type";
 
 const defaultNearClient = new NearClient({
   networkId: "testnet",
@@ -50,8 +61,12 @@ const defaultNearClient = new NearClient({
 const NearWalletContext = createContext<NearWalletContextValue | null>(null);
 
 export function NearWalletProvider({ children }: { children: ReactNode }) {
+  const [selector, setSelector] = useState<WalletSelector | null>(null);
+  const [modal, setModal] = useState<WalletSelectorModal | null>(null);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
+  const [connectionType, setConnectionType] = useState<WalletConnectionType | null>(null);
+  const [walletName, setWalletName] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
 
   // Fetch balance for an account
@@ -62,40 +77,153 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
       setBalance(`${near.toFixed(2)} NEAR`);
     } catch (err) {
       console.warn("Failed to fetch balance for", account, err);
-      setBalance("10.00 NEAR"); // Fallback for network hiccups
+      setBalance("10.00 NEAR");
     }
   }, []);
 
-  // Initialize from localStorage ONLY if user explicitly connected an account
+  // Initialize NEAR Wallet Selector (Meteor, Here, MyNearWallet, Sender)
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && saved !== "disconnected" && DEFAULT_ACCOUNTS.includes(saved)) {
-      setAccountId(saved);
-      refreshBalance(saved);
-    } else {
-      setAccountId(null);
-      setBalance(null);
+    let isCancelled = false;
+
+    async function initSelector() {
+      try {
+        const { setupWalletSelector } = await import("@near-wallet-selector/core");
+        const { setupModal } = await import("@near-wallet-selector/modal-ui");
+        const { setupMeteorWallet } = await import("@near-wallet-selector/meteor-wallet");
+        const { setupHereWallet } = await import("@near-wallet-selector/here-wallet");
+        const { setupMyNearWallet } = await import("@near-wallet-selector/my-near-wallet");
+        const { setupSender } = await import("@near-wallet-selector/sender");
+
+        const _selector = await setupWalletSelector({
+          network: "testnet",
+          modules: [
+            setupMeteorWallet(),
+            setupHereWallet(),
+            setupMyNearWallet(),
+            setupSender(),
+          ],
+        });
+
+        const _modal = setupModal(_selector, {
+          contractId: "fx-budget.chilliroger-operator.testnet",
+          description: "Connect your NEAR wallet to manage Treasury FX goals and approvals.",
+        });
+
+        if (isCancelled) return;
+
+        setSelector(_selector);
+        setModal(_modal);
+
+        // Check if an external wallet is already signed in via selector
+        const state = _selector.store.getState();
+        const selectedWalletId = state.selectedWalletId;
+        const savedType = localStorage.getItem(STORAGE_TYPE_KEY) as WalletConnectionType | null;
+        const savedAccount = localStorage.getItem(STORAGE_ACCOUNT_KEY);
+
+        if (state.accounts.length > 0 && selectedWalletId && savedType !== "testnet-role") {
+          const activeAccount = state.accounts[0].accountId;
+          setAccountId(activeAccount);
+          setConnectionType("wallet-selector");
+          setWalletName(selectedWalletId);
+          localStorage.setItem(STORAGE_ACCOUNT_KEY, activeAccount);
+          localStorage.setItem(STORAGE_TYPE_KEY, "wallet-selector");
+          refreshBalance(activeAccount);
+        } else if (
+          savedType === "testnet-role" &&
+          savedAccount &&
+          savedAccount !== "disconnected" &&
+          DEFAULT_ACCOUNTS.includes(savedAccount)
+        ) {
+          setAccountId(savedAccount);
+          setConnectionType("testnet-role");
+          setWalletName("Testnet Role");
+          refreshBalance(savedAccount);
+        }
+
+        // Subscribe to selector account changes
+        const subscription = _selector.store.observable.subscribe(async (s) => {
+          if (s.accounts.length > 0 && s.selectedWalletId) {
+            const acc = s.accounts[0].accountId;
+            setAccountId(acc);
+            setConnectionType("wallet-selector");
+            setWalletName(s.selectedWalletId);
+            localStorage.setItem(STORAGE_ACCOUNT_KEY, acc);
+            localStorage.setItem(STORAGE_TYPE_KEY, "wallet-selector");
+            refreshBalance(acc);
+          }
+        });
+
+        return () => subscription.unsubscribe();
+      } catch (err) {
+        console.error("Failed to initialize NEAR Wallet Selector:", err);
+      }
     }
+
+    initSelector();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [refreshBalance]);
 
-  const connect = async (selectedAccount?: string) => {
+  // Connect via testnet role (Operator / Council)
+  const connectRole = async (targetAccount: string) => {
     setIsConnecting(true);
     try {
-      const target = selectedAccount || DEFAULT_ACCOUNTS[0];
-      setAccountId(target);
-      localStorage.setItem(STORAGE_KEY, target);
-      await refreshBalance(target);
+      if (selector && selector.isSignedIn()) {
+        try {
+          const w = await selector.wallet();
+          await w.signOut();
+        } catch {}
+      }
+      setAccountId(targetAccount);
+      setConnectionType("testnet-role");
+      setWalletName("Testnet Role");
+      localStorage.setItem(STORAGE_ACCOUNT_KEY, targetAccount);
+      localStorage.setItem(STORAGE_TYPE_KEY, "testnet-role");
+      await refreshBalance(targetAccount);
     } finally {
       setIsConnecting(false);
     }
   };
 
-  const disconnect = () => {
-    setAccountId(null);
-    setBalance(null);
-    localStorage.setItem(STORAGE_KEY, "disconnected");
+  // Open official NEAR Wallet Selector Modal (Meteor, Here, MyNearWallet, etc.)
+  const openWalletModal = () => {
+    if (modal) {
+      modal.show();
+    } else {
+      console.warn("Wallet Selector modal not yet initialized");
+    }
   };
 
+  // Generic connect method
+  const connect = async (accountOrTarget?: string) => {
+    if (accountOrTarget && DEFAULT_ACCOUNTS.includes(accountOrTarget)) {
+      await connectRole(accountOrTarget);
+    } else {
+      openWalletModal();
+    }
+  };
+
+  // Disconnect any active wallet or role
+  const disconnect = async () => {
+    if (selector && selector.isSignedIn()) {
+      try {
+        const w = await selector.wallet();
+        await w.signOut();
+      } catch (err) {
+        console.warn("Error signing out from wallet selector:", err);
+      }
+    }
+    setAccountId(null);
+    setBalance(null);
+    setConnectionType(null);
+    setWalletName(null);
+    localStorage.setItem(STORAGE_ACCOUNT_KEY, "disconnected");
+    localStorage.setItem(STORAGE_TYPE_KEY, "disconnected");
+  };
+
+  // Sign and send transaction (routes to Wallet Selector or backend runner depending on connection type)
   const signAndSendTransaction = async (params: {
     receiverId: string;
     methodName: string;
@@ -103,16 +231,66 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
     depositYocto?: string;
     depositNear?: string;
     gasUnits?: string;
-  }) => {
+  }): Promise<{ txHash: string; explorerUrl: string }> => {
     if (!accountId) throw new Error("Wallet not connected");
 
     let depositStr = "0 NEAR";
+    let depositYocto = "0";
+
     if (params.depositNear) {
-      depositStr = params.depositNear.includes("NEAR") ? params.depositNear : `${params.depositNear} NEAR`;
+      depositStr = params.depositNear.includes("NEAR")
+        ? params.depositNear
+        : `${params.depositNear} NEAR`;
+      const numNear = parseFloat(params.depositNear.replace(/[^\d.]/g, ""));
+      depositYocto = nearToYocto(isNaN(numNear) ? 0 : numNear);
     } else if (params.depositYocto) {
+      depositYocto = params.depositYocto;
       depositStr = `${yoctoToNear(params.depositYocto)} NEAR`;
     }
 
+    // Convert gas units to yoctoGas string
+    let gasUnitsBigInt = "100000000000000"; // 100 Tgas default
+    if (params.gasUnits) {
+      const match = params.gasUnits.match(/([\d.]+)\s*Tgas/i);
+      if (match) {
+        gasUnitsBigInt = BigInt(Math.round(parseFloat(match[1]) * 1e12)).toString();
+      }
+    }
+
+    // Route A: External Web3 Wallet via Wallet Selector (Meteor, Here, MyNearWallet, Sender)
+    if (connectionType === "wallet-selector" && selector && selector.isSignedIn()) {
+      const { actionCreators } = await import("@near-wallet-selector/core");
+      const wallet = await selector.wallet();
+      const outcome = await wallet.signAndSendTransaction({
+        receiverId: params.receiverId,
+        actions: [
+          actionCreators.functionCall(
+            params.methodName,
+            params.args,
+            BigInt(gasUnitsBigInt),
+            BigInt(depositYocto)
+          ),
+        ],
+      });
+
+      let txHash = "";
+      if (outcome && typeof outcome === "object") {
+        if ("transaction" in outcome && outcome.transaction?.hash) {
+          txHash = outcome.transaction.hash;
+        } else if ("transaction_outcome" in outcome && (outcome as any).transaction_outcome?.id) {
+          txHash = (outcome as any).transaction_outcome.id;
+        }
+      }
+
+      return {
+        txHash: txHash || "tx_confirmed",
+        explorerUrl: txHash
+          ? explorerTxUrl(txHash)
+          : `https://testnet.nearblocks.io/address/${params.receiverId}`,
+      };
+    }
+
+    // Route B: Pre-configured Testnet Role signed via local testnet keychain
     const res = await fetch("/api/near/tx", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -141,11 +319,15 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
     <NearWalletContext.Provider
       value={{
         accountId,
-        isConnected: !!accountId,
+        isConnected: Boolean(accountId),
         balance,
         networkId: "testnet",
         isConnecting,
+        connectionType,
+        walletName,
         availableAccounts: DEFAULT_ACCOUNTS,
+        connectRole,
+        openWalletModal,
         connect,
         disconnect,
         signAndSendTransaction,
