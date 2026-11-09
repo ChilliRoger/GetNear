@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/toast";
 import { FaucetGuideModal } from "@/components/faucet-guide-modal";
-import { NearEmblem } from "@/components/near-emblem";
+import { NearToken3D } from "@/components/near-token-3d";
 
 interface FaucetStatus {
   operatorId: string;
@@ -409,9 +409,9 @@ export default function FaucetHome() {
             </div>
           </div>
 
-          {/* Right Column: 3D Geometric NEAR Emblem */}
+          {/* Right Column: Interactive 3D NEAR Token Model */}
           <div className="lg:col-span-5 hidden lg:flex items-center justify-center pl-4">
-            <NearEmblem className="w-full max-w-[380px]" />
+            <NearToken3D className="w-full max-w-[440px]" />
           </div>
         </div>
       </main>
