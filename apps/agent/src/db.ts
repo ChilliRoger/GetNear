@@ -34,6 +34,8 @@ db.exec(`
     tx_hash TEXT,
     explorer_url TEXT,
     is_simulated INTEGER NOT NULL DEFAULT 1,
+    ft_transfer_tx_hash TEXT,
+    ft_transfer_url TEXT,
     timestamp INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_fills_order ON agent_fills(order_id);
@@ -52,6 +54,14 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_decisions_order ON agent_decisions(order_id, timestamp);
 `)
 
+// Safe column migrations for existing SQLite databases
+try {
+  db.exec(`ALTER TABLE agent_fills ADD COLUMN ft_transfer_tx_hash TEXT;`)
+} catch {}
+try {
+  db.exec(`ALTER TABLE agent_fills ADD COLUMN ft_transfer_url TEXT;`)
+} catch {}
+
 export interface AgentFill {
   id?: number
   order_id: number
@@ -62,6 +72,8 @@ export interface AgentFill {
   deviation_bps: number
   tx_hash?: string
   explorer_url?: string
+  ft_transfer_tx_hash?: string
+  ft_transfer_url?: string
   is_simulated: boolean
   timestamp: number
 }
@@ -82,8 +94,8 @@ export function recordFill(fill: AgentFill): void {
   const stmt = db.prepare(`
     INSERT INTO agent_fills (
       order_id, chunk_index, amount_in, simulated_out,
-      quote_ref, deviation_bps, tx_hash, explorer_url, is_simulated, timestamp
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      quote_ref, deviation_bps, tx_hash, explorer_url, ft_transfer_tx_hash, ft_transfer_url, is_simulated, timestamp
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   stmt.run(
     fill.order_id,
@@ -94,6 +106,8 @@ export function recordFill(fill: AgentFill): void {
     fill.deviation_bps,
     fill.tx_hash || null,
     fill.explorer_url || null,
+    fill.ft_transfer_tx_hash || null,
+    fill.ft_transfer_url || null,
     fill.is_simulated ? 1 : 0,
     fill.timestamp,
   )

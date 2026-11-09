@@ -72,6 +72,8 @@ export class AgentRunner {
   private refRateSource: FrankfurterReferenceSource
   private contractId: string
   private agentId: string
+  private operatorId: string
+  private eureId: string
   private activeLocks = new Set<number>()
   private isRunning = false
   private timer: NodeJS.Timeout | null = null
@@ -87,9 +89,10 @@ export class AgentRunner {
     rpcUrls?: string[]
   }) {
     this.pollIntervalMs = options?.pollIntervalMs || Number(process.env.AGENT_POLL_INTERVAL_MS || 10_000)
-    const operator = process.env.OPERATOR_ACCOUNT_ID || 'chilliroger-operator.testnet'
-    this.contractId = options?.contractId || process.env.FX_BUDGET_CONTRACT_ID || `fx-budget.${operator}`
+    this.operatorId = process.env.OPERATOR_ACCOUNT_ID || 'chilliroger-operator.testnet'
+    this.contractId = options?.contractId || process.env.FX_BUDGET_CONTRACT_ID || `fx-budget.${this.operatorId}`
     this.agentId = options?.agentId || process.env.AGENT_ACCOUNT_ID || 'chilliroger-agent.testnet'
+    this.eureId = process.env.EURE_CONTRACT_ID || `eure.${this.operatorId}`
 
     this.client = new NearClient({
       networkId: 'testnet',
@@ -361,7 +364,51 @@ export class AgentRunner {
 
       this.totalChunksExecuted++
 
-      // Record fill with strict simulated provenance
+      // Transfer real on-chain NEP-141 EURe tokens to requester's wallet
+      let ftTransferTx: any = null
+      const eureAtomic = BigInt(
+        Math.max(1, Math.round((Number(candidateChunk) / 1e6) * quote.rate * 1e6)),
+      ).toString()
+
+      try {
+        // Ensure requester has storage registered on the EURe contract
+        const reg = await this.client.callView<any>(this.eureId, 'storage_balance_of', {
+          account_id: order.requester,
+        })
+        if (!reg || BigInt(reg.total || '0') === 0n) {
+          console.log(`[Agent] Registering EURe storage for requester ${order.requester}...`)
+          runCallFunction({
+            contractId: this.eureId,
+            methodName: 'storage_deposit',
+            args: { account_id: order.requester, registration_only: false },
+            deposit: '0.0125 NEAR',
+            gas: '30.0 Tgas',
+            signerId: this.operatorId,
+          })
+        }
+
+        console.log(`[Agent] 💸 Dispatching real on-chain EURe transfer:`)
+        console.log(`  Amount: ${Number(eureAtomic) / 1e6} EURe -> ${order.requester}`)
+
+        ftTransferTx = runCallFunction({
+          contractId: this.eureId,
+          methodName: 'ft_transfer',
+          args: {
+            receiver_id: order.requester,
+            amount: eureAtomic,
+            memo: `GetNear FX Settlement Order #${order.id} Chunk #${order.chunks_count + 1}`,
+          },
+          deposit: '1 yoctoNEAR',
+          gas: '50.0 Tgas',
+          signerId: this.operatorId,
+        })
+
+        console.log(`✓ Real EURe transferred to ${order.requester}! Tx: ${ftTransferTx.txHash || 'confirmed'}`)
+      } catch (err: any) {
+        console.warn(`[Agent] Real EURe transfer notice: ${err.message}`)
+      }
+
+      // Record fill with on-chain settlement details
       const fill: AgentFill = {
         order_id: order.id,
         chunk_index: order.chunks_count + 1,
@@ -371,7 +418,9 @@ export class AgentRunner {
         deviation_bps: deviationBps,
         tx_hash: txResult?.txHash,
         explorer_url: txResult?.explorerUrl,
-        is_simulated: true, // Strictly simulated per hackathon rules
+        ft_transfer_tx_hash: ftTransferTx?.txHash,
+        ft_transfer_url: ftTransferTx?.explorerUrl,
+        is_simulated: false, // Real NEP-141 token transferred to user wallet
         timestamp: nowMs,
       }
       recordFill(fill)

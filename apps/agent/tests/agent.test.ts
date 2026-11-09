@@ -59,6 +59,32 @@ describe('Agent SQLite Persistence & Provenance', () => {
     assert.equal(saved.amount_in, '20000000')
   })
 
+  test('persists real NEP-141 token settlements with on-chain transfer receipt', () => {
+    const testFill = {
+      order_id: 8888,
+      chunk_index: 1,
+      amount_in: '10000000',
+      simulated_out: '8900000',
+      quote_ref: 'sha256:real-nep141-ref',
+      deviation_bps: 10,
+      tx_hash: 'ExecuteChunkTxHash111',
+      explorer_url: 'https://testnet.nearblocks.io/txns/ExecuteChunkTxHash111',
+      ft_transfer_tx_hash: 'FtTransferTxHash222',
+      ft_transfer_url: 'https://testnet.nearblocks.io/txns/FtTransferTxHash222',
+      is_simulated: false,
+      timestamp: Date.now(),
+    }
+
+    recordFill(testFill)
+    const fills = getRecentFills(10)
+    const saved = fills.find((f) => f.order_id === 8888)
+
+    assert.ok(saved, 'Saved real NEP-141 fill should be retrievable')
+    assert.equal(saved.is_simulated, false, 'is_simulated must be false for real token transfer')
+    assert.equal(saved.ft_transfer_tx_hash, 'FtTransferTxHash222')
+    assert.equal(saved.ft_transfer_url, 'https://testnet.nearblocks.io/txns/FtTransferTxHash222')
+  })
+
   test('persists strategy decisions with reason', () => {
     const testDec = {
       order_id: 9999,
