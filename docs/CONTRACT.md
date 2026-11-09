@@ -176,3 +176,40 @@ cargo build --target wasm32-unknown-unknown --release
 pnpm test:contract
 ```
 
+---
+
+## 7. Companion NEP-141 Fungible Token Smart Contracts
+
+To support verifiable on-chain settlement alongside the FxBudget accounting contract, two standard NEP-141 Fungible Token smart contracts are deployed on NEAR Testnet:
+
+### A. Token Specifications
+- **USDC Contract**: `usdc.chilliroger-operator.testnet`
+  - Name: `USD Coin (Testnet)`
+  - Symbol: `USDC`
+  - Decimals: `6`
+  - Initial Supply: `1,000,000 USDC`
+- **EURe Contract**: `eure.chilliroger-operator.testnet`
+  - Name: `Euro Stablecoin (Testnet)`
+  - Symbol: `EURe`
+  - Decimals: `6`
+  - Initial Supply: `1,000,000 EURe`
+
+### B. Standard Interfaces Implemented
+1. **NEP-141 Core**:
+   - `ft_transfer(receiver_id, amount, memo)` (requires 1 yoctoNEAR attached deposit)
+   - `ft_balance_of(account_id)` &rarr; `U128`
+   - `ft_total_supply()` &rarr; `U128`
+2. **NEP-148 Metadata**:
+   - `ft_metadata()` &rarr; returns spec, name, symbol, icon, decimals
+3. **NEP-145 Storage Management**:
+   - `storage_deposit(account_id, registration_only)` (requires 0.0125 NEAR deposit)
+   - `storage_balance_of(account_id)` &rarr; returns `{ total, available }`
+4. **Testnet Faucet & Mint**:
+   - `mint(account_id, amount)` &rarr; used by `/api/faucet` and onboarding scripts to dispense test tokens.
+
+### C. Vault Settlement Architecture
+- The `fx-budget.chilliroger-operator.testnet` contract account is pre-registered on both tokens via NEP-145 `storage_deposit`.
+- The vault holds a dedicated reserve of **100,000 EURe**.
+- Upon autonomous chunk execution, `fx-budget` calls `ft_transfer` on the EURe contract to deliver genuine stablecoins directly into the requester's NEAR wallet (Meteor, Sender, Here, etc.).
+
+
