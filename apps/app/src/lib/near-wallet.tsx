@@ -66,12 +66,15 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Initialize from localStorage or default to operator
+  // Initialize from localStorage ONLY if user explicitly connected an account
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY) || DEFAULT_ACCOUNTS[0];
-    if (saved) {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved && saved !== "disconnected" && DEFAULT_ACCOUNTS.includes(saved)) {
       setAccountId(saved);
       refreshBalance(saved);
+    } else {
+      setAccountId(null);
+      setBalance(null);
     }
   }, [refreshBalance]);
 
@@ -90,7 +93,7 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
   const disconnect = () => {
     setAccountId(null);
     setBalance(null);
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.setItem(STORAGE_KEY, "disconnected");
   };
 
   const signAndSendTransaction = async (params: {

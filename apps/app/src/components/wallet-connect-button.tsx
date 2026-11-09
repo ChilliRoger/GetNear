@@ -34,12 +34,57 @@ export function WalletConnectButton() {
 
   if (!isConnected || !accountId) {
     return (
-      <button
-        onClick={() => connect(availableAccounts[0])}
-        className="rounded-lg bg-accent-blue/15 px-3 py-1.5 text-xs font-semibold text-accent-blue transition-colors hover:bg-accent-blue/25"
-      >
-        Connect Wallet
-      </button>
+      <div className="relative" ref={dropdownRef}>
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex items-center gap-1.5 rounded-lg border border-accent-blue/40 bg-accent-blue/15 px-3 py-1.5 text-xs font-semibold text-accent-blue transition-colors hover:bg-accent-blue/25"
+        >
+          <span>Connect Test Wallet</span>
+          <ChevronDown className={`h-3 w-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        </button>
+
+        {isOpen && (
+          <div className="absolute right-0 top-full mt-1.5 w-72 rounded-xl border border-border bg-surface p-3 shadow-xl z-50">
+            <div className="mb-2 pb-2 border-b border-border">
+              <div className="text-[10px] uppercase tracking-wider text-muted font-medium">
+                Select NEAR Testnet Account
+              </div>
+              <div className="text-[11px] text-zinc-400 mt-0.5">
+                Choose an account to connect with:
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              {availableAccounts.map((acc) => {
+                const isOp = acc.includes("operator");
+                const role = isOp
+                  ? "Treasury Operator"
+                  : `Council Member ${acc.replace(/.*council(\d).*/, "$1")}`;
+                return (
+                  <button
+                    key={acc}
+                    onClick={() => {
+                      connect(acc);
+                      setIsOpen(false);
+                    }}
+                    className="flex w-full items-start justify-between rounded-lg p-2 text-left text-xs border border-border bg-background hover:bg-surface-hover hover:border-zinc-700 transition-colors"
+                  >
+                    <div>
+                      <div className="font-mono text-[11px] font-semibold text-foreground">
+                        {acc}
+                      </div>
+                      <div className="text-[10px] text-muted">Role: {role}</div>
+                    </div>
+                    <span className="text-[10px] font-semibold text-accent-blue mt-0.5">
+                      Connect &rarr;
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     );
   }
 

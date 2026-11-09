@@ -7,7 +7,7 @@ import { useNearWallet } from "@/lib/near-wallet";
 import { CheckCircle2, AlertCircle, PlusCircle } from "lucide-react";
 
 export default function TradePage() {
-  const { signAndSendTransaction } = useNearWallet();
+  const { accountId, connect, signAndSendTransaction } = useNearWallet();
   const { showToast } = useToast();
 
   const [contractId] = useState("fx-budget.chilliroger-operator.testnet");
@@ -57,6 +57,10 @@ export default function TradePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!accountId) {
+      showToast("Please connect your testnet wallet first", "error");
+      return;
+    }
     if (!numAmount || numAmount <= 0) {
       showToast("Please enter a valid order amount", "error");
       return;
@@ -247,14 +251,25 @@ export default function TradePage() {
           </div>
         </Card>
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-accent-blue py-2.5 text-xs font-semibold text-white hover:bg-accent-blue/90 disabled:opacity-50 transition-colors"
-        >
-          <PlusCircle className="h-4 w-4" />
-          <span>{submitting ? "Signing & Submitting to NEAR Testnet..." : "Create Order on NEAR Testnet"}</span>
-        </button>
+        {!accountId ? (
+          <button
+            type="button"
+            onClick={() => connect()}
+            className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-accent-blue/40 bg-accent-blue/15 py-2.5 text-xs font-semibold text-accent-blue hover:bg-accent-blue/25 transition-colors"
+          >
+            <PlusCircle className="h-4 w-4" />
+            <span>Connect Test Wallet to Create Order</span>
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-accent-blue py-2.5 text-xs font-semibold text-white hover:bg-accent-blue/90 disabled:opacity-50 transition-colors"
+          >
+            <PlusCircle className="h-4 w-4" />
+            <span>{submitting ? "Signing & Submitting to NEAR Testnet..." : "Create Order on NEAR Testnet"}</span>
+          </button>
+        )}
       </form>
     </div>
   );

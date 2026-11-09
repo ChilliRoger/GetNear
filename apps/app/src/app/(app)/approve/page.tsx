@@ -54,6 +54,10 @@ export default function ApprovePage() {
   }, [loadProposals]);
 
   const handleVote = async (proposalId: number, action: "VoteApprove" | "VoteReject") => {
+    if (!accountId) {
+      showToast("Please connect a Council wallet first", "error");
+      return;
+    }
     setVotingId(proposalId);
     try {
       const res = await signAndSendTransaction({
@@ -208,20 +212,35 @@ export default function ApprovePage() {
 
                   {!isApproved && (
                     <div className="flex gap-2 pt-2 border-t border-border">
-                      <button
-                        onClick={() => handleVote(p.id, "VoteApprove")}
-                        disabled={isProcessing}
-                        className="flex-1 py-1.5 rounded-lg bg-green-500/15 text-green-400 border border-green-500/20 font-semibold hover:bg-green-500/25 disabled:opacity-50 transition-colors"
-                      >
-                        {isProcessing ? "Submitting..." : hasVoted ? "Change Vote to Approve" : "Vote Approve (2-of-3)"}
-                      </button>
-                      <button
-                        onClick={() => handleVote(p.id, "VoteReject")}
-                        disabled={isProcessing}
-                        className="py-1.5 px-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/20 font-semibold hover:bg-red-500/25 disabled:opacity-50 transition-colors"
-                      >
-                        Reject
-                      </button>
+                      {!accountId ? (
+                        <button
+                          onClick={() => connect(councilAccounts[0])}
+                          className="flex-1 py-1.5 rounded-lg bg-accent-blue/15 text-accent-blue border border-accent-blue/20 font-semibold hover:bg-accent-blue/25 transition-colors"
+                        >
+                          Connect Council Wallet to Vote
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleVote(p.id, "VoteApprove")}
+                            disabled={isProcessing}
+                            className="flex-1 py-1.5 rounded-lg bg-green-500/15 text-green-400 border border-green-500/20 font-semibold hover:bg-green-500/25 disabled:opacity-50 transition-colors"
+                          >
+                            {isProcessing
+                              ? "Submitting..."
+                              : hasVoted
+                              ? "Change Vote to Approve"
+                              : "Vote Approve (2-of-3)"}
+                          </button>
+                          <button
+                            onClick={() => handleVote(p.id, "VoteReject")}
+                            disabled={isProcessing}
+                            className="py-1.5 px-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/20 font-semibold hover:bg-red-500/25 disabled:opacity-50 transition-colors"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

@@ -133,10 +133,13 @@ export default function DashboardPage() {
     return () => clearInterval(timer);
   }, [loadData]);
 
-  // Handle Quick Order Creation
-  const handleCreateOrder = async (overrideAmount?: string) => {
-    const amtStr = overrideAmount || orderAmount;
-    const amtNum = parseFloat(amtStr);
+  // Handle Order Creation
+  const handleCreateOrder = async () => {
+    if (!accountId) {
+      showToast("Please connect your testnet wallet first", "error");
+      return;
+    }
+    const amtNum = parseFloat(orderAmount);
     if (!amtNum || amtNum <= 0) {
       showToast("Please enter a valid amount", "error");
       return;
@@ -337,25 +340,39 @@ export default function DashboardPage() {
         <div className="space-y-3 pt-1">
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={() => {
                 setOrderAmount("20");
-                handleCreateOrder("20");
+                setMaxChunk("5");
+                setMaxDevBps("120");
+                setDeadlineHours("4");
+                showToast("Preset loaded: $20 USDC (Auto-Active). Click Submit Order below when ready.", "info");
               }}
-              disabled={submittingOrder}
-              className="flex-1 py-1.5 px-2 rounded-lg border border-border bg-surface-hover text-xs font-medium text-foreground hover:border-accent-blue transition-colors text-left"
+              className={`flex-1 py-1.5 px-2.5 rounded-lg border text-xs font-medium transition-colors text-left ${
+                orderAmount === "20"
+                  ? "border-accent-green bg-accent-green/10 text-foreground"
+                  : "border-border bg-surface-hover text-foreground hover:border-accent-green"
+              }`}
             >
-              <div className="font-semibold text-accent-green">Quick Test: $20 USDC</div>
+              <div className="font-semibold text-accent-green">Preset: $20 USDC</div>
               <div className="text-[10px] text-muted">Auto-Active (Below $100 cap)</div>
             </button>
             <button
+              type="button"
               onClick={() => {
                 setOrderAmount("250");
-                handleCreateOrder("250");
+                setMaxChunk("20");
+                setMaxDevBps("120");
+                setDeadlineHours("4");
+                showToast("Preset loaded: $250 USDC (Requires DAO Approval). Click Submit Order below when ready.", "info");
               }}
-              disabled={submittingOrder}
-              className="flex-1 py-1.5 px-2 rounded-lg border border-border bg-surface-hover text-xs font-medium text-foreground hover:border-amber-500 transition-colors text-left"
+              className={`flex-1 py-1.5 px-2.5 rounded-lg border text-xs font-medium transition-colors text-left ${
+                orderAmount === "250"
+                  ? "border-amber-500 bg-amber-500/10 text-foreground"
+                  : "border-border bg-surface-hover text-foreground hover:border-amber-500"
+              }`}
             >
-              <div className="font-semibold text-amber-400">Quick Test: $250 USDC</div>
+              <div className="font-semibold text-amber-400">Preset: $250 USDC</div>
               <div className="text-[10px] text-muted">Pending (Needs DAO 2-of-3)</div>
             </button>
           </div>
@@ -422,14 +439,26 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          <button
-            onClick={() => handleCreateOrder()}
-            disabled={submittingOrder}
-            className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-accent-blue py-2 text-xs font-semibold text-white hover:bg-accent-blue/90 disabled:opacity-50 transition-colors"
-          >
-            <PlusCircle className="h-3.5 w-3.5" />
-            <span>{submittingOrder ? "Submitting to NEAR Testnet..." : "Submit Order to Testnet"}</span>
-          </button>
+          {!accountId ? (
+            <button
+              type="button"
+              onClick={() => connect()}
+              className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-accent-blue/40 bg-accent-blue/15 py-2 text-xs font-semibold text-accent-blue hover:bg-accent-blue/25 transition-colors"
+            >
+              <Shield className="h-3.5 w-3.5" />
+              <span>Connect Test Wallet to Submit Order</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleCreateOrder}
+              disabled={submittingOrder}
+              className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-accent-blue py-2 text-xs font-semibold text-white hover:bg-accent-blue/90 disabled:opacity-50 transition-colors"
+            >
+              <PlusCircle className="h-3.5 w-3.5" />
+              <span>{submittingOrder ? "Submitting to NEAR Testnet..." : "Submit Order to Testnet"}</span>
+            </button>
+          )}
         </div>
       </Card>
 
