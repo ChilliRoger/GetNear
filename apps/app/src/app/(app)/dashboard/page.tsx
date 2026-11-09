@@ -68,7 +68,7 @@ interface AgentDecision {
 }
 
 export default function DashboardPage() {
-  const { signAndSendTransaction } = useNearWallet();
+  const { accountId, connect, availableAccounts, signAndSendTransaction } = useNearWallet();
   const { showToast } = useToast();
 
   const [loading, setLoading] = useState(true);
@@ -76,6 +76,7 @@ export default function DashboardPage() {
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [triggeringAgent, setTriggeringAgent] = useState(false);
   const [votingProposalId, setVotingProposalId] = useState<number | null>(null);
+  const [submittingProposalForOrder, setSubmittingProposalForOrder] = useState<number | null>(null);
 
   // NEAR state
   const [orders, setOrders] = useState<ContractOrder[]>([]);
@@ -176,6 +177,51 @@ export default function DashboardPage() {
     }
   };
 
+  // Handle Sputnik DAO Proposal Creation for Pending Order
+  const handleSubmitProposalForOrder = async (orderId: number, orderTotal: number, pairLabel: string) => {
+    setSubmittingProposalForOrder(orderId);
+    try {
+      const approveArgsBase64 = btoa(JSON.stringify({ id: orderId }));
+      const pairTarget = pairLabel.includes("/") ? pairLabel.split("/")[1] : "EURe";
+      const res = await signAndSendTransaction({
+        receiverId: daoId,
+        methodName: "add_proposal",
+        args: {
+          proposal: {
+            description: `Approve Treasury FX Order #${orderId} (${orderTotal.toFixed(2)} USDC -> ${pairTarget})`,
+            kind: {
+              FunctionCall: {
+                receiver_id: contractId,
+                actions: [
+                  {
+                    method_name: "approve_order",
+                    args: approveArgsBase64,
+                    deposit: "0",
+                    gas: "30000000000000",
+                  },
+                ],
+              },
+            },
+          },
+        },
+        depositNear: "0.1 NEAR",
+        gasUnits: "100.0 Tgas",
+      });
+
+      showToast(`Sputnik DAO Proposal created for Order #${orderId}`, {
+        type: "success",
+        explorerUrl: res.explorerUrl,
+      });
+
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast(`Failed to create proposal: ${msg}`, "error");
+    } finally {
+      setSubmittingProposalForOrder(null);
+    }
+  };
+
   // Handle Sputnik DAO Vote
   const handleVote = async (proposalId: number, action: "VoteApprove" | "VoteReject") => {
     setVotingProposalId(proposalId);
@@ -222,6 +268,8 @@ export default function DashboardPage() {
       setTriggeringAgent(false);
     }
   };
+
+  const councilAccounts = availableAccounts.filter((a) => a.includes("council"));
 
   return (
     <div className="space-y-4">
@@ -442,6 +490,102 @@ export default function DashboardPage() {
                     <span>Chunks Executed: {o.chunks_count}</span>
                     <span>Max Dev: {o.max_dev_bps} bps</span>
                   </div>
+
+                  {/* Governance & Sputnik DAO Approval Panel for Pending Orders */}
+                  {isPending && (
+                    <div className="mt-2.5 pt-2.5 border-t border-border bg-surface/50 -mx-3 -mb-3 p-3 rounded-b-xl">
+                      {(() => {
+                        const relatedProp = proposals.find(
+                          (p) =>
+                            p.description.includes(`Order #${o.id}`) ||
+                            p.description.includes(`order #${o.id}`)
+                        );
+                        const approveVotes = relatedProp
+                          ? Object.values(relatedProp.votes).filter((v) => v === "Approve").length
+                          : 0;
+
+                        return (
+                          <>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[11px] font-semibold text-amber-400 flex items-center gap-1.5">
+                                <Shield className="h-3.5 w-3.5" />
+                                Requires Sputnik DAO 2-of-3 Approval
+                              </span>
+                              {relatedProp && (
+                                <span className="text-[10px] font-mono text-zinc-300">
+                                  Proposal #{relatedProp.id}: {relatedProp.status} ({approveVotes}/2 votes)
+                                </span>
+                              )}
+                            </div>
+
+                            {!relatedProp ? (
+                              <button
+                                onClick={() => handleSubmitProposalForOrder(o.id, total, o.pair_label)}
+                                disabled={submittingProposalForOrder === o.id}
+                                className="w-full py-1.5 px-3 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/20 font-semibold hover:bg-amber-500/25 disabled:opacity-50 transition-colors text-xs flex items-center justify-center gap-1"
+                              >
+                                {submittingProposalForOrder === o.id
+                                  ? "Submitting Proposal (0.1 NEAR)..."
+                                  : "Submit Approval Proposal to Sputnik DAO (0.1 NEAR)"}
+                              </button>
+                            ) : relatedProp.status === "InProgress" ? (
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="text-muted">Switch Signer:</span>
+                                  <div className="flex gap-1.5">
+                                    {councilAccounts.map((acc, idx) => {
+                                      const isCurrent = acc === accountId;
+                                      const hasVotedThis = relatedProp.votes[acc];
+                                      return (
+                                        <button
+                                          key={acc}
+                                          onClick={() => connect(acc)}
+                                          className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold transition-colors border ${
+                                            isCurrent
+                                              ? "bg-accent-blue/20 border-accent-blue text-accent-blue"
+                                              : hasVotedThis
+                                              ? "bg-green-500/10 border-green-500/30 text-green-400"
+                                              : "bg-surface border-border text-muted hover:text-foreground"
+                                          }`}
+                                        >
+                                          Council {idx + 1} {hasVotedThis ? "(Voted)" : ""}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleVote(relatedProp.id, "VoteApprove")}
+                                    disabled={votingProposalId === relatedProp.id}
+                                    className="flex-1 py-1.5 rounded-lg bg-green-500/15 text-green-400 border border-green-500/20 font-semibold hover:bg-green-500/25 disabled:opacity-50 transition-colors text-xs"
+                                  >
+                                    {votingProposalId === relatedProp.id
+                                      ? "Casting Vote..."
+                                      : approveVotes === 1
+                                      ? "Vote Approve (2nd Vote -> Automatically Activates Order!)"
+                                      : "Vote Approve (1st Vote)"}
+                                  </button>
+                                  <button
+                                    onClick={() => handleVote(relatedProp.id, "VoteReject")}
+                                    disabled={votingProposalId === relatedProp.id}
+                                    className="py-1.5 px-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/20 font-semibold hover:bg-red-500/25 disabled:opacity-50 transition-colors text-xs"
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-[11px] text-green-400 font-medium">
+                                Proposal #{relatedProp.id} {relatedProp.status} — Sputnik DAO approved order.
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -454,67 +598,100 @@ export default function DashboardPage() {
         title={`Sputnik DAO Council Approvals (${proposals.length})`}
         subtitle="2-of-3 multisig votes required for orders above $100 auto-cap"
       >
+        <div className="mb-3 pb-2 border-b border-border flex items-center justify-between text-xs">
+          <span className="text-muted">Active Signer: <strong className="text-accent-blue font-mono">{accountId}</strong></span>
+          <div className="flex items-center gap-1">
+            <span className="text-[11px] text-muted mr-1">Switch:</span>
+            {councilAccounts.map((acc, idx) => (
+              <button
+                key={acc}
+                onClick={() => connect(acc)}
+                className={`px-1.5 py-0.5 rounded text-[10px] font-mono border ${
+                  acc === accountId
+                    ? "bg-accent-blue/20 border-accent-blue text-accent-blue font-bold"
+                    : "bg-surface border-border text-muted hover:text-foreground"
+                }`}
+              >
+                C{idx + 1}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {proposals.length === 0 ? (
           <div className="py-4 text-center text-xs text-muted">No pending DAO proposals on testnet.</div>
         ) : (
           <div className="space-y-2.5 pt-1">
-            {proposals.map((p) => {
-              const approveVotes = Object.values(p.votes).filter((v) => v === "Approve").length;
-              const isApproved = p.status === "Approved";
-              const isVoting = votingProposalId === p.id;
+            {[...proposals]
+              .sort((a, b) => {
+                if (a.status === "InProgress" && b.status !== "InProgress") return -1;
+                if (a.status !== "InProgress" && b.status === "InProgress") return 1;
+                return b.id - a.id;
+              })
+              .map((p) => {
+                const approveVotes = Object.values(p.votes).filter((v) => v === "Approve").length;
+                const isApproved = p.status === "Approved";
+                const isVoting = votingProposalId === p.id;
+                const hasVoted = accountId ? p.votes[accountId] : undefined;
 
-              return (
-                <div key={p.id} className="rounded-xl border border-border bg-background p-3 text-xs">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <Vote className="h-3.5 w-3.5 text-accent-blue" />
-                      <span className="font-mono font-semibold text-foreground">Proposal #{p.id}</span>
+                return (
+                  <div key={p.id} className="rounded-xl border border-border bg-background p-3 text-xs">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Vote className="h-3.5 w-3.5 text-accent-blue" />
+                        <span className="font-mono font-semibold text-foreground">Proposal #{p.id}</span>
+                      </div>
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                          isApproved ? "bg-green-500/15 text-green-400" : "bg-amber-500/15 text-amber-400"
+                        }`}
+                      >
+                        {p.status} ({approveVotes}/2 votes)
+                      </span>
                     </div>
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
-                        isApproved ? "bg-green-500/15 text-green-400" : "bg-amber-500/15 text-amber-400"
-                      }`}
-                    >
-                      {p.status} ({approveVotes}/2 votes)
-                    </span>
-                  </div>
 
-                  <p className="text-[11px] text-muted mb-2 font-mono break-all">{p.description}</p>
+                    <p className="text-[11px] text-muted mb-2 font-mono break-all">{p.description}</p>
 
-                  <div className="text-[10px] text-muted mb-2">
-                    Votes cast:{" "}
-                    {Object.keys(p.votes).length === 0 ? (
-                      <span>None yet</span>
-                    ) : (
-                      Object.entries(p.votes).map(([voter, vote]) => (
-                        <span key={voter} className="inline-block mr-2 text-foreground font-mono">
-                          {voter.slice(0, 15)}... ({vote})
-                        </span>
-                      ))
+                    <div className="text-[10px] text-muted mb-2">
+                      Votes cast:{" "}
+                      {Object.keys(p.votes).length === 0 ? (
+                        <span>None yet</span>
+                      ) : (
+                        Object.entries(p.votes).map(([voter, vote]) => (
+                          <span key={voter} className="inline-block mr-2 text-foreground font-mono">
+                            {voter.slice(0, 15)}... ({vote})
+                          </span>
+                        ))
+                      )}
+                    </div>
+
+                    {!isApproved && (
+                      <div className="flex gap-2 pt-1 border-t border-border">
+                        <button
+                          onClick={() => handleVote(p.id, "VoteApprove")}
+                          disabled={isVoting}
+                          className="flex-1 py-1.5 rounded-lg bg-green-500/15 text-green-400 border border-green-500/20 font-semibold hover:bg-green-500/25 disabled:opacity-50 transition-colors"
+                        >
+                          {isVoting
+                            ? "Broadcasting vote..."
+                            : hasVoted === "Approve"
+                            ? "Already Voted Approve (Switch Signer for 2nd vote)"
+                            : approveVotes === 1
+                            ? "Vote Approve (2nd Vote -> Executes on-chain!)"
+                            : "Vote Approve (2-of-3)"}
+                        </button>
+                        <button
+                          onClick={() => handleVote(p.id, "VoteReject")}
+                          disabled={isVoting}
+                          className="py-1.5 px-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/20 font-semibold hover:bg-red-500/25 disabled:opacity-50 transition-colors"
+                        >
+                          Reject
+                        </button>
+                      </div>
                     )}
                   </div>
-
-                  {!isApproved && (
-                    <div className="flex gap-2 pt-1 border-t border-border">
-                      <button
-                        onClick={() => handleVote(p.id, "VoteApprove")}
-                        disabled={isVoting}
-                        className="flex-1 py-1.5 rounded-lg bg-green-500/15 text-green-400 border border-green-500/20 font-semibold hover:bg-green-500/25 disabled:opacity-50 transition-colors"
-                      >
-                        {isVoting ? "Broadcasting vote..." : "Vote Approve (2-of-3)"}
-                      </button>
-                      <button
-                        onClick={() => handleVote(p.id, "VoteReject")}
-                        disabled={isVoting}
-                        className="py-1.5 px-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/20 font-semibold hover:bg-red-500/25 disabled:opacity-50 transition-colors"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         )}
       </Card>

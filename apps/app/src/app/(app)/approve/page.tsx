@@ -150,11 +150,17 @@ export default function ApprovePage() {
           <div className="py-6 text-center text-xs text-muted">No proposals found on Sputnik DAO.</div>
         ) : (
           <div className="space-y-3 pt-1">
-            {proposals.map((p) => {
-              const approveVotes = Object.values(p.votes).filter((v) => v === "Approve").length;
-              const isApproved = p.status === "Approved";
-              const isProcessing = votingId === p.id;
-              const hasVoted = accountId && p.votes[accountId];
+            {[...proposals]
+              .sort((a, b) => {
+                if (a.status === "InProgress" && b.status !== "InProgress") return -1;
+                if (a.status !== "InProgress" && b.status === "InProgress") return 1;
+                return b.id - a.id;
+              })
+              .map((p) => {
+                const approveVotes = Object.values(p.votes).filter((v) => v === "Approve").length;
+                const isApproved = p.status === "Approved";
+                const isProcessing = votingId === p.id;
+                const hasVoted = accountId && p.votes[accountId];
 
               return (
                 <div key={p.id} className="rounded-xl border border-border bg-background p-3 text-xs">

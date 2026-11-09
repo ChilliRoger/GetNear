@@ -25,6 +25,7 @@ export interface NearWalletContextValue {
     methodName: string;
     args: Record<string, unknown>;
     depositYocto?: string;
+    depositNear?: string;
     gasUnits?: string;
   }) => Promise<{ txHash: string; explorerUrl: string }>;
 }
@@ -97,9 +98,17 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
     methodName: string;
     args: Record<string, unknown>;
     depositYocto?: string;
+    depositNear?: string;
     gasUnits?: string;
   }) => {
     if (!accountId) throw new Error("Wallet not connected");
+
+    let depositStr = "0 NEAR";
+    if (params.depositNear) {
+      depositStr = params.depositNear.includes("NEAR") ? params.depositNear : `${params.depositNear} NEAR`;
+    } else if (params.depositYocto) {
+      depositStr = `${yoctoToNear(params.depositYocto)} NEAR`;
+    }
 
     const res = await fetch("/api/near/tx", {
       method: "POST",
@@ -109,7 +118,7 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
         methodName: params.methodName,
         args: params.args,
         signerId: accountId,
-        deposit: params.depositYocto ? `${yoctoToNear(params.depositYocto)} NEAR` : "0 NEAR",
+        deposit: depositStr,
         gas: params.gasUnits || "100.0 Tgas",
       }),
     });
