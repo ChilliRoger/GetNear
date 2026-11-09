@@ -1,6 +1,12 @@
-# NEAR Testnet Stablecoin Faucet — Vercel Deployment Guide
+# NEAR Testnet Stablecoin Faucet — Vercel Deployment & Live Operations
 
-This document describes how to deploy the standalone **NEAR Testnet Stablecoin Faucet** (`apps/faucet`) to Vercel in under 2 minutes.
+The standalone **NEAR Testnet Stablecoin Faucet** (`apps/faucet`) is deployed live to production on Vercel:
+
+- **Production URL**: [https://getnear-faucet.vercel.app](https://getnear-faucet.vercel.app)
+- **Deployment URL**: [https://getnear-faucet-rg1neayzv-chillirogers-projects.vercel.app](https://getnear-faucet-rg1neayzv-chillirogers-projects.vercel.app)
+- **Vercel Project**: `chillirogers-projects/getnear-faucet`
+- **Network**: NEAR Testnet (`testnet`)
+- **Operator Account**: `chilliroger-operator.testnet`
 
 ---
 
@@ -10,11 +16,12 @@ The faucet operates as a hardened serverless Web3 application with 6 security de
 - **Zero Native Binaries**: Uses pure `near-api-js` v7 with `KeyPairSigner` to sign transactions strictly in memory.
 - **Sybil & Storage Drain Defense**: Queries on-chain RPC `view_account` to verify the recipient account ID actually exists on NEAR testnet before executing any storage deposit. Non-existent accounts are rejected immediately without spending operator NEAR.
 - **Serverless Anti-Hoarding Balance Cap**: On-chain token balance check caps faucet claims if a wallet already holds $\ge 2,500$ USDC or EURe. Because this reads live blockchain state, it cannot be bypassed by multi-instance or multi-region serverless concurrency.
-- **Fixed Non-Tamperable Quota**: Hardcoded 500 token claim per token type, completely preventing payload manipulation attacks via HTTP body parameters.
+- **Fixed Non-Tamperable Quota**: Hardcoded 500 token claim per token type (`USDC` or `EURe`), completely preventing payload manipulation attacks via HTTP body parameters.
+- **Live 24-Hour Per-Account Cooldown**: Strict 24-hour rate limit tracked per account ID with synchronized client-side live countdown timer and server-side cooldown verification (`/api/cooldown`).
+- **Interactive 3D Visuals**: Embedded Three.js canvas rendering a high-fidelity 3D model of the NEAR token (`/near3d_logo.glb`) with mouse orbit controls and auto-rotation.
 - **Operator Gas Safety Margin**: Halts dispensing gracefully with HTTP 503 if operator NEAR drops below 0.05 NEAR, preventing broken partial states.
-- **Rate Limiting & Proxy Extraction**: 10-minute sliding window cooldown tracking both account ID and real client IP (`x-real-ip` and `x-forwarded-for`).
 - **HTTP Security Headers**: Enforces `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and strict referrer policy in `vercel.json`.
-- **Zero Secret Leakage**: Operator private keys are never prefixed with `NEXT_PUBLIC_` and never bundled into client assets. All `.env` files are ignored by git.
+- **Zero Secret Leakage**: Operator private keys are never prefixed with `NEXT_PUBLIC_` and never bundled into client assets. Production credentials are encrypted in Vercel's environment variable vault.
 
 ---
 
