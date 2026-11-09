@@ -400,7 +400,7 @@ export class AgentRunner {
           },
           deposit: '1 yoctoNEAR',
           gas: '50.0 Tgas',
-          signerId: this.operatorId,
+          signerId: this.contractId,
         })
 
         console.log(`✓ Real EURe transferred to ${order.requester}! Tx: ${ftTransferTx.txHash || 'confirmed'}`)
