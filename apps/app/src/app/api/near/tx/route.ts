@@ -70,6 +70,17 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Pre-flight check for Sputnik DAO proposal voting permissions
+    if (contractId.includes('sputnik') && methodName === 'act_proposal' && !signerId.includes('council')) {
+      return NextResponse.json(
+        {
+          error: `Permission Denied: Account "${signerId}" is not a Council member. Only Council members (chilliroger-council1.testnet, chilliroger-council2.testnet, chilliroger-council3.testnet) have voting permissions on this DAO.`,
+          success: false,
+        },
+        { status: 403 },
+      )
+    }
+
     console.log(`[API /near/tx] Calling ${signerId} -> ${contractId}.${methodName}()`)
 
     const bin = getNearBin()
@@ -116,7 +127,10 @@ export async function POST(req: NextRequest) {
       stdout: combinedOutput,
     })
   } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : String(err)
+    let errMsg = err instanceof Error ? err.message : String(err)
+    if (errMsg.includes('ERR_PERMISSION_DENIED')) {
+      errMsg = `Permission Denied: Sputnik DAO rejected this vote because the signer is not a Council member. Switch to Council 1, 2, or 3.`
+    }
     console.error('[API /near/tx Error]:', errMsg)
     return NextResponse.json(
       { error: errMsg, success: false },

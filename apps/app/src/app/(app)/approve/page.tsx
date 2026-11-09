@@ -58,6 +58,10 @@ export default function ApprovePage() {
       showToast("Please connect a Council wallet first", "error");
       return;
     }
+    if (!councilAccounts.includes(accountId)) {
+      showToast(`Account "${accountId}" is the Treasury Operator and cannot vote. Switch to Council 1, 2, or 3.`, "error");
+      return;
+    }
     setVotingId(proposalId);
     try {
       const res = await signAndSendTransaction({
@@ -84,6 +88,7 @@ export default function ApprovePage() {
   };
 
   const councilAccounts = availableAccounts.filter((a) => a.includes("council"));
+  const isCouncil = Boolean(accountId && councilAccounts.includes(accountId));
 
   return (
     <div className="space-y-4">
@@ -211,20 +216,41 @@ export default function ApprovePage() {
                   </div>
 
                   {!isApproved && (
-                    <div className="flex gap-2 pt-2 border-t border-border">
+                    <div className="pt-2 border-t border-border">
                       {!accountId ? (
                         <button
                           onClick={() => connect(councilAccounts[0])}
-                          className="flex-1 py-1.5 rounded-lg bg-accent-blue/15 text-accent-blue border border-accent-blue/20 font-semibold hover:bg-accent-blue/25 transition-colors"
+                          className="w-full py-1.5 rounded-lg bg-accent-blue/15 text-accent-blue border border-accent-blue/20 font-semibold hover:bg-accent-blue/25 transition-colors text-xs"
                         >
                           Connect Council Wallet to Vote
                         </button>
+                      ) : !isCouncil ? (
+                        <div className="rounded-lg bg-surface border border-border p-2 space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-amber-400 font-medium">Connected as Operator</span>
+                            <span className="text-[10px] text-muted">Council only</span>
+                          </div>
+                          <div className="text-[11px] text-zinc-400">
+                            Operator cannot vote on DAO proposals. Switch to a Council member:
+                          </div>
+                          <div className="flex gap-2">
+                            {councilAccounts.slice(0, 2).map((acc, idx) => (
+                              <button
+                                key={acc}
+                                onClick={() => connect(acc)}
+                                className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/30 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors font-mono"
+                              >
+                                Switch to Council {idx + 1} &rarr;
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       ) : (
-                        <>
+                        <div className="flex gap-2">
                           <button
                             onClick={() => handleVote(p.id, "VoteApprove")}
                             disabled={isProcessing}
-                            className="flex-1 py-1.5 rounded-lg bg-green-500/15 text-green-400 border border-green-500/20 font-semibold hover:bg-green-500/25 disabled:opacity-50 transition-colors"
+                            className="flex-1 py-1.5 rounded-lg bg-green-500/15 text-green-400 border border-green-500/20 font-semibold hover:bg-green-500/25 disabled:opacity-50 transition-colors text-xs"
                           >
                             {isProcessing
                               ? "Submitting..."
@@ -235,11 +261,11 @@ export default function ApprovePage() {
                           <button
                             onClick={() => handleVote(p.id, "VoteReject")}
                             disabled={isProcessing}
-                            className="py-1.5 px-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/20 font-semibold hover:bg-red-500/25 disabled:opacity-50 transition-colors"
+                            className="py-1.5 px-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/20 font-semibold hover:bg-red-500/25 disabled:opacity-50 transition-colors text-xs"
                           >
                             Reject
                           </button>
-                        </>
+                        </div>
                       )}
                     </div>
                   )}

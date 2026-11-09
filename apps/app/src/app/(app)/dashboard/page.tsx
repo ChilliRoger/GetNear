@@ -227,6 +227,14 @@ export default function DashboardPage() {
 
   // Handle Sputnik DAO Vote
   const handleVote = async (proposalId: number, action: "VoteApprove" | "VoteReject") => {
+    if (!accountId) {
+      showToast("Please connect a Council wallet first", "error");
+      return;
+    }
+    if (!councilAccounts.includes(accountId)) {
+      showToast(`Account "${accountId}" is the Treasury Operator and cannot vote. Switch to Council 1, 2, or 3.`, "error");
+      return;
+    }
     setVotingProposalId(proposalId);
     try {
       const res = await signAndSendTransaction({
@@ -273,6 +281,7 @@ export default function DashboardPage() {
   };
 
   const councilAccounts = availableAccounts.filter((a) => a.includes("council"));
+  const isCouncil = Boolean(accountId && councilAccounts.includes(accountId));
 
   return (
     <div className="space-y-4">
@@ -560,7 +569,7 @@ export default function DashboardPage() {
                             ) : relatedProp.status === "InProgress" ? (
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between text-[11px]">
-                                  <span className="text-muted">Switch Signer:</span>
+                                  <span className="text-muted">Council Voters:</span>
                                   <div className="flex gap-1.5">
                                     {councilAccounts.map((acc, idx) => {
                                       const isCurrent = acc === accountId;
@@ -577,33 +586,89 @@ export default function DashboardPage() {
                                               : "bg-surface border-border text-muted hover:text-foreground"
                                           }`}
                                         >
-                                          Council {idx + 1} {hasVotedThis ? "(Voted)" : ""}
+                                          Council {idx + 1} {hasVotedThis ? "✓" : ""}
                                         </button>
                                       );
                                     })}
                                   </div>
                                 </div>
 
-                                <div className="flex gap-2">
+                                {!accountId ? (
                                   <button
-                                    onClick={() => handleVote(relatedProp.id, "VoteApprove")}
-                                    disabled={votingProposalId === relatedProp.id}
-                                    className="flex-1 py-1.5 rounded-lg bg-green-500/15 text-green-400 border border-green-500/20 font-semibold hover:bg-green-500/25 disabled:opacity-50 transition-colors text-xs"
+                                    onClick={() => connect(councilAccounts[0])}
+                                    className="w-full py-1.5 rounded-lg bg-accent-blue/15 text-accent-blue border border-accent-blue/20 font-semibold hover:bg-accent-blue/25 transition-colors text-xs"
                                   >
-                                    {votingProposalId === relatedProp.id
-                                      ? "Casting Vote..."
-                                      : approveVotes === 1
-                                      ? "Vote Approve (2nd Vote -> Automatically Activates Order!)"
-                                      : "Vote Approve (1st Vote)"}
+                                    Connect Council Wallet to Vote
                                   </button>
-                                  <button
-                                    onClick={() => handleVote(relatedProp.id, "VoteReject")}
-                                    disabled={votingProposalId === relatedProp.id}
-                                    className="py-1.5 px-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/20 font-semibold hover:bg-red-500/25 disabled:opacity-50 transition-colors text-xs"
-                                  >
-                                    Reject
-                                  </button>
-                                </div>
+                                ) : !isCouncil ? (
+                                  <div className="rounded-lg bg-surface border border-border p-2 space-y-1.5">
+                                    <div className="flex items-center justify-between text-xs">
+                                      <span className="text-amber-400 font-medium">Connected as Operator</span>
+                                      <span className="text-[10px] text-muted">Council only</span>
+                                    </div>
+                                    <div className="text-[11px] text-zinc-400">
+                                      Operator cannot vote on DAO proposals. Switch to a Council member:
+                                    </div>
+                                    <div className="flex gap-2">
+                                      {councilAccounts.slice(0, 2).map((acc, idx) => (
+                                        <button
+                                          key={acc}
+                                          onClick={() => connect(acc)}
+                                          className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/30 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors font-mono"
+                                        >
+                                          Switch to Council {idx + 1} &rarr;
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ) : relatedProp.votes[accountId] === "Approve" ? (
+                                  <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-2 space-y-1.5">
+                                    <div className="text-xs text-green-400 font-medium flex items-center justify-between">
+                                      <span>Council {councilAccounts.indexOf(accountId) + 1} voted Approve ✓</span>
+                                      <span className="text-[10px] text-muted font-mono">{approveVotes}/2 votes</span>
+                                    </div>
+                                    <div className="text-[11px] text-zinc-300">
+                                      Switch to the next Council member to cast the 2nd approval vote:
+                                    </div>
+                                    <div className="flex gap-2">
+                                      {councilAccounts
+                                        .filter((acc) => !relatedProp.votes[acc])
+                                        .map((acc) => {
+                                          const idx = councilAccounts.indexOf(acc);
+                                          return (
+                                            <button
+                                              key={acc}
+                                              onClick={() => connect(acc)}
+                                              className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/40 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors font-mono"
+                                            >
+                                              Switch to Council {idx + 1} & Vote &rarr;
+                                            </button>
+                                          );
+                                        })}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => handleVote(relatedProp.id, "VoteApprove")}
+                                      disabled={votingProposalId === relatedProp.id}
+                                      className="flex-1 py-1.5 rounded-lg bg-green-500/15 text-green-400 border border-green-500/20 font-semibold hover:bg-green-500/25 disabled:opacity-50 transition-colors text-xs"
+                                    >
+                                      {votingProposalId === relatedProp.id
+                                        ? "Casting Vote..."
+                                        : approveVotes === 1
+                                        ? "Vote Approve (2nd Vote -> Automatically Activates Order!)"
+                                        : "Vote Approve (1st Vote)"}
+                                    </button>
+                                    <button
+                                      onClick={() => handleVote(relatedProp.id, "VoteReject")}
+                                      disabled={votingProposalId === relatedProp.id}
+                                      className="py-1.5 px-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/20 font-semibold hover:bg-red-500/25 disabled:opacity-50 transition-colors text-xs"
+                                    >
+                                      Reject
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <div className="text-[11px] text-green-400 font-medium">
@@ -695,27 +760,83 @@ export default function DashboardPage() {
                     </div>
 
                     {!isApproved && (
-                      <div className="flex gap-2 pt-1 border-t border-border">
-                        <button
-                          onClick={() => handleVote(p.id, "VoteApprove")}
-                          disabled={isVoting}
-                          className="flex-1 py-1.5 rounded-lg bg-green-500/15 text-green-400 border border-green-500/20 font-semibold hover:bg-green-500/25 disabled:opacity-50 transition-colors"
-                        >
-                          {isVoting
-                            ? "Broadcasting vote..."
-                            : hasVoted === "Approve"
-                            ? "Already Voted Approve (Switch Signer for 2nd vote)"
-                            : approveVotes === 1
-                            ? "Vote Approve (2nd Vote -> Executes on-chain!)"
-                            : "Vote Approve (2-of-3)"}
-                        </button>
-                        <button
-                          onClick={() => handleVote(p.id, "VoteReject")}
-                          disabled={isVoting}
-                          className="py-1.5 px-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/20 font-semibold hover:bg-red-500/25 disabled:opacity-50 transition-colors"
-                        >
-                          Reject
-                        </button>
+                      <div className="pt-2 border-t border-border">
+                        {!accountId ? (
+                          <button
+                            onClick={() => connect(councilAccounts[0])}
+                            className="w-full py-1.5 rounded-lg bg-accent-blue/15 text-accent-blue border border-accent-blue/20 font-semibold hover:bg-accent-blue/25 transition-colors text-xs"
+                          >
+                            Connect Council Wallet to Vote
+                          </button>
+                        ) : !isCouncil ? (
+                          <div className="rounded-lg bg-surface border border-border p-2 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-amber-400 font-medium">Connected as Operator</span>
+                              <span className="text-[10px] text-muted">Council only</span>
+                            </div>
+                            <div className="text-[11px] text-zinc-400">
+                              Operator cannot vote on DAO proposals. Switch to a Council member:
+                            </div>
+                            <div className="flex gap-2">
+                              {councilAccounts.slice(0, 2).map((acc, idx) => (
+                                <button
+                                  key={acc}
+                                  onClick={() => connect(acc)}
+                                  className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/30 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors font-mono"
+                                >
+                                  Switch to Council {idx + 1} &rarr;
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : hasVoted === "Approve" ? (
+                          <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-2 space-y-1.5">
+                            <div className="text-xs text-green-400 font-medium flex items-center justify-between">
+                              <span>Council {councilAccounts.indexOf(accountId) + 1} voted Approve ✓</span>
+                              <span className="text-[10px] text-muted font-mono">{approveVotes}/2 votes</span>
+                            </div>
+                            <div className="text-[11px] text-zinc-300">
+                              Switch to the next Council member to cast the 2nd approval vote:
+                            </div>
+                            <div className="flex gap-2">
+                              {councilAccounts
+                                .filter((acc) => !p.votes[acc])
+                                .map((acc) => {
+                                  const idx = councilAccounts.indexOf(acc);
+                                  return (
+                                    <button
+                                      key={acc}
+                                      onClick={() => connect(acc)}
+                                      className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/40 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors font-mono"
+                                    >
+                                      Switch to Council {idx + 1} & Vote &rarr;
+                                    </button>
+                                  );
+                                })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleVote(p.id, "VoteApprove")}
+                              disabled={isVoting}
+                              className="flex-1 py-1.5 rounded-lg bg-green-500/15 text-green-400 border border-green-500/20 font-semibold hover:bg-green-500/25 disabled:opacity-50 transition-colors text-xs"
+                            >
+                              {isVoting
+                                ? "Broadcasting vote..."
+                                : approveVotes === 1
+                                ? "Vote Approve (2nd Vote -> Automatically Activates Order!)"
+                                : "Vote Approve (1st Vote)"}
+                            </button>
+                            <button
+                              onClick={() => handleVote(p.id, "VoteReject")}
+                              disabled={isVoting}
+                              className="py-1.5 px-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/20 font-semibold hover:bg-red-500/25 disabled:opacity-50 transition-colors text-xs"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
