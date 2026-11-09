@@ -171,48 +171,27 @@ export default function FaucetHome() {
               <path d="M4 19V5l12 14V5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          <span className="text-base sm:text-lg font-bold tracking-tight text-white">
-            NEAR Faucet
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-base sm:text-lg font-bold tracking-tight text-white">
+              NEAR Faucet
+            </span>
+            <span className="px-2 py-0.5 text-[10px] font-mono font-semibold rounded bg-[#13151b] text-[#00ec97] border border-[#222634]">
+              TESTNET
+            </span>
+          </div>
         </div>
 
-        {/* Center Nav Links */}
-        <nav className="hidden md:flex items-center gap-8 text-xs font-medium text-zinc-400">
+        {/* Right Actions: How it Works & Connect Wallet */}
+        <div className="flex items-center gap-3">
           <FaucetGuideModal
             usdcContractId={status.usdcContractId}
             eureContractId={status.eureContractId}
             trigger={
-              <button className="text-zinc-300 hover:text-white transition-colors cursor-pointer">
-                How it Works
+              <button className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-[#222634] bg-[#13151b] text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors cursor-pointer">
+                <span>How it Works</span>
               </button>
             }
           />
-          <a
-            href="https://docs.near.org"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-white transition-colors"
-          >
-            Docs
-          </a>
-          <a
-            href="https://github.com/ChilliRoger/GetNear"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-white transition-colors"
-          >
-            Support
-          </a>
-        </nav>
-
-        {/* Right CTA: Connect Wallet / Guide trigger */}
-        <div className="flex items-center gap-3">
-          <div className="md:hidden">
-            <FaucetGuideModal
-              usdcContractId={status.usdcContractId}
-              eureContractId={status.eureContractId}
-            />
-          </div>
 
           <button
             onClick={handleConnectWalletPrompt}
@@ -479,10 +458,10 @@ export default function FaucetHome() {
               <span>Network: <strong className="text-zinc-200 font-medium">NEAR Testnet</strong></span>
             </div>
 
-            {/* Latest Claim */}
+            {/* Operator Account */}
             <div className="hidden md:flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#00ec97]" />
-              <span>Latest Claim: <strong className="text-zinc-200 font-medium">{lastResult ? "Just now" : "2s ago"}</strong></span>
+              <span>Operator: <strong className="text-zinc-200 font-mono font-normal">{status.operatorId}</strong></span>
             </div>
           </div>
 
