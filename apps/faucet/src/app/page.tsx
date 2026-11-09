@@ -6,7 +6,6 @@ import {
   Copy,
   Check,
   RefreshCw,
-  Wallet,
   Clipboard,
   ChevronDown,
   CheckCircle2,
@@ -95,14 +94,6 @@ export default function FaucetHome() {
     }
   };
 
-  const handleConnectWalletPrompt = () => {
-    if (accountId) {
-      showToast(`Target wallet set: ${accountId}`, { type: "info" });
-    } else {
-      handlePaste();
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanAddress = accountId.trim().toLowerCase();
@@ -181,7 +172,7 @@ export default function FaucetHome() {
           </div>
         </div>
 
-        {/* Right Actions: How it Works & Connect Wallet */}
+        {/* Right Actions: How it Works */}
         <div className="flex items-center gap-3">
           <FaucetGuideModal
             usdcContractId={status.usdcContractId}
@@ -192,14 +183,6 @@ export default function FaucetHome() {
               </button>
             }
           />
-
-          <button
-            onClick={handleConnectWalletPrompt}
-            className="border border-[#00ec97] text-[#00ec97] hover:bg-[#00ec97]/10 transition-colors px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm"
-          >
-            <Wallet className="w-3.5 h-3.5" />
-            <span>{accountId ? `${accountId.slice(0, 10)}...` : "Connect Wallet"}</span>
-          </button>
         </div>
       </header>
 
@@ -248,11 +231,11 @@ export default function FaucetHome() {
                   </div>
                 </div>
 
-                {/* Token / Network Selector Dropdown */}
+                {/* Token Selector Dropdown */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <span className="block text-xs font-medium text-zinc-300">
-                      Select Network
+                      Select Token
                     </span>
                     <span className="w-1.5 h-1.5 rounded-full bg-[#00ec97]" />
                   </div>
@@ -262,9 +245,9 @@ export default function FaucetHome() {
                       onChange={(e) => setTokenChoice(e.target.value as "BOTH" | "USDC" | "EURE")}
                       className="w-full appearance-none bg-[#0c0e13] border border-[#222634] focus:border-[#00ec97] rounded-xl px-4 py-3.5 text-sm text-zinc-200 font-medium focus:outline-none transition-colors cursor-pointer"
                     >
-                      <option value="BOTH">Testnet — Both (500 USDC + 500 EURe)</option>
-                      <option value="USDC">Testnet — 500 Testnet USDC</option>
-                      <option value="EURE">Testnet — 500 Testnet EURe</option>
+                      <option value="BOTH">Both (500 USDC + 500 EURe)</option>
+                      <option value="USDC">USD Coin (500 USDC)</option>
+                      <option value="EURE">Euro Stablecoin (500 EURe)</option>
                     </select>
                     <div className="absolute right-4 top-4 pointer-events-none text-zinc-400">
                       <ChevronDown className="w-4 h-4" />
@@ -285,7 +268,7 @@ export default function FaucetHome() {
                     </>
                   ) : (
                     <span>
-                      Request {tokenChoice === "BOTH" ? "1,000" : "500"} Tokens
+                      Request {tokenChoice === "BOTH" ? "1,000 (USDC + EURe)" : tokenChoice === "USDC" ? "500 USDC" : "500 EURe"}
                     </span>
                   )}
                 </button>
