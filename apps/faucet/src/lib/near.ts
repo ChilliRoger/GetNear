@@ -51,7 +51,7 @@ export function getProvider(): JsonRpcProvider {
 export function getOperatorAccount(): Account {
   const provider = getProvider()
   const privateKey = getPrivateKey()
-  const keyPair = KeyPair.fromString(privateKey)
+  const keyPair = KeyPair.fromString(privateKey as `ed25519:${string}`)
   const signer = new KeyPairSigner(keyPair)
   return new Account(OPERATOR_ID, provider, signer)
 }

@@ -17,16 +17,16 @@ const ipCache = new Map<string, RateLimitRecord>()
 // Clean up stale entries every 15 minutes
 setInterval(() => {
   const now = Date.now()
-  for (const [key, record] of accountCache.entries()) {
+  accountCache.forEach((record, key) => {
     if (now - record.lastClaimTime > COOLDOWN_MS * 2) {
       accountCache.delete(key)
     }
-  }
-  for (const [key, record] of ipCache.entries()) {
+  })
+  ipCache.forEach((record, key) => {
     if (now - record.lastClaimTime > COOLDOWN_MS * 2) {
       ipCache.delete(key)
     }
-  }
+  })
 }, 15 * 60 * 1000).unref()
 
 export interface RateLimitCheck {
