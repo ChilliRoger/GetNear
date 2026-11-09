@@ -415,47 +415,6 @@ export default function FaucetHome() {
           </div>
         </div>
       </main>
-
-      {/* Bottom Status Bar Ticker */}
-      <footer className="w-full border-t border-[#1a1d26] py-3.5 px-4 sm:px-6">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-400">
-          {/* Ticker items */}
-          <div className="flex flex-wrap items-center gap-5 sm:gap-7">
-            {/* Status Online */}
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#00ec97] animate-pulse" />
-              <span>Status: <strong className="text-zinc-200 font-medium">Online</strong></span>
-            </div>
-
-            {/* Faucet Reserves */}
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#00ec97]" />
-              <span suppressHydrationWarning>
-                Faucet Balance: <strong className="text-zinc-200 font-mono font-medium">{status.usdcTotalSupply.toLocaleString("en-US")} USDC</strong>
-              </span>
-            </div>
-
-            {/* Network */}
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#00ec97]" />
-              <span>Network: <strong className="text-zinc-200 font-medium">NEAR Testnet</strong></span>
-            </div>
-
-            {/* Operator Account */}
-            <div className="hidden md:flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#00ec97]" />
-              <span>Operator: <strong className="text-zinc-200 font-mono font-normal">{status.operatorId}</strong></span>
-            </div>
-          </div>
-
-          {/* Right Decorative 4-Point Sparkle Star */}
-          <div className="hidden sm:block text-zinc-700">
-            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-              <path d="M12 2L14.2 9.8L22 12L14.2 14.2L12 22L9.8 14.2L2 12L9.8 9.8L12 2Z" />
-            </svg>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
