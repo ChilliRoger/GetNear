@@ -2,20 +2,18 @@
 
 import { useState, useEffect } from "react";
 import {
-  Coins,
-  Droplets,
   ExternalLink,
   Copy,
   Check,
-  ShieldCheck,
   RefreshCw,
   Wallet,
-  ArrowRight,
   Clipboard,
-  Activity,
+  ChevronDown,
+  CheckCircle2,
 } from "lucide-react";
 import { useToast } from "@/components/toast";
 import { FaucetGuideModal } from "@/components/faucet-guide-modal";
+import { NearEmblem } from "@/components/near-emblem";
 
 interface FaucetStatus {
   operatorId: string;
@@ -39,9 +37,10 @@ export default function FaucetHome() {
   const { showToast } = useToast();
 
   const [accountId, setAccountId] = useState("");
-  const [tokenChoice, setTokenChoice] = useState<"USDC" | "EURE" | "BOTH">("BOTH");
+  const [tokenChoice, setTokenChoice] = useState<"BOTH" | "USDC" | "EURE">("BOTH");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [showContracts, setShowContracts] = useState(false);
 
   const [status, setStatus] = useState<FaucetStatus>({
     operatorId: "chilliroger-operator.testnet",
@@ -93,6 +92,14 @@ export default function FaucetHome() {
       }
     } catch {
       showToast("Unable to read clipboard", { type: "error" });
+    }
+  };
+
+  const handleConnectWalletPrompt = () => {
+    if (accountId) {
+      showToast(`Target wallet set: ${accountId}`, { type: "info" });
+    } else {
+      handlePaste();
     }
   };
 
@@ -154,318 +161,339 @@ export default function FaucetHome() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-between p-4 sm:p-6 md:p-10 max-w-4xl mx-auto">
-      {/* Top Navigation */}
-      <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-zinc-800">
+    <div className="min-h-screen near-grid-bg text-white flex flex-col justify-between selection:bg-[#00ec97] selection:text-black">
+      {/* Top Navbar */}
+      <header className="w-full max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-4 flex items-center justify-between">
+        {/* Brand Logo & Name */}
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-emerald-950 border border-emerald-800 rounded-lg">
-            <Coins className="w-6 h-6 text-emerald-400" />
+          <div className="w-8 h-8 rounded-lg bg-[#00ec97] flex items-center justify-center p-1.5 shadow-sm">
+            <svg viewBox="0 0 24 24" fill="none" className="w-full h-full text-black stroke-current stroke-[2.5]">
+              <path d="M4 19V5l12 14V5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-zinc-100 tracking-tight">
-                NEAR Stablecoin Faucet
-              </h1>
-              <span className="px-2 py-0.5 text-[10px] font-mono font-semibold rounded bg-zinc-800 text-emerald-400 border border-zinc-700">
-                TESTNET
-              </span>
-            </div>
-            <p className="text-xs text-zinc-400">
-              Official NEP-141 Testnet Dispenser for USDC & EURe
-            </p>
-          </div>
+          <span className="text-base sm:text-lg font-bold tracking-tight text-white">
+            NEAR Faucet
+          </span>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Center Nav Links */}
+        <nav className="hidden md:flex items-center gap-8 text-xs font-medium text-zinc-400">
           <FaucetGuideModal
             usdcContractId={status.usdcContractId}
             eureContractId={status.eureContractId}
+            trigger={
+              <button className="text-zinc-300 hover:text-white transition-colors cursor-pointer">
+                How it Works
+              </button>
+            }
           />
-
-          <div className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded border border-zinc-800 bg-zinc-900 text-zinc-300">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-mono text-[11px]">RPC: Healthy</span>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Container */}
-      <main className="my-8 space-y-6">
-        {/* Main Dispenser Card */}
-        <div className="p-6 sm:p-8 rounded-xl border border-zinc-800 bg-zinc-900/60 shadow-xl space-y-6">
-          <div>
-            <h2 className="text-base font-semibold text-zinc-100 flex items-center gap-2">
-              <Droplets className="w-4 h-4 text-emerald-400" />
-              <span>Claim Testnet Stablecoins</span>
-            </h2>
-            <p className="text-xs text-zinc-400 mt-1">
-              Enter any NEAR testnet address. The faucet automatically funds your NEP-145 storage deposit and mints standard fungible tokens.
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Address Input */}
-            <div className="space-y-1.5">
-              <label htmlFor="near-account-input" className="block text-xs font-medium text-zinc-300">
-                NEAR Testnet Account ID
-              </label>
-              <div className="relative">
-                <input
-                  id="near-account-input"
-                  type="text"
-                  value={accountId}
-                  onChange={(e) => setAccountId(e.target.value.toLowerCase())}
-                  placeholder="your-wallet.testnet"
-                  className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-500 font-mono focus:outline-none focus:border-emerald-500 transition-colors"
-                  disabled={isSubmitting}
-                />
-                <button
-                  type="button"
-                  onClick={handlePaste}
-                  className="absolute right-2 top-2 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800 rounded flex items-center gap-1 transition-colors"
-                >
-                  <Clipboard className="w-3 h-3" />
-                  <span>Paste</span>
-                </button>
-              </div>
-              <p className="text-[11px] text-zinc-500">
-                Supports Meteor Wallet, Sender, Here Wallet, MyNearWallet, or any testnet account.
-              </p>
-            </div>
-
-            {/* Token Selector */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-zinc-300">
-                Select Token(s) to Receive
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setTokenChoice("BOTH")}
-                  className={`p-3 rounded-lg border text-left transition-colors ${
-                    tokenChoice === "BOTH"
-                      ? "border-emerald-500 bg-emerald-950/40 text-emerald-200"
-                      : "border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900"
-                  }`}
-                >
-                  <div className="font-semibold text-xs flex items-center justify-between">
-                    <span>Both (USDC + EURe)</span>
-                    <span className="text-[10px] uppercase font-mono px-1 rounded bg-zinc-800 text-emerald-400">
-                      Popular
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-zinc-400 mt-0.5">500 USDC + 500 EURe</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setTokenChoice("USDC")}
-                  className={`p-3 rounded-lg border text-left transition-colors ${
-                    tokenChoice === "USDC"
-                      ? "border-blue-500 bg-blue-950/40 text-blue-200"
-                      : "border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900"
-                  }`}
-                >
-                  <div className="font-semibold text-xs">USDC Only</div>
-                  <div className="text-[11px] text-zinc-400 mt-0.5">500 Testnet USDC</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setTokenChoice("EURE")}
-                  className={`p-3 rounded-lg border text-left transition-colors ${
-                    tokenChoice === "EURE"
-                      ? "border-emerald-500 bg-emerald-950/40 text-emerald-200"
-                      : "border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900"
-                  }`}
-                >
-                  <div className="font-semibold text-xs">EURe Only</div>
-                  <div className="text-[11px] text-zinc-400 mt-0.5">500 Testnet EURe</div>
-                </button>
-              </div>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isSubmitting || !accountId}
-              className="w-full py-3 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm"
-            >
-              {isSubmitting ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Broadcasting On-Chain Transactions...</span>
-                </>
-              ) : (
-                <>
-                  <Droplets className="w-4 h-4" />
-                  <span>
-                    Dispense {tokenChoice === "BOTH" ? "1,000" : "500"} Testnet Tokens
-                  </span>
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Success Result Box */}
-          {lastResult && (
-            <div className="p-4 rounded-lg border border-emerald-800 bg-emerald-950/30 space-y-3 animate-in fade-in duration-200">
-              <div className="flex items-center gap-2 text-emerald-400 font-semibold text-xs">
-                <Check className="w-4 h-4" />
-                <span>Successfully Dispensed to {lastResult.receiverId}</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                {lastResult.tokens.map((t) => (
-                  <div key={t.symbol} className="p-2.5 bg-zinc-950 border border-zinc-800 rounded">
-                    <div className="flex justify-between font-semibold text-zinc-200">
-                      <span>+{t.amount} {t.symbol}</span>
-                      <a
-                        href={t.explorerUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-emerald-400 hover:underline inline-flex items-center gap-1 font-mono text-[11px]"
-                      >
-                        Receipt <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
-                    </div>
-                    <div className="text-[11px] text-zinc-500 font-mono mt-1 truncate">
-                      Tx: {t.txHash.slice(0, 20)}...
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-1 border-t border-zinc-800/60">
-                <span>Updated Balances:</span>
-                <span className="font-mono text-zinc-200" suppressHydrationWarning>
-                  {lastResult.balances.usdc.toLocaleString("en-US")} USDC | {lastResult.balances.eure.toLocaleString("en-US")} EURe
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Token Contracts & Faucet Reserves Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          {/* USDC Box */}
-          <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/40 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-blue-500" />
-                <span className="font-semibold text-zinc-200">USD Coin (USDC)</span>
-              </div>
-              <span className="text-[11px] font-mono text-zinc-400">6 Decimals</span>
-            </div>
-            <div className="flex items-center justify-between p-2 rounded bg-zinc-950 border border-zinc-800 font-mono text-[11px] text-zinc-400">
-              <span className="truncate max-w-[240px]">{status.usdcContractId}</span>
-              <button
-                onClick={() => handleCopy(status.usdcContractId, "USDC Contract ID")}
-                className="hover:text-zinc-200 p-1"
-                title="Copy Address"
-              >
-                {copiedToken === "USDC Contract ID" ? (
-                  <Check className="w-3 h-3 text-emerald-400" />
-                ) : (
-                  <Copy className="w-3 h-3" />
-                )}
-              </button>
-            </div>
-            <div className="flex justify-between text-[11px] text-zinc-500 pt-1">
-              <span suppressHydrationWarning>Total Minted: {status.usdcTotalSupply.toLocaleString("en-US")} USDC</span>
-              <a
-                href={`https://testnet.nearblocks.io/address/${status.usdcContractId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1"
-              >
-                NEARBlocks <ExternalLink className="w-2.5 h-2.5" />
-              </a>
-            </div>
-          </div>
-
-          {/* EURe Box */}
-          <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/40 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="font-semibold text-zinc-200">Euro Stablecoin (EURe)</span>
-              </div>
-              <span className="text-[11px] font-mono text-zinc-400">6 Decimals</span>
-            </div>
-            <div className="flex items-center justify-between p-2 rounded bg-zinc-950 border border-zinc-800 font-mono text-[11px] text-zinc-400">
-              <span className="truncate max-w-[240px]">{status.eureContractId}</span>
-              <button
-                onClick={() => handleCopy(status.eureContractId, "EURe Contract ID")}
-                className="hover:text-zinc-200 p-1"
-                title="Copy Address"
-              >
-                {copiedToken === "EURe Contract ID" ? (
-                  <Check className="w-3 h-3 text-emerald-400" />
-                ) : (
-                  <Copy className="w-3 h-3" />
-                )}
-              </button>
-            </div>
-            <div className="flex justify-between text-[11px] text-zinc-500 pt-1">
-              <span suppressHydrationWarning>Total Minted: {status.eureTotalSupply.toLocaleString("en-US")} EURe</span>
-              <a
-                href={`https://testnet.nearblocks.io/address/${status.eureContractId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1"
-              >
-                NEARBlocks <ExternalLink className="w-2.5 h-2.5" />
-              </a>
-            </div>
-          </div>
-        </div>
-
-        {/* Banner Link to GetNear */}
-        <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-zinc-400">
-          <div className="flex items-center gap-2.5">
-            <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-            <span>
-              Claimed tokens can be swapped with automated TWAP scheduling on <strong className="text-zinc-200">GetNear Treasury FX Agent</strong>.
-            </span>
-          </div>
-          <a
-            href="https://github.com/ChilliRoger/GetNear"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 text-emerald-400 hover:underline font-medium text-xs whitespace-nowrap"
-          >
-            <span>Explore GetNear Platform</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </a>
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="pt-6 border-t border-zinc-800 text-xs text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
-        <div>
-          <span>NEAR Testnet Stablecoin Faucet &bull; Built with standard NEP-141 / NEP-145 protocols</span>
-        </div>
-        <div className="flex items-center gap-4 font-mono text-[11px]">
-          <a
-            href="https://testnet.nearblocks.io"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-zinc-300 transition-colors"
-          >
-            NEARBlocks Explorer
-          </a>
           <a
             href="https://docs.near.org"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-zinc-300 transition-colors"
+            className="hover:text-white transition-colors"
           >
-            NEAR Docs
+            Docs
           </a>
+          <a
+            href="https://github.com/ChilliRoger/GetNear"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-white transition-colors"
+          >
+            Support
+          </a>
+        </nav>
+
+        {/* Right CTA: Connect Wallet / Guide trigger */}
+        <div className="flex items-center gap-3">
+          <div className="md:hidden">
+            <FaucetGuideModal
+              usdcContractId={status.usdcContractId}
+              eureContractId={status.eureContractId}
+            />
+          </div>
+
+          <button
+            onClick={handleConnectWalletPrompt}
+            className="border border-[#00ec97] text-[#00ec97] hover:bg-[#00ec97]/10 transition-colors px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm"
+          >
+            <Wallet className="w-3.5 h-3.5" />
+            <span>{accountId ? `${accountId.slice(0, 10)}...` : "Connect Wallet"}</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Hero Section: Two-Column Split */}
+      <main className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-6 md:py-12 flex-1 flex items-center">
+        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+          {/* Left Column: Floating Faucet Card */}
+          <div className="lg:col-span-7">
+            <div className="bg-[#13151b] border border-[#222634] rounded-2xl p-6 sm:p-8 md:p-9 shadow-2xl space-y-6">
+              {/* Card Header */}
+              <div>
+                <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+                  NEAR Faucet
+                </h1>
+                <p className="text-xs sm:text-sm text-zinc-400 mt-2 leading-relaxed">
+                  Get free testnet USDC &amp; EURe to build and test your dApps.
+                </p>
+              </div>
+
+              {/* Faucet Form */}
+              <form onSubmit={handleSubmit} className="space-y-5">
+                {/* Account ID Input */}
+                <div className="space-y-2">
+                  <label htmlFor="account-address" className="block text-xs font-medium text-zinc-300">
+                    Enter your Account ID or Address
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="account-address"
+                      type="text"
+                      value={accountId}
+                      onChange={(e) => setAccountId(e.target.value.toLowerCase())}
+                      placeholder="e.g., wallet.testnet or 0x..."
+                      className="w-full bg-[#0c0e13] border border-[#222634] focus:border-[#00ec97] rounded-xl px-4 py-3.5 text-sm text-zinc-100 placeholder-[#525866] font-mono focus:outline-none transition-colors"
+                      disabled={isSubmitting}
+                    />
+                    <button
+                      type="button"
+                      onClick={handlePaste}
+                      className="absolute right-2.5 top-2.5 px-2.5 py-1 text-xs text-zinc-400 hover:text-white bg-[#1a1d26] border border-[#262a38] rounded-md flex items-center gap-1 transition-colors cursor-pointer"
+                      title="Paste from clipboard"
+                    >
+                      <Clipboard className="w-3 h-3" />
+                      <span>Paste</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Token / Network Selector Dropdown */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="block text-xs font-medium text-zinc-300">
+                      Select Network
+                    </span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#00ec97]" />
+                  </div>
+                  <div className="relative">
+                    <select
+                      value={tokenChoice}
+                      onChange={(e) => setTokenChoice(e.target.value as "BOTH" | "USDC" | "EURE")}
+                      className="w-full appearance-none bg-[#0c0e13] border border-[#222634] focus:border-[#00ec97] rounded-xl px-4 py-3.5 text-sm text-zinc-200 font-medium focus:outline-none transition-colors cursor-pointer"
+                    >
+                      <option value="BOTH">Testnet — Both (500 USDC + 500 EURe)</option>
+                      <option value="USDC">Testnet — 500 Testnet USDC</option>
+                      <option value="EURE">Testnet — 500 Testnet EURe</option>
+                    </select>
+                    <div className="absolute right-4 top-4 pointer-events-none text-zinc-400">
+                      <ChevronDown className="w-4 h-4" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Main Bright Green CTA Button */}
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !accountId}
+                  className="w-full py-4 px-4 rounded-xl bg-[#00ec97] hover:bg-[#00c980] disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-lg shadow-[#00ec97]/10 cursor-pointer"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-black" />
+                      <span>Broadcasting On-Chain Transactions...</span>
+                    </>
+                  ) : (
+                    <span>
+                      Request {tokenChoice === "BOTH" ? "1,000" : "500"} Tokens
+                    </span>
+                  )}
+                </button>
+
+                {/* Cooldown Note */}
+                <p className="text-[11px] text-zinc-500 text-center">
+                  Note: Limited to one request per address every 10 minutes.
+                </p>
+              </form>
+
+              {/* On-Chain Success Receipt Box */}
+              {lastResult && (
+                <div className="p-4 rounded-xl border border-[#00ec97]/30 bg-[#0c1712] space-y-3 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2 text-[#00ec97] font-semibold text-xs">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Successfully Dispensed to {lastResult.receiverId}</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                    {lastResult.tokens.map((t) => (
+                      <div key={t.symbol} className="p-2.5 bg-[#090b0e] border border-[#1e2330] rounded-lg">
+                        <div className="flex justify-between font-semibold text-zinc-200">
+                          <span>+{t.amount} {t.symbol}</span>
+                          <a
+                            href={t.explorerUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#00ec97] hover:underline inline-flex items-center gap-1 font-mono text-[11px]"
+                          >
+                            Receipt <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        </div>
+                        <div className="text-[11px] text-zinc-500 font-mono mt-1 truncate">
+                          Tx: {t.txHash.slice(0, 18)}...
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-2 border-t border-[#1c2420]">
+                    <span>Updated Balances:</span>
+                    <span className="font-mono text-zinc-200" suppressHydrationWarning>
+                      {lastResult.balances.usdc.toLocaleString("en-US")} USDC | {lastResult.balances.eure.toLocaleString("en-US")} EURe
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Collapsible Token Contract IDs for Wallet Import */}
+              <div className="pt-2 border-t border-[#1d222e]">
+                <button
+                  type="button"
+                  onClick={() => setShowContracts(!showContracts)}
+                  className="flex items-center justify-between w-full text-xs text-zinc-400 hover:text-zinc-200 transition-colors py-1 cursor-pointer"
+                >
+                  <span className="font-medium">NEP-141 Token Contracts &amp; Explorer</span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                      showContracts ? "rotate-180 text-[#00ec97]" : ""
+                    }`}
+                  />
+                </button>
+
+                {showContracts && (
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs animate-in fade-in duration-150">
+                    {/* USDC Mini Card */}
+                    <div className="p-3 bg-[#0c0e13] border border-[#222634] rounded-lg space-y-1.5">
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="font-semibold text-zinc-200">USD Coin (USDC)</span>
+                        <span className="font-mono text-zinc-500">6 decimals</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 bg-[#13151b] p-1.5 rounded">
+                        <span className="truncate max-w-[150px]">{status.usdcContractId}</span>
+                        <button
+                          onClick={() => handleCopy(status.usdcContractId, "USDC Contract ID")}
+                          className="hover:text-white p-0.5 cursor-pointer"
+                          title="Copy Address"
+                        >
+                          {copiedToken === "USDC Contract ID" ? (
+                            <Check className="w-3 h-3 text-[#00ec97]" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-zinc-500 pt-0.5">
+                        <span suppressHydrationWarning>
+                          Supply: {status.usdcTotalSupply.toLocaleString("en-US")}
+                        </span>
+                        <a
+                          href={`https://testnet.nearblocks.io/address/${status.usdcContractId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[#00ec97] hover:underline inline-flex items-center gap-0.5"
+                        >
+                          NEARBlocks <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
+                    </div>
+
+                    {/* EURe Mini Card */}
+                    <div className="p-3 bg-[#0c0e13] border border-[#222634] rounded-lg space-y-1.5">
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="font-semibold text-zinc-200">Euro Stablecoin (EURe)</span>
+                        <span className="font-mono text-zinc-500">6 decimals</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 bg-[#13151b] p-1.5 rounded">
+                        <span className="truncate max-w-[150px]">{status.eureContractId}</span>
+                        <button
+                          onClick={() => handleCopy(status.eureContractId, "EURe Contract ID")}
+                          className="hover:text-white p-0.5 cursor-pointer"
+                          title="Copy Address"
+                        >
+                          {copiedToken === "EURe Contract ID" ? (
+                            <Check className="w-3 h-3 text-[#00ec97]" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-zinc-500 pt-0.5">
+                        <span suppressHydrationWarning>
+                          Supply: {status.eureTotalSupply.toLocaleString("en-US")}
+                        </span>
+                        <a
+                          href={`https://testnet.nearblocks.io/address/${status.eureContractId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[#00ec97] hover:underline inline-flex items-center gap-0.5"
+                        >
+                          NEARBlocks <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: 3D Geometric NEAR Emblem */}
+          <div className="lg:col-span-5 hidden lg:flex items-center justify-center pl-4">
+            <NearEmblem className="w-full max-w-[380px]" />
+          </div>
+        </div>
+      </main>
+
+      {/* Bottom Status Bar Ticker */}
+      <footer className="w-full border-t border-[#1a1d26] py-3.5 px-4 sm:px-6">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-400">
+          {/* Ticker items */}
+          <div className="flex flex-wrap items-center gap-5 sm:gap-7">
+            {/* Status Online */}
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#00ec97] animate-pulse" />
+              <span>Status: <strong className="text-zinc-200 font-medium">Online</strong></span>
+            </div>
+
+            {/* Faucet Reserves */}
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#00ec97]" />
+              <span suppressHydrationWarning>
+                Faucet Balance: <strong className="text-zinc-200 font-mono font-medium">{status.usdcTotalSupply.toLocaleString("en-US")} USDC</strong>
+              </span>
+            </div>
+
+            {/* Network */}
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#00ec97]" />
+              <span>Network: <strong className="text-zinc-200 font-medium">NEAR Testnet</strong></span>
+            </div>
+
+            {/* Latest Claim */}
+            <div className="hidden md:flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#00ec97]" />
+              <span>Latest Claim: <strong className="text-zinc-200 font-medium">{lastResult ? "Just now" : "2s ago"}</strong></span>
+            </div>
+          </div>
+
+          {/* Right Decorative 4-Point Sparkle Star */}
+          <div className="hidden sm:block text-zinc-700">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+              <path d="M12 2L14.2 9.8L22 12L14.2 14.2L12 22L9.8 14.2L2 12L9.8 9.8L12 2Z" />
+            </svg>
+          </div>
         </div>
       </footer>
     </div>
   );
 }
-

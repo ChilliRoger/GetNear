@@ -16,11 +16,13 @@ import {
 interface FaucetGuideModalProps {
   usdcContractId: string;
   eureContractId: string;
+  trigger?: React.ReactNode;
 }
 
 export function FaucetGuideModal({
   usdcContractId,
   eureContractId,
+  trigger,
 }: FaucetGuideModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
@@ -33,13 +35,19 @@ export function FaucetGuideModal({
 
   return (
     <>
-      <button
-        onClick={() => setIsOpen(true)}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 transition-colors"
-      >
-        <HelpCircle className="w-3.5 h-3.5 text-emerald-400" />
-        <span>How to Use & Wallet Setup</span>
-      </button>
+      {trigger ? (
+        <div onClick={() => setIsOpen(true)} className="cursor-pointer inline-flex">
+          {trigger}
+        </div>
+      ) : (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 transition-colors"
+        >
+          <HelpCircle className="w-3.5 h-3.5 text-emerald-400" />
+          <span>How to Use & Wallet Setup</span>
+        </button>
+      )}
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
