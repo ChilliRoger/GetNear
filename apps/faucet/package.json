@@ -6,7 +6,8 @@
     "dev": "next dev -p 3200",
     "build": "next build",
     "start": "next start -p 3200",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "tsx tests/near.test.ts"
   },
   "dependencies": {
     "lucide-react": "^1.70.0",
