@@ -17,19 +17,20 @@
 
 **What it is NOT (never claim these).**
 
-- Real swaps. NEAR Intents has no testnet, so all fills are simulated and labeled.
-- Mainnet use, Confidential Intents, or any privacy claim.
+- Mainnet cross-chain bridge execution. NEAR Intents has no testnet market-maker network, so market quotes are read via 1Click `dry: true`. Settlement on testnet is executed using real on-chain NEP-141 token contracts (`usdc.chilliroger-operator.testnet` & `eure.chilliroger-operator.testnet`) with genuine `ft_transfer` receipts directly to user wallets.
+- Mainnet funds, Confidential Intents, or any privacy claim.
 - Savings, alpha, or better-than-bank rates.
 - Oracle-verified prices. The price deviation is reported by the agent and is not verified on-chain.
 - Trezu integration. The design is compatible with Sputnik-based treasuries; claim Trezu only after testing it.
 
 **The 60–90 second demo.**
 
-1. Open the dashboard: banner reads TESTNET · SIMULATED FILLS.
-2. Create a small order. It is Active at once. The agent fills chunks when the timing score is high and logs WAIT decisions with reasons.
-3. Create a large order. It is Pending. A DAO proposal appears. Two of three council members vote. The order becomes Active.
-4. Show that the agent's key is restricted to one method, and show an over-limit call reverting.
-5. Open the explorer links for each transaction.
+1. Open the dashboard: connects with any NEAR wallet (Meteor, Sender, Here, MyNearWallet).
+2. Claim 500 Testnet USDC via the 1-click faucet; import tokens into Meteor Wallet.
+3. Create a small order ($20 USDC). It is Active at once. The agent evaluates live 1Click and ECB market rates, executes chunks, and transfers real EURe directly into the user's wallet.
+4. Create a large order ($250 USDC). It is Pending. A Sputnik DAO proposal appears. Two of three council members vote. The order becomes Active.
+5. Show that the agent's key is restricted strictly to `execute_chunk`, and show an over-limit call reverting.
+6. Open the explorer links on NEARBlocks for each transaction (order creation, DAO votes, chunk executions, and NEP-141 token transfers).
 
 **Tracks.** Primary: Real-World Money and Autonomous Business. Secondary: AI Security & Defense (contract limits, restricted key, multi-signer approval). Privacy is not claimed.
 
