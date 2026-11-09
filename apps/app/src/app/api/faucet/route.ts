@@ -49,8 +49,10 @@ export async function POST(req: NextRequest) {
       txHash,
       explorerUrl: txHash ? `https://testnet.nearblocks.io/txns/${txHash}` : undefined,
     })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(`[API /faucet Exception]:`, err)
-    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 })
+    const errorMsg = err instanceof Error ? err.message : 'Internal server error'
+    return NextResponse.json({ error: errorMsg }, { status: 500 })
   }
 }
+

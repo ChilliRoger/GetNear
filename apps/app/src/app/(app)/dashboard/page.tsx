@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/card";
 import { LiveQuoteCard } from "@/components/live-quote-card";
+import { TokenBalanceCard } from "@/components/token-balance-card";
 import { useToast } from "@/components/toast-provider";
 import { useNearWallet } from "@/lib/near-wallet";
 import { explorerAccountUrl } from "@getnear/shared";
@@ -52,6 +53,8 @@ interface AgentFill {
   deviation_bps: number;
   tx_hash: string | null;
   explorer_url: string | null;
+  ft_transfer_tx_hash?: string | null;
+  ft_transfer_url?: string | null;
   is_simulated: boolean;
   timestamp: number;
 }
@@ -85,6 +88,13 @@ export default function DashboardPage() {
   const [decisions, setDecisions] = useState<AgentDecision[]>([]);
   const [contractId, setContractId] = useState("fx-budget.chilliroger-operator.testnet");
   const [daoId, setDaoId] = useState("chilliroger-dao.sputnik-v2.testnet");
+  const [tokens, setTokens] = useState({
+    usdcId: "usdc.chilliroger-operator.testnet",
+    eureId: "eure.chilliroger-operator.testnet",
+    userUsdc: 0,
+    userEure: 0,
+    vaultEure: 0,
+  });
 
   // Order intake quick inputs
   const [orderAmount, setOrderAmount] = useState("50");
@@ -97,9 +107,13 @@ export default function DashboardPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const res = await fetch("/api/near");
+      const url = accountId ? `/api/near?account=${encodeURIComponent(accountId)}` : "/api/near";
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
+        if (data.tokens) {
+          setTokens(data.tokens);
+        }
         if (data.contract?.orders) {
           setOrders(data.contract.orders);
         }
@@ -125,7 +139,7 @@ export default function DashboardPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [accountId]);
 
   useEffect(() => {
     loadData();
@@ -343,6 +357,17 @@ export default function DashboardPage() {
 
       {/* 2. Rate Discovery & Timing Score Card */}
       <LiveQuoteCard />
+
+      {/* 2b. Testnet Stablecoin Balances & Faucet */}
+      <TokenBalanceCard
+        accountId={accountId}
+        userUsdc={tokens.userUsdc}
+        userEure={tokens.userEure}
+        vaultEure={tokens.vaultEure}
+        usdcId={tokens.usdcId}
+        eureId={tokens.eureId}
+        onRefresh={loadData}
+      />
 
       {/* 3. Interactive Order Intake Card */}
       <Card title="Create FX Goal (NEAR Testnet)" subtitle="Auto-executes small orders, requires DAO 2-of-3 approval above $100">
@@ -883,26 +908,45 @@ export default function DashboardPage() {
                   <div>
                     <div className="font-semibold text-foreground flex items-center gap-1.5">
                       <span>Chunk #{f.chunk_index} for Order #{f.order_id}</span>
-                      <span className="rounded bg-amber-500/15 px-1 py-0.2 text-[9px] font-bold text-amber-400 uppercase">
-                        Simulated
-                      </span>
+                      {f.is_simulated ? (
+                        <span className="rounded bg-amber-500/15 px-1 py-0.2 text-[9px] font-bold text-amber-400 uppercase">
+                          Simulated
+                        </span>
+                      ) : (
+                        <span className="rounded bg-emerald-500/15 px-1 py-0.2 text-[9px] font-bold text-emerald-400 uppercase">
+                          On-Chain Settlement
+                        </span>
+                      )}
                     </div>
                     <div className="text-[10px] text-muted font-mono mt-0.5">
                       {inAmt} USDC &rarr; ~{outAmt} EURe ({f.deviation_bps} bps)
                     </div>
                   </div>
 
-                  {f.explorer_url && (
-                    <a
-                      href={f.explorer_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1 text-[11px] font-mono text-accent-blue hover:underline"
-                    >
-                      <span>NEARBlocks</span>
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {f.ft_transfer_url && (
+                      <a
+                        href={f.ft_transfer_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1 text-[11px] font-mono text-emerald-400 hover:underline"
+                      >
+                        <span>EURe Transfer</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                    {f.explorer_url && (
+                      <a
+                        href={f.explorer_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1 text-[11px] font-mono text-accent-blue hover:underline"
+                      >
+                        <span>execute_chunk</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
                 </div>
               );
             })}

@@ -275,10 +275,11 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
 
       let txHash = "";
       if (outcome && typeof outcome === "object") {
-        if ("transaction" in outcome && outcome.transaction?.hash) {
-          txHash = outcome.transaction.hash;
-        } else if ("transaction_outcome" in outcome && (outcome as any).transaction_outcome?.id) {
-          txHash = (outcome as any).transaction_outcome.id;
+        const obj = outcome as unknown as Record<string, unknown>;
+        if ("transaction" in obj && typeof obj.transaction === "object" && obj.transaction && "hash" in obj.transaction) {
+          txHash = String((obj.transaction as Record<string, unknown>).hash || "");
+        } else if ("transaction_outcome" in obj && typeof obj.transaction_outcome === "object" && obj.transaction_outcome && "id" in obj.transaction_outcome) {
+          txHash = String((obj.transaction_outcome as Record<string, unknown>).id || "");
         }
       }
 

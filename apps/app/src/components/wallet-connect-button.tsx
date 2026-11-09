@@ -9,7 +9,6 @@ import {
   ChevronDown,
   Wallet,
   Shield,
-  Layers,
   LogOut,
   RefreshCw,
 } from "lucide-react";

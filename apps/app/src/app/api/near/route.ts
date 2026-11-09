@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { NearClient } from '@getnear/near-client'
 import Database from 'better-sqlite3'
 import * as path from 'node:path'
@@ -19,6 +19,8 @@ const nearClient = new NearClient({
 const OPERATOR = process.env.OPERATOR_ACCOUNT_ID || 'chilliroger-operator.testnet'
 const FX_BUDGET_ID = process.env.FX_BUDGET_CONTRACT_ID || `fx-budget.${OPERATOR}`
 const DAO_ID = process.env.SPUTNIK_DAO_ACCOUNT_ID || 'chilliroger-dao.sputnik-v2.testnet'
+const USDC_ID = process.env.USDC_CONTRACT_ID || `usdc.${OPERATOR}`
+const EURE_ID = process.env.EURE_CONTRACT_ID || `eure.${OPERATOR}`
 
 // SQLite connection for agent fills and decisions
 function getAgentDb() {
@@ -34,13 +36,19 @@ function getAgentDb() {
   return null
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const [ordersRes, limitsRes, isPausedRes, proposalsRes] = await Promise.allSettled([
+    const { searchParams } = new URL(req.url)
+    const userAccount = searchParams.get('account')?.trim()
+
+    const [ordersRes, limitsRes, isPausedRes, proposalsRes, vaultEureRes, userUsdcRes, userEureRes] = await Promise.allSettled([
       nearClient.callView(FX_BUDGET_ID, 'list_orders', { from_index: 0, limit: 50 }),
       nearClient.callView(FX_BUDGET_ID, 'get_limits', {}),
       nearClient.callView(FX_BUDGET_ID, 'is_paused', {}),
       nearClient.callView(DAO_ID, 'get_proposals', { from_index: 0, limit: 50 }),
+      nearClient.callView<string>(EURE_ID, 'ft_balance_of', { account_id: FX_BUDGET_ID }),
+      userAccount ? nearClient.callView<string>(USDC_ID, 'ft_balance_of', { account_id: userAccount }) : Promise.resolve('0'),
+      userAccount ? nearClient.callView<string>(EURE_ID, 'ft_balance_of', { account_id: userAccount }) : Promise.resolve('0'),
     ])
 
     const orders = ordersRes.status === 'fulfilled' ? ordersRes.value : []
@@ -52,6 +60,9 @@ export async function GET() {
     }
     const isPaused = isPausedRes.status === 'fulfilled' ? isPausedRes.value : false
     const proposals = proposalsRes.status === 'fulfilled' ? proposalsRes.value : []
+    const vaultEure = vaultEureRes.status === 'fulfilled' ? (Number(vaultEureRes.value || '0') / 1e6) : 0
+    const userUsdc = userUsdcRes.status === 'fulfilled' ? (Number(userUsdcRes.value || '0') / 1e6) : 0
+    const userEure = userEureRes.status === 'fulfilled' ? (Number(userEureRes.value || '0') / 1e6) : 0
 
     // Read agent fills and decisions
     let fills: Record<string, unknown>[] = []
@@ -80,6 +91,13 @@ export async function GET() {
           'chilliroger-council2.testnet',
           'chilliroger-council3.testnet',
         ],
+      },
+      tokens: {
+        usdcId: USDC_ID,
+        eureId: EURE_ID,
+        userUsdc,
+        userEure,
+        vaultEure,
       },
       contract: {
         id: FX_BUDGET_ID,
