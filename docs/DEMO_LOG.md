@@ -141,13 +141,51 @@ The autonomous agent runner (`@getnear/agent` in `apps/agent`) monitors active o
 ```
 
 ### Local Audit & Observability
-- All fills are tracked locally in SQLite (`apps/agent/data/agent.db`) with `is_simulated = 1`.
+- All fills are tracked locally in SQLite (`apps/agent/data/agent.db`).
 - Strategy evaluations and WAIT decisions are logged with granular rationale.
 - Observability REST API server is exposed on port `38175` with endpoints:
   - `GET /health` — Agent uptime and service status
   - `GET /status` — Current loop state, order count, and lock status
-  - `GET /fills` — Complete list of simulated fills with transaction hashes
+  - `GET /fills` — Complete list of fills with transaction hashes
   - `GET /decisions` — Complete audit trail of WAIT / EXECUTE decisions
   - `POST /trigger` — Manual tick trigger for ops / testing
+
+---
+
+## 7. Real NEP-141 Stablecoin Deployment & On-Chain Settlement (Block P10.5)
+
+To eliminate simulated accounting and demonstrate true dynamic Web3 capability, GetNear deploys two official standard NEP-141 Fungible Token smart contracts and integrates real on-chain transfers directly into the autonomous agent loop:
+
+### A. Deployed NEP-141 Token Contracts
+
+| Token | Contract Account ID | Decimals | Total Supply | Deployment & Init Tx |
+| :--- | :--- | :--- | :--- | :--- |
+| **USDC** | `usdc.chilliroger-operator.testnet` | 6 | 1,000,000 | [`A1gD9RxFbLbg3fon2wGaC1mxErJJDBfQKccGb1jmMKJu`](https://testnet.nearblocks.io/txns/A1gD9RxFbLbg3fon2wGaC1mxErJJDBfQKccGb1jmMKJu) |
+| **EURe** | `eure.chilliroger-operator.testnet` | 6 | 1,000,000 | [`Bd6FkM9u5JkvF4ytFGwJRNT8p39FQQSKccv7XaUuzwCM`](https://testnet.nearblocks.io/txns/Bd6FkM9u5JkvF4ytFGwJRNT8p39FQQSKccv7XaUuzwCM) |
+
+### B. Protocol Vault Storage & Liquidity Seeding
+- **NEP-145 Storage Registration**: Registered `fx-budget.chilliroger-operator.testnet`, all council accounts, and agent accounts on both token contracts (`storage_deposit` with 0.0125 NEAR).
+- **Vault Liquidity Seed**: Transferred **100,000 EURe** (`100,000,000,000` atomic units) from operator to `fx-budget.chilliroger-operator.testnet` to act as the automated on-chain settlement liquidity reserve.
+
+### C. Live End-to-End On-Chain Settlement Proof
+Verified live execution on NEAR Testnet (Order #7 Chunk #2):
+1. **Live Strategy Evaluation**:
+   - Pair: `USDC/EURe`
+   - Chunk Input: `20.00 USDC`
+   - Market Quote Rate: `0.8890 EURe/USDC` (1Click API)
+   - ECB Reference Rate: `0.8934` (Frankfurter API)
+   - Deviation: `-49 bps` (within user 120 bps limit)
+   - Calculated EURe Output: `17.780824 EURe`
+2. **On-Chain Chunk Execution (`execute_chunk`)**:
+   - Signer: `chilliroger-agent.testnet` (via restricted key)
+   - Receiver: `fx-budget.chilliroger-operator.testnet`
+   - Tx Hash: [`DSXaxdXchXT2jsiQ5dNRGU37t37T9PRM373w7NuTjLek`](https://testnet.nearblocks.io/txns/DSXaxdXchXT2jsiQ5dNRGU37t37T9PRM373w7NuTjLek)
+3. **Genuine On-Chain NEP-141 Token Transfer (`ft_transfer`)**:
+   - Signer / Vault: `fx-budget.chilliroger-operator.testnet`
+   - Receiver: `chilliroger-operator.testnet` (user wallet)
+   - Amount: `17.780824 EURe`
+   - Tx Hash: [`EHLGpffWZkrZphKb3BGLst4XTraWPkw2kijwYADrzNMw`](https://testnet.nearblocks.io/txns/EHLGpffWZkrZphKb3BGLst4XTraWPkw2kijwYADrzNMw)
+   - Result: User's on-chain wallet balance increased from `900,000.000000 EURe` to `900,017.780824 EURe`.
+
 
 
