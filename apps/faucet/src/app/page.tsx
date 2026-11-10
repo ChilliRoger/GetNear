@@ -38,10 +38,14 @@ export default function FaucetHome() {
 
   const [accountId, setAccountId] = useState("");
   const [tokenChoice, setTokenChoice] = useState<"USDC" | "EURE">("USDC");
+  const [amount, setAmount] = useState<string>("500");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [showContracts, setShowContracts] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState<number | null>(null);
+
+  const numAmount = Number(amount);
+  const isAmountValid = !isNaN(numAmount) && numAmount >= 1 && numAmount <= 500 && Number.isInteger(numAmount);
 
   const formatCooldown = (seconds: number): string => {
     if (seconds <= 0) return "0s";
@@ -180,6 +184,14 @@ export default function FaucetHome() {
       return;
     }
 
+    if (!isAmountValid) {
+      showToast("Invalid Token Amount", {
+        type: "error",
+        description: "Please specify an integer amount between 1 and 500 tokens.",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     setLastResult(null);
 
@@ -190,7 +202,7 @@ export default function FaucetHome() {
         body: JSON.stringify({
           accountId: cleanAddress,
           token: tokenChoice,
-          amount: 500,
+          amount: numAmount,
         }),
       });
 
@@ -335,13 +347,76 @@ export default function FaucetHome() {
                       onChange={(e) => setTokenChoice(e.target.value as "USDC" | "EURE")}
                       className="w-full appearance-none bg-[#0c0e13] border border-[#222634] focus:border-[#00ec97] rounded-xl px-4 py-3.5 text-sm text-zinc-200 font-medium focus:outline-none transition-colors cursor-pointer"
                     >
-                      <option value="USDC">USD Coin (500 USDC)</option>
-                      <option value="EURE">Euro Stablecoin (500 EURe)</option>
+                      <option value="USDC">USD Coin (USDC)</option>
+                      <option value="EURE">Euro Stablecoin (EURe)</option>
                     </select>
                     <div className="absolute right-4 top-4 pointer-events-none text-zinc-400">
                       <ChevronDown className="w-4 h-4" />
                     </div>
                   </div>
+                </div>
+
+                {/* Token Amount Input */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="token-amount" className="block text-xs font-medium text-zinc-300">
+                        Token Amount
+                      </label>
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#00ec97]" />
+                    </div>
+                    <span className="text-[11px] text-zinc-400 font-mono">
+                      Max: 500 {tokenChoice}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      id="token-amount"
+                      type="number"
+                      min="1"
+                      max="500"
+                      step="1"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="e.g., 500"
+                      className="w-full bg-[#0c0e13] border border-[#222634] focus:border-[#00ec97] rounded-xl px-4 py-3.5 pr-20 text-sm text-zinc-100 placeholder-[#525866] font-mono focus:outline-none transition-colors"
+                      disabled={isSubmitting}
+                    />
+                    <div className="absolute right-3 top-2.5 flex items-center px-2.5 py-1 rounded bg-[#1a1d26] border border-[#262a38] text-xs font-mono font-semibold text-zinc-300 pointer-events-none">
+                      {tokenChoice}
+                    </div>
+                  </div>
+
+                  {/* Preset Amount Pills */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Presets:</span>
+                    {[50, 100, 250, 500].map((preset) => {
+                      const isActive = Number(amount) === preset;
+                      return (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setAmount(preset.toString())}
+                          className={`px-2.5 py-1 text-xs rounded-lg font-mono transition-colors border cursor-pointer ${
+                            isActive
+                              ? "bg-[#00ec97]/15 border-[#00ec97] text-[#00ec97] font-semibold"
+                              : "bg-[#0e1117] border-[#222634] text-zinc-400 hover:text-zinc-200 hover:border-zinc-700"
+                          }`}
+                        >
+                          {preset === 500 ? "500 (Max)" : preset}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Inline Validation Error Message */}
+                  {amount !== "" && !isAmountValid && (
+                    <p className="text-[11px] text-rose-400 font-medium">
+                      {numAmount > 500
+                        ? `Maximum claim limit is 500 ${tokenChoice} per request.`
+                        : `Please enter an integer between 1 and 500.`}
+                    </p>
+                  )}
                 </div>
 
                 {/* Active Rate Limit Cooldown Warning Box */}
@@ -365,7 +440,12 @@ export default function FaucetHome() {
                 {/* Main Bright Green CTA Button */}
                 <button
                   type="submit"
-                  disabled={isSubmitting || !accountId || (cooldownSeconds !== null && cooldownSeconds > 0)}
+                  disabled={
+                    isSubmitting ||
+                    !accountId ||
+                    !isAmountValid ||
+                    (cooldownSeconds !== null && cooldownSeconds > 0)
+                  }
                   className="w-full py-4 px-4 rounded-xl bg-[#00ec97] hover:bg-[#00c980] disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-lg shadow-[#00ec97]/10 cursor-pointer"
                 >
                   {isSubmitting ? (
@@ -380,7 +460,7 @@ export default function FaucetHome() {
                     </span>
                   ) : (
                     <span>
-                      Request 500 {tokenChoice}
+                      Request {isAmountValid ? numAmount : 500} {tokenChoice}
                     </span>
                   )}
                 </button>

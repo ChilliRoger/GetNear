@@ -11,8 +11,17 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const accountId = body.accountId?.trim().toLowerCase()
     const token = (body.token || 'USDC').toUpperCase()
-    // Non-tamperable fixed faucet quota
-    const amount = 500
+    
+    // User-specified amount (between 1 and 500)
+    const rawAmount = Number(body.amount)
+    const amount = isNaN(rawAmount) ? 500 : Math.floor(rawAmount)
+
+    if (amount < 1 || amount > 500) {
+      return NextResponse.json(
+        { error: 'Invalid amount. You can request between 1 and 500 tokens per claim.' },
+        { status: 400 },
+      )
+    }
 
     // 1. Validate Account ID format
     if (!accountId || !accountId.endsWith('.testnet')) {

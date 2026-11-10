@@ -22,6 +22,8 @@ export const RPC_URL = process.env.NEAR_RPC_URL || 'https://rpc.testnet.near.org
 
 // Security Guardrails
 export const DISPENSE_AMOUNT_PER_TOKEN = 500
+export const MIN_DISPENSE_AMOUNT = 1
+export const MAX_DISPENSE_AMOUNT = 500
 export const MAX_HOLDING_BALANCE_CAP = 2500
 
 // 0.0125 NEAR deposit for NEP-145 storage registration
@@ -153,8 +155,12 @@ export async function dispenseTokens(params: {
   amount?: number
 }): Promise<DispenseResult> {
   const { receiverId, token } = params
-  // Strict non-negotiable quota per token
-  const defaultAmount = DISPENSE_AMOUNT_PER_TOKEN
+  const rawAmount = Number(params.amount)
+  const dispenseAmount = isNaN(rawAmount) ? DISPENSE_AMOUNT_PER_TOKEN : Math.floor(rawAmount)
+
+  if (dispenseAmount < MIN_DISPENSE_AMOUNT || dispenseAmount > MAX_DISPENSE_AMOUNT) {
+    throw new Error(`Invalid amount: must be between ${MIN_DISPENSE_AMOUNT} and ${MAX_DISPENSE_AMOUNT} tokens.`)
+  }
 
   if (!receiverId || !receiverId.endsWith('.testnet')) {
     throw new Error('Invalid account ID: must be a valid NEAR testnet account ending with .testnet')
@@ -202,8 +208,8 @@ export async function dispenseTokens(params: {
   await ensureStorageRegistered(targetToken.contractId, receiverId)
 
   // Mint tokens
-  const atomicAmount = (BigInt(defaultAmount) * 1_000_000n).toString()
-  console.log(`[Faucet] Minting ${defaultAmount} ${targetToken.symbol} to ${receiverId}...`)
+  const atomicAmount = (BigInt(dispenseAmount) * 1_000_000n).toString()
+  console.log(`[Faucet] Minting ${dispenseAmount} ${targetToken.symbol} to ${receiverId}...`)
 
   const outcome: any = await account.callFunctionRaw({
     contractId: targetToken.contractId,
@@ -220,7 +226,7 @@ export async function dispenseTokens(params: {
   results.push({
     symbol: targetToken.symbol,
     contractId: targetToken.contractId,
-    amount: defaultAmount,
+    amount: dispenseAmount,
     txHash,
     explorerUrl: `https://testnet.nearblocks.io/txns/${txHash}`,
   })

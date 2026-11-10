@@ -94,10 +94,10 @@ export function FaucetGuideModal({
                     1. Open your NEAR wallet (Meteor, Sender, Here Wallet, or MyNearWallet) and copy your testnet account ID (for example, <code className="text-zinc-200 font-mono">alice.testnet</code>).
                   </p>
                   <p>
-                    2. Paste the address into the faucet input box and select whether you want <strong>USDC</strong> or <strong>EURe</strong>.
+                    2. Paste the address into the faucet input box, select your token (<strong>USDC</strong> or <strong>EURe</strong>), and specify your desired amount (up to 500 tokens).
                   </p>
                   <p>
-                    3. Click <strong>Dispense Tokens</strong>. The faucet automatically sponsors your NEP-145 storage deposit and mints 500 tokens in a single on-chain transaction.
+                    3. Click <strong>Request Tokens</strong>. The faucet automatically sponsors your NEP-145 storage deposit and mints the requested tokens in a single on-chain transaction.
                   </p>
                 </div>
               </div>
