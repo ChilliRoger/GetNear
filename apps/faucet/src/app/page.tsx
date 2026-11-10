@@ -14,6 +14,7 @@ import {
 import { useToast } from "@/components/toast";
 import { FaucetGuideModal } from "@/components/faucet-guide-modal";
 import { NearToken3D } from "@/components/near-token-3d";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 interface FaucetStatus {
   operatorId: string;
@@ -606,9 +607,11 @@ export default function FaucetHome() {
             </div>
           </div>
 
-          {/* Right Column: Interactive 3D NEAR Token Model */}
+          {/* Right Column: Interactive 3D NEAR Token Model with Error Boundary */}
           <div className="lg:col-span-5 hidden lg:flex items-center justify-center pl-4">
-            <NearToken3D className="w-full max-w-[440px]" />
+            <ErrorBoundary>
+              <NearToken3D className="w-full max-w-[440px]" />
+            </ErrorBoundary>
           </div>
         </div>
       </main>
