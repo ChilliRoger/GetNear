@@ -167,25 +167,40 @@ To eliminate simulated accounting and demonstrate true dynamic Web3 capability, 
 - **NEP-145 Storage Registration**: Registered `fx-budget.chilliroger-operator.testnet`, all council accounts, and agent accounts on both token contracts (`storage_deposit` with 0.0125 NEAR).
 - **Vault Liquidity Seed**: Transferred **100,000 EURe** (`100,000,000,000` atomic units) from operator to `fx-budget.chilliroger-operator.testnet` to act as the automated on-chain settlement liquidity reserve.
 
-### C. Live End-to-End On-Chain Settlement Proof
-Verified live execution on NEAR Testnet (Order #7 Chunk #2):
+### C. Legacy Pre-Callback Settlement Proof (Historical Baseline)
+Verified prior to the callback-verified contract upgrade (Order #7 Chunk #2):
 1. **Live Strategy Evaluation**:
-   - Pair: `USDC/EURe`
-   - Chunk Input: `20.00 USDC`
-   - Market Quote Rate: `0.8890 EURe/USDC` (1Click API)
-   - ECB Reference Rate: `0.8934` (Frankfurter API)
-   - Deviation: `-49 bps` (within user 120 bps limit)
-   - Calculated EURe Output: `17.780824 EURe`
-2. **On-Chain Chunk Execution (`execute_chunk`)**:
-   - Signer: `chilliroger-agent.testnet` (via restricted key)
-   - Receiver: `fx-budget.chilliroger-operator.testnet`
-   - Tx Hash: [`DSXaxdXchXT2jsiQ5dNRGU37t37T9PRM373w7NuTjLek`](https://testnet.nearblocks.io/txns/DSXaxdXchXT2jsiQ5dNRGU37t37T9PRM373w7NuTjLek)
-3. **Genuine On-Chain NEP-141 Token Transfer (`ft_transfer`)**:
-   - Signer / Vault: `fx-budget.chilliroger-operator.testnet`
-   - Receiver: `chilliroger-operator.testnet` (user wallet)
-   - Amount: `17.780824 EURe`
-   - Tx Hash: [`EHLGpffWZkrZphKb3BGLst4XTraWPkw2kijwYADrzNMw`](https://testnet.nearblocks.io/txns/EHLGpffWZkrZphKb3BGLst4XTraWPkw2kijwYADrzNMw)
-   - Result: User's on-chain wallet balance increased from `900,000.000000 EURe` to `900,017.780824 EURe`.
+   - Pair: `USDC/EURe` | Chunk Input: `20.00 USDC` | Quote: `0.8890 EURe/USDC` vs ECB `0.8934` (`-49 bps`, agent-reported) -> `17.780824 EURe`
+2. **Legacy Two-Transaction Pattern (Replaced in Section 8)**:
+   - `execute_chunk`: [`DSXaxdXchXT2jsiQ5dNRGU37t37T9PRM373w7NuTjLek`](https://testnet.nearblocks.io/txns/DSXaxdXchXT2jsiQ5dNRGU37t37T9PRM373w7NuTjLek)
+   - Separate `ft_transfer`: [`EHLGpffWZkrZphKb3BGLst4XTraWPkw2kijwYADrzNMw`](https://testnet.nearblocks.io/txns/EHLGpffWZkrZphKb3BGLst4XTraWPkw2kijwYADrzNMw)
+
+---
+
+## 8. Callback-Verified €1,000 Supplier Invoice & Failure-Safety Proof (Post-Audit Upgrade)
+
+To close the gap between chunk accounting and confirmed token delivery, `FxBudget` (`fx-budget.chilliroger-operator.testnet`) was upgraded & migrated (`migrate` tx [`EKfuns36z7MM6tAUxZYTmHbgP4uYxMGa457zEWXowATD`](https://testnet.nearblocks.io/txns/EKfuns36z7MM6tAUxZYTmHbgP4uYxMGa457zEWXowATD)) so `execute_chunk` dispatches cross-contract `ft_transfer` directly and updates `settled_out` / `remaining_due_out` solely inside `#[private] on_chunk_settled`.
+
+Reproduced end-to-end via `pnpm tsx scripts/near/verify-invoice-settlement.ts`:
+
+- **Restricted Key Isolation Proven**: Agent resolved `chilliroger-agent.testnet`'s `FunctionCall` key (`execute_chunk` on `fx-budget.chilliroger-operator.testnet` only); calling `eure.storage_deposit` with that credential was rejected at protocol level.
+- **Invoice Payable**: `Order #8` (`INV-2026-1000`), supplier `supplier-eu.chilliroger-operator.testnet`, target owed **`€1,000.00 EURe`** (`1,500 USDC` budget > `$700` drill auto-cap, approved by Sputnik DAO Proposal #8 2-of-3 vote).
+- **Confirmed Payment Reduces Balance**: Chunk #1 (`order-8-seq-1`) transferred `582.760093 EURe` cross-contract; callback set `settled_out = 582.760093 EURe`, reducing remaining due from `€1,000.00` to **`€417.24 EURe`**, and persisted `CONFIRMED` (`is_simulated = false`).
+- **Idempotent Replay Pays Zero**: Replaying `order-8-seq-1` transferred `0 EURe` and returned `idempotent_replay: true`.
+- **Failed Payment Leaves Balance Unchanged**: Unregistering `supplier-eu` on `eure` caused Chunk #2 (`order-8-seq-2`, attempt 1) cross-contract `ft_transfer` to fail on-chain; `on_chunk_settled` marked `ChunkStatus::Failed`, left `settled_out` at `582.760093` and **remaining due unchanged at `€417.24`**, and `AgentRunner` persisted `FAILED` with **`is_simulated = true`** (never `false`).
+- **Retry Completes Without Double-Pay**: Re-registering `supplier-eu` and retrying `order-8-seq-2` (attempt 2) transferred the remaining **`417.239907 EURe`**, settling `Order #8` to **`Completed`** (`€1,000.00` settled, `€0.00` remaining due, `+€1,000.00 EURe` supplier balance). Standard contract limits (`$100` auto-cap / `$20` max-chunk / `60s`) were then restored via DAO Proposal #9.
+
+| Step | Action | On-Chain Result | NEARBlocks Explorer Link |
+| :--- | :--- | :--- | :--- |
+| Contract Upgrade | `deploy` + `migrate` (`settlement_token`) | 7 orders preserved; invoice state active | [`EKfuns36z7MM6tAUxZYTmHbgP4uYxMGa457zEWXowATD`](https://testnet.nearblocks.io/txns/EKfuns36z7MM6tAUxZYTmHbgP4uYxMGa457zEWXowATD) |
+| DAO Drill Limits | Prop #7 2-of-3 approve | Raised drill cap to `$700 / $650 / 5s` | [`DLjMD6Em81gafcfmayBjFYDCDK3aZvWMuhnADkzBCKS4`](https://testnet.nearblocks.io/txns/DLjMD6Em81gafcfmayBjFYDCDK3aZvWMuhnADkzBCKS4) |
+| Create Invoice | `create_order` (#8, `INV-2026-1000`) | `Pending` · `€1,000.00` remaining due | [`28AjjbNGGHyYEwWD8sAWoMAQTZGVpGLSDShvNgwBfRze`](https://testnet.nearblocks.io/txns/28AjjbNGGHyYEwWD8sAWoMAQTZGVpGLSDShvNgwBfRze) |
+| DAO Approve #8 | Prop #8 2-of-3 approve | Order `#8` transitioned to `Active` | [`9eHYwHCZVPLvECUbJ8E3q9LMgiAXAuEE5SzWgnPxezVq`](https://testnet.nearblocks.io/txns/9eHYwHCZVPLvECUbJ8E3q9LMgiAXAuEE5SzWgnPxezVq) |
+| Chunk #1 Confirmed | `execute_chunk` (`order-8-seq-1`) | `+€582.76 EURe` · Due reduced to `€417.24` | [`EATGRqzgJF4Y5KyC7RKQuQ5wC5b21JVYNycGkYyvAC1m`](https://testnet.nearblocks.io/txns/EATGRqzgJF4Y5KyC7RKQuQ5wC5b21JVYNycGkYyvAC1m) |
+| Replay `seq-1` | `execute_chunk` (`order-8-seq-1`) | `0 EURe` moved (`idempotent_replay: true`) | [`5aAovDnuWo7gE877m6jb1PYraZWcWm2HpZEbz3ie9z8Y`](https://testnet.nearblocks.io/txns/5aAovDnuWo7gE877m6jb1PYraZWcWm2HpZEbz3ie9z8Y) |
+| Chunk #2 Failed | `execute_chunk` (`order-8-seq-2` #1) | `ft_transfer` failed · Due still `€417.24` · `is_simulated=true` | [`Dq2WdyNTou6jFQ2rDHAuXcgwpK4xqTJJFQXy8ZotNSrf`](https://testnet.nearblocks.io/txns/Dq2WdyNTou6jFQ2rDHAuXcgwpK4xqTJJFQXy8ZotNSrf) |
+| Chunk #2 Retry | `execute_chunk` (`order-8-seq-2` #2) | `+€417.24 EURe` · `Completed` (`€0.00` due) | [`7D78yZ4FPtqYc4cpsFYid3JKarV1cZj578aFcerbXMoZ`](https://testnet.nearblocks.io/txns/7D78yZ4FPtqYc4cpsFYid3JKarV1cZj578aFcerbXMoZ) |
+| Restore Limits | Prop #9 2-of-3 approve | Restored `$100` cap / `$20` chunk / `60s` | [`AgTaV88Mu8s9icJZWhMFJGTgNZoRtdgyYXFhFrgNb1Vb`](https://testnet.nearblocks.io/txns/AgTaV88Mu8s9icJZWhMFJGTgNZoRtdgyYXFhFrgNb1Vb) |
 
 
 

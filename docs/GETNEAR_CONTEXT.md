@@ -17,7 +17,7 @@
 
 **What it is NOT (never claim these).**
 
-- Mainnet cross-chain bridge execution. NEAR Intents has no testnet market-maker network, so market quotes are read via 1Click `dry: true`. Settlement on testnet is executed using real on-chain NEP-141 token contracts (`usdc.chilliroger-operator.testnet` & `eure.chilliroger-operator.testnet`) with genuine `ft_transfer` receipts directly to user wallets.
+- Mainnet cross-chain bridge execution. NEAR Intents has no testnet market-maker network, so market quotes are read via 1Click `dry: true` (simulated USDC FX leg). On NEAR testnet, invoice/order payouts use callback-verified cross-contract `ft_transfer` on demo NEP-141 token contracts (`usdc.chilliroger-operator.testnet` & `eure.chilliroger-operator.testnet`) to `order.recipient`.
 - Mainnet funds, Confidential Intents, or any privacy claim.
 - Savings, alpha, or better-than-bank rates.
 - Oracle-verified prices. The price deviation is reported by the agent and is not verified on-chain.
@@ -34,7 +34,7 @@
 
 **Tracks.** Primary: Real-World Money and Autonomous Business. Secondary: AI Security & Defense (contract limits, restricted key, multi-signer approval). Privacy is not claimed.
 
-**Decisions already fixed.** Testnet only. Quotes come from 1Click `dry: true` calls (read-only HTTPS to the mainnet quote API, no funds). Fills are accounting-only simulations. A Rust contract (`FxBudget`) is owned by a testnet Sputnik DAO. The agent holds a function-call key limited to `execute_chunk`. Trezu, Rhea, OutLayer, Aurora, HOT and Confidential Intents are out of scope. NEAR AI is an optional extra (block P11).
+**Decisions already fixed.** Testnet only. Quotes come from 1Click `dry: true` calls (read-only HTTPS to the mainnet quote API, no funds). The USDC FX conversion is simulated accounting, while demo NEP-141 EURe payouts transfer cross-contract inside `FxBudget::execute_chunk` and reduce invoice balance due only inside `on_chunk_settled` callback confirmation. A Rust contract (`FxBudget`) is owned by a testnet Sputnik DAO. The agent holds a function-call key limited to `execute_chunk`. Trezu, Rhea, OutLayer, Aurora, HOT and Confidential Intents are out of scope. NEAR AI is an optional extra (block P11).
 
 ## 2. GetNear: what exists upstream
 
@@ -97,7 +97,9 @@ Dashboard <-- RPC reads (testnet) + local decision log (SQLite) + explorer links
 | Only the DAO approves large orders or changes limits | Contract owner check | On-chain, hard |
 | Agent can call only `execute_chunk` | Access-key restriction | Protocol, hard |
 | Max chunk, total, deadline, minimum interval | Contract | On-chain, hard |
-| Price deviation limit | Agent code; value reported on-chain | Software only |
+| Price deviation limit | Agent-reported `deviation_bps` policy check | Policy check on agent-reported value |
 | Quote authenticity | Nothing | Not verified |
-| Fills | Accounting only | Simulated |
+| USDC FX conversion leg | 1Click `dry: true` accounting | Simulated (demo prototype) |
+| Invoice balance reduction | Cross-contract `ft_transfer` + `on_chunk_settled` callback | On-chain, hard (testnet demo NEP-141 EURe) |
+| Chunk retry double-pay protection | `ChunkRecord` idempotency store (`InFlight \| Settled \| Failed`) | On-chain, hard |
 

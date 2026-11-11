@@ -1,12 +1,13 @@
 # GetNear — FxBudget Smart Contract Specification
 
-The `FxBudget` smart contract (`contracts/fx-budget`) is an immutable, on-chain accounting and governance gate for corporate treasury FX execution on NEAR Protocol. It is implemented in Rust using `near-sdk` v5.30.
+The `FxBudget` smart contract (`contracts/fx-budget`) is an on-chain governance, budget-limit, and callback-verified settlement contract for corporate treasury FX payables on NEAR Testnet. It is implemented in Rust using `near-sdk` v5.7.0.
 
 > [!IMPORTANT]
 > **Key Design Constraints**:
-> - **Accounting Only**: Fills are simulated; no tokens move on-chain, and function-call keys cannot attach deposits.
-> - **Sputnik DAO Ownership**: The contract is owned by a Sputnik DAO v2 council. Limits, agent authorization, and above-cap order approvals require DAO proposals and 2-of-3 multisig votes.
-> - **Restricted Key Execution**: The agent runner's function-call access key is restricted strictly to `execute_chunk`.
+> - **Callback-Verified NEP-141 Settlement (Testnet Demo Tokens)**: `execute_chunk` initiates a cross-contract `ft_transfer` on `settlement_token` (`eure.chilliroger-operator.testnet`, demo NEP-141 token) and attaches `on_chunk_settled` (`#[private]`). Invoice `settled_out` and `executed_in` advance **only** when `PromiseResult` confirms `ft_transfer` succeeded; failures unlock in-flight state and leave the supplier's remaining balance due unchanged.
+> - **Simulated Swap Leg + Agent-Reported Deviation Policy Check**: 1Click quotes run with `dry: true` (NEAR Intents has no testnet), so the USDC FX conversion is accounting-only. On-chain, `deviation_bps >= -max_dev_bps` is an **enforced policy check on an agent-reported value**, not an oracle signature check.
+> - **Sputnik DAO Ownership**: The contract is owned by a Sputnik DAO v2 council (`chilliroger-dao.sputnik-v2.testnet`). Limits, settlement token changes, upgrades (`migrate`), agent authorization, and above-cap order approvals require DAO proposals and 2-of-3 multisig votes.
+> - **Restricted Key Execution**: The agent runner's operational function-call access key is restricted strictly to `execute_chunk` with `0 NEAR` allowance for attached deposits.
 
 ---
 
@@ -14,35 +15,60 @@ The `FxBudget` smart contract (`contracts/fx-budget`) is an immutable, on-chain 
 
 ```rust
 pub struct FxBudget {
-    pub owner: AccountId,                      // Sputnik DAO contract account
-    pub agent: Option<AccountId>,              // Designated automated agent account
-    pub requesters: IterableSet<AccountId>,    // Authorized order creation accounts
-    pub auto_cap_in: u128,                     // Auto-activation threshold (100 USDC = 100,000,000)
-    pub max_chunk_in: u128,                    // Max chunk size per execution (20 USDC = 20,000,000)
-    pub min_interval_ns: u64,                  // Minimum interval between chunks (60s = 60,000,000,000 ns)
-    pub max_horizon_ns: u64,                   // Maximum order deadline horizon (7 days)
-    pub paused: bool,                          // Circuit breaker pause switch
-    pub next_order_id: u64,                    // Auto-incrementing order ID counter
-    pub orders: IterableMap<u64, Order>,       // Orders collection
+    pub owner: AccountId,                             // Sputnik DAO contract account
+    pub agent: Option<AccountId>,                     // Designated automated agent account
+    pub settlement_token: Option<AccountId>,          // NEP-141 payout token (eure.chilliroger-operator.testnet)
+    pub requesters: IterableSet<AccountId>,           // Authorized order creation accounts
+    pub auto_cap_in: u128,                            // Auto-activation threshold (default: 100 USDC)
+    pub max_chunk_in: u128,                           // Max chunk size per execution (default: 20 USDC)
+    pub min_interval_ns: u64,                         // Minimum interval between chunks (default: 60s)
+    pub max_horizon_ns: u64,                          // Maximum order deadline horizon (7 days)
+    pub paused: bool,                                 // Circuit breaker pause switch
+    pub next_order_id: u64,                           // Auto-incrementing order ID counter
+    pub orders: IterableMap<u64, Order>,              // Orders collection
     pub open_orders_count: LookupMap<AccountId, u32>, // Storage bounding per requester
+    pub chunk_records: IterableMap<String, ChunkRecord>,   // Idempotency store keyed by idempotency_key
+    pub order_chunk_keys: IterableMap<u64, Vec<String>>,   // Ordered keys per order ID
 }
 ```
 
-### Order Schema
+### Order & ChunkRecord Schemas
 
 ```rust
 pub struct Order {
     pub id: u64,
     pub requester: AccountId,
+    pub recipient: AccountId,      // Supplier payout account (defaults to requester)
+    pub invoice_ref: String,       // Optional invoice reference (e.g. "INV-2026-1000")
     pub pair_label: String,        // e.g. "USDC/EURe"
-    pub total_in: U128,            // Total input amount (atomic units)
-    pub executed_in: U128,         // Total amount filled so far
+    pub total_in: U128,            // Budget cap in input units (6-dec USDC)
+    pub executed_in: U128,         // Callback-confirmed input budget consumed
+    pub pending_in: U128,          // Input locked during an in-flight ft_transfer callback
+    pub target_out: U128,          // Supplier invoice amount owed (0 = budget-only order)
+    pub settled_out: U128,         // Callback-confirmed EURe transferred to recipient
+    pub pending_out: U128,         // Output locked during an in-flight callback
     pub max_chunk_in: U128,        // Max per-chunk input size for this order
     pub deadline_ns: u64,          // Expiration timestamp in nanoseconds
-    pub max_dev_bps: u32,          // Maximum allowed adverse deviation (e.g. 120 bps)
+    pub max_dev_bps: u32,          // Policy cap on agent-reported adverse deviation
     pub status: OrderStatus,       // Pending | Active | Completed | Expired | Cancelled
-    pub last_chunk_ns: u64,        // Timestamp of last executed chunk
-    pub chunks_count: u32,         // Number of chunks executed so far
+    pub last_chunk_ns: u64,        // Timestamp of last confirmed settlement
+    pub chunks_count: u32,         // Count of callback-confirmed settlements
+}
+
+pub struct ChunkRecord {
+    pub key: String,               // Deterministic idempotency_key (e.g. "order-8-seq-1")
+    pub order_id: u64,
+    pub amount_in: U128,
+    pub settlement_out: U128,      // 6-dec NEP-141 transfer amount
+    pub simulated_out: U128,       // Indicative 1Click quote simulation output
+    pub recipient: AccountId,
+    pub quote_ref: String,
+    pub deviation_bps: i32,
+    pub status: ChunkStatus,       // InFlight | Settled | Failed
+    pub attempts: u32,
+    pub initiated_ns: u64,
+    pub settled_ns: u64,
+    pub failure_reason: Option<String>,
 }
 ```
 
@@ -62,12 +88,14 @@ pub struct Order {
 
 ## 3. Methods & Access Control
 
-### 3.1 Initialization & Admin (Owner Only)
+### 3.1 Initialization, Upgrade & Admin (Owner / Self Only)
 
-- **`new(owner: AccountId)`**:
+- **`new(owner: AccountId, settlement_token: Option<AccountId>)`**:
   Initializes contract state. Callable only once (`require!(!env::state_exists())`).
-- **`set_agent(agent: AccountId)`**:
-  Authorizes the agent account ID for chunk execution.
+- **`#[init(ignore_state)] #[private] migrate(settlement_token: Option<AccountId>)`**:
+  Owner/self migration hook preserving all legacy orders while backfilling invoice & idempotency collections.
+- **`set_agent(agent: AccountId)`** / **`set_settlement_token(token: AccountId)`**:
+  Authorizes the agent account ID and sets the NEP-141 token contract (`eure.chilliroger-operator.testnet`).
 - **`add_requester(account: AccountId)`** / **`remove_requester(account: AccountId)`**:
   Authorizes or revokes corporate treasury accounts allowed to create orders.
 - **`set_limits(auto_cap_in, max_chunk_in, min_interval_ns, max_horizon_ns)`**:
@@ -77,17 +105,12 @@ pub struct Order {
 
 ### 3.2 Order Lifecycle
 
-- **`create_order(pair_label, total_in, deadline_ns, max_chunk_in, max_dev_bps) -> u64`**:
+- **`create_order(pair_label, total_in, deadline_ns, max_chunk_in, max_dev_bps, recipient?, target_out?, invoice_ref?) -> u64`**:
   - **Caller**: Authorized requester (or owner).
   - **Pre-conditions**:
-    - Contract is not paused.
-    - `total_in > 0`.
-    - `now < deadline_ns` and `deadline_ns - now <= max_horizon_ns`.
-    - `max_chunk_in <= global max_chunk_in` and `max_chunk_in <= total_in`.
-    - Requester open orders $< 16$.
-  - **Status Assignment**:
-    - If `total_in <= auto_cap_in` &rarr; `Active`.
-    - If `total_in > auto_cap_in` &rarr; `Pending` (awaits Sputnik DAO council approval).
+    - Contract is not paused, `total_in > 0`, `now < deadline_ns`, `deadline_ns - now <= max_horizon_ns`, `max_chunk_in <= global max_chunk_in`, open orders $< 16$.
+  - **Invoice Fields**: `recipient` defaults to requester if omitted; `target_out` (`0` = budget-only order) sets the EURe supplier amount owed; `invoice_ref` tags the payable.
+  - **Status Assignment**: `total_in <= auto_cap_in` &rarr; `Active`; `total_in > auto_cap_in` &rarr; `Pending` (awaits Sputnik DAO 2-of-3 approval).
   - **Emits**: NEP-297 `order_created`.
 
 - **`approve_order(id: u64)`**:
@@ -98,38 +121,44 @@ pub struct Order {
 
 - **`cancel_order(id: u64)`**:
   - **Caller**: Order requester OR contract owner.
-  - **Pre-conditions**: Order must be in `Pending` or `Active` status.
+  - **Pre-conditions**: Order must be in `Pending` or `Active` status and have no `InFlight` callback (`pending_in == 0`).
   - **Effect**: Status transitions to `Cancelled`. Decrements requester open orders.
   - **Emits**: NEP-297 `order_cancelled`.
 
-- **`execute_chunk(id, amount_in, quote_ref, deviation_bps, simulated_out)`**:
-  - **Caller**: Designated agent account (via restricted function-call access key).
+- **`execute_chunk(id, amount_in, quote_ref, deviation_bps, simulated_out, settlement_out?, idempotency_key?)`**:
+  - **Caller**: Designated agent account (via restricted `FunctionCall` access key).
+  - **Idempotency**:
+    - If `idempotency_key` already has status `Settled`, immediately returns `{ idempotent_replay: true, status: "Settled", ... }` without initiating any transfer.
+    - If `InFlight` (either key or order `pending_in > 0`), aborts to prevent overlapping callbacks.
+    - If `Failed`, permits safe retry using the same key (incrementing `attempts`).
   - **Pre-conditions**:
-    - Contract is not paused.
-    - Order status is `Active`.
-    - Current block timestamp $< \text{order.deadline\_ns}$.
-    - `amount_in <= order.max_chunk_in`.
-    - `order.executed_in + amount_in <= order.total_in`.
+    - Contract is not paused, order status is `Active`, `now < order.deadline_ns`, `pending_in == 0`.
+    - `amount_in <= order.max_chunk_in`, `order.executed_in + amount_in <= order.total_in`.
     - If `chunks_count > 0`, $\text{now} - \text{last\_chunk\_ns} \ge \text{min\_interval\_ns}$.
-    - `deviation_bps >= -order.max_dev_bps` (adverse deviation does not exceed order limit).
-  - **Effect**:
-    - Updates `executed_in`, `last_chunk_ns`, and increments `chunks_count`.
-    - If `executed_in == total_in` &rarr; status becomes `Completed`.
-  - **Emits**: NEP-297 `chunk_executed`.
+    - `deviation_bps >= -(order.max_dev_bps as i32)` (policy check on agent-reported deviation).
+  - **Cross-Contract Effect**:
+    - Locks `pending_in` / `pending_out` and records `ChunkRecord` as `InFlight`.
+    - Calls `ext_ft::ft_transfer(recipient, settlement_out, memo)` on `settlement_token` (1 yoctoNEAR from contract balance), chained to `#[private] on_chunk_settled(id, key, amount_in, settlement_out)`.
+
+- **`#[private] on_chunk_settled(id, key, amount_in, settlement_out) -> ChunkSettlementView`**:
+  - Inspects `env::promise_result_checked(0, 1024).is_ok()`, clears `pending_in` and `pending_out`.
+  - **On success**: increments `executed_in`, `settled_out`, and `chunks_count`; updates `last_chunk_ns`; marks `ChunkStatus::Settled`; transitions order to `Completed` if `settled_out >= target_out` (for invoice orders) or `executed_in >= total_in`; emits NEP-297 `chunk_settled`.
+  - **On failure**: keeps `executed_in`, `settled_out`, `chunks_count`, and supplier remaining due **unchanged**; sets `ChunkStatus::Failed` with `failure_reason`; emits NEP-297 `chunk_settlement_failed`.
 
 - **`expire_order(id: u64)`**:
-  - **Caller**: Permissionless (anyone can call).
-  - **Pre-conditions**: $\text{now} \ge \text{order.deadline\_ns}$ and order is `Pending` or `Active`.
-  - **Effect**: Status transitions to `Expired`. Decrements requester open orders.
-  - **Emits**: NEP-297 `order_expired`.
+  - **Caller**: Permissionless (when `now >= deadline_ns` and `pending_in == 0`).
 
 ### 3.3 View Methods (Read-Only)
 
 - `get_order(id: u64) -> Option<Order>`
 - `list_orders(from_index: Option<u64>, limit: Option<u64>) -> Vec<Order>`
+- `get_invoice_summary(id: u64) -> Option<InvoiceSummaryView>` (exposes `target_out`, `settled_out`, `pending_out`, `remaining_due_out`)
+- `get_chunk_record(key: String) -> Option<ChunkRecord>`
+- `list_order_chunks(order_id: u64) -> Vec<ChunkRecord>`
 - `get_limits() -> LimitsView`
 - `get_owner() -> AccountId`
 - `get_agent() -> Option<AccountId>`
+- `get_settlement_token() -> Option<AccountId>`
 - `is_requester(account: AccountId) -> bool`
 - `is_paused() -> bool`
 - `get_open_orders_count(account: AccountId) -> u32`
@@ -155,13 +184,13 @@ EVENT_JSON:{"standard":"nep297","version":"1.0.0","event":"chunk_executed","data
 1. **Predecessor Assertions**:
    All access checks assert on `env::predecessor_account_id()` (the direct caller), never `signer_account_id()`, preventing relay/proxy spoofing.
 2. **Checked Arithmetic**:
-   All financial amounts use checked addition (`checked_add`) and saturation logic to prevent integer overflow.
-3. **No Cross-Contract Promises**:
-   The contract is a fully self-contained state machine. It does not await external contract callbacks, eliminating re-entrancy attack surfaces.
-4. **Bounded Storage**:
-   Capped open orders ($16$ per requester) prevent malicious state ballooning.
-5. **No Upgrade Path**:
-   The contract code is non-upgradable to ensure predictable, immutable rules.
+   All financial amounts use checked/saturating arithmetic to prevent integer overflow.
+3. **Callback-Gated Settlement & Re-Entrancy Lock**:
+   `pending_in` and `pending_out` plus `ChunkStatus::InFlight` prevent concurrent overlapping transfers on the same order or key, and balance due advances only inside `#[private] on_chunk_settled` on verified `PromiseResult` success.
+4. **Idempotent Retry Safety**:
+   Deterministic `idempotency_key` records prevent paying a settled chunk twice, while allowing failed chunks (`ChunkStatus::Failed`) to retry once the failure cause (e.g. recipient storage registration) is fixed.
+5. **Bounded Storage & Governed Upgrades**:
+   Capped open orders ($16$ per requester) bound state growth; contract upgrades via `migrate` are gated by the contract's key/owner governance.
 
 ---
 
@@ -209,7 +238,7 @@ To support verifiable on-chain settlement alongside the FxBudget accounting cont
 
 ### C. Vault Settlement Architecture
 - The `fx-budget.chilliroger-operator.testnet` contract account is pre-registered on both tokens via NEP-145 `storage_deposit`.
-- The vault holds a dedicated reserve of **100,000 EURe**.
-- Upon autonomous chunk execution, `fx-budget` calls `ft_transfer` on the EURe contract to deliver genuine stablecoins directly into the requester's NEAR wallet (Meteor, Sender, Here, etc.).
+- The vault was seeded with **100,000 EURe** (testnet demo NEP-141 liquidity).
+- Upon `execute_chunk`, `fx-budget` invokes `ext_ft::ft_transfer` directly on `settlement_token` (`eure.chilliroger-operator.testnet`) to pay `order.recipient`, advancing `settled_out` and reducing invoice balance due solely inside the `on_chunk_settled` callback.
 
 

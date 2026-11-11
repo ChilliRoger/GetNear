@@ -20,6 +20,7 @@ Items noted during P0–P2 for later blocks.
 - [x] P9: Build agent runner (`apps/agent`) with autonomous polling loop, live 1Click & ECB integration, SQLite provenance (`is_simulated = true`), REST observability endpoints, and testnet chunk executions.
 - [x] P10: Build dashboard and order UI (clean, non-gradient, zero emojis, Lucide SVG icons, live testnet transactions for create_order & Sputnik DAO voting, toast alerts with NEARBlocks explorer links, and agent runner controls).
 - [x] P10.5: Real on-chain NEP-141 token deployment (USDC & EURe), vault storage registration, 100k EURe liquidity seeding, user faucet API & script, and autonomous agent `ft_transfer` direct wallet settlement.
+- [x] Post-Audit Settlement-Proof Upgrade: Callback-verified NEP-141 EURe settlement inside `FxBudget::execute_chunk` (`on_chunk_settled`), invoice payable tracking (`target_out`, `settled_out`, `remaining_due_out`), `ChunkRecord` idempotency, restricted FunctionCall key enforcement in `AgentRunner`, failure-safe SQLite provenance (`is_simulated = true` on failed transfers), UI Invoice Balance & decimals fix, and live `€1,000` testnet verification (`Order #8`, `INV-2026-1000`).
 - [ ] P11 (optional): NEAR AI natural-language order intake.
 - [ ] P12: End-to-end demo, tests, reproducibility.
 - [ ] P13: README and hackathon disclosures.
