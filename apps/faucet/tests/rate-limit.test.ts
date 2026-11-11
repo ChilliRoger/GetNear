@@ -4,6 +4,9 @@ import {
   checkRateLimit,
   checkAccountCooldown,
   recordClaim,
+  checkNearDripIpLimit,
+  recordNearDrip,
+  MAX_NEAR_DRIPS_PER_IP,
   COOLDOWN_MS,
   formatRemainingTime,
 } from '../src/lib/rate-limit.js'
@@ -50,5 +53,25 @@ describe('Faucet Rate Limiter', () => {
     assert.equal(formatRemainingTime(125), '2m 5s')
     assert.equal(formatRemainingTime(3665), '1h 1m')
     assert.equal(formatRemainingTime(86400), '24h 0m')
+  })
+
+  test('enforces per-IP native NEAR drip cap across multiple new accounts', () => {
+    const ip = `198.51.100.${Math.floor(Math.random() * 200) + 1}`
+    const otherIp = `198.51.101.${Math.floor(Math.random() * 200) + 1}`
+
+    for (let i = 0; i < MAX_NEAR_DRIPS_PER_IP; i++) {
+      const before = checkNearDripIpLimit(ip)
+      assert.equal(before.allowed, true)
+      assert.equal(before.remainingInWindow, MAX_NEAR_DRIPS_PER_IP - i)
+      recordNearDrip(ip)
+    }
+
+    const blocked = checkNearDripIpLimit(ip)
+    assert.equal(blocked.allowed, false)
+    assert.equal(blocked.remainingInWindow, 0)
+
+    const otherCheck = checkNearDripIpLimit(otherIp)
+    assert.equal(otherCheck.allowed, true)
+    assert.equal(otherCheck.remainingInWindow, MAX_NEAR_DRIPS_PER_IP)
   })
 })

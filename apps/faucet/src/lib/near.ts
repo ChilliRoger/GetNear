@@ -26,9 +26,33 @@ export const MIN_DISPENSE_AMOUNT = 1
 export const MAX_DISPENSE_AMOUNT = 500
 export const MAX_HOLDING_BALANCE_CAP = 2500
 
-// 0.0125 NEAR deposit for NEP-145 storage registration
-const STORAGE_DEPOSIT_YOCTO = 12500000000000000000000n
-const FUNCTION_GAS = 30000000000000n // 30 Tgas
+// Dynamic native NEAR stipend so new NEP-448 zero-balance wallets (0 NEAR)
+// can complete Meteor Wallet's "Import Token" flow (ref-finance-101.testnet ~0.1309 NEAR)
+export const TARGET_MIN_NATIVE_NEAR = 0.16
+export const TARGET_MIN_NATIVE_YOCTO = 16n * 10n ** 22n // 0.16 NEAR
+export const OPERATOR_NEAR_RESERVE_FLOOR_YOCTO = 40n * 10n ** 22n // 0.40 NEAR
+export const MIN_SIGNABLE_IMPORT_NEAR = 0.14
+
+// 0.00125 NEAR deposit matching on-chain storage_balance_bounds for NEP-145 registration
+const STORAGE_DEPOSIT_YOCTO = 125n * 10n ** 19n // 0.00125 NEAR
+const FUNCTION_GAS = 30_000_000_000_000n // 30 Tgas
+
+export type NativeNearSkipReason =
+  | 'already_funded'
+  | 'repeat_wallet'
+  | 'ip_drip_cap'
+  | 'operator_low_reserve'
+  | 'transfer_failed'
+
+export function yoctoToNearNumber(yocto: bigint): number {
+  return Number(yocto / 10n ** 18n) / 1e6
+}
+
+function assertTestnetNetwork(): void {
+  if (NETWORK_ID !== 'testnet') {
+    throw new Error(`Unsafe network configuration "${NETWORK_ID}": GetNear faucet is testnet-only.`)
+  }
+}
 
 function getPrivateKey(): string {
   // 1. Check explicit environment variable (Vercel standard)
@@ -51,15 +75,83 @@ function getPrivateKey(): string {
 }
 
 export function getProvider(): JsonRpcProvider {
+  assertTestnetNetwork()
   return new JsonRpcProvider({ url: RPC_URL })
 }
 
 export function getOperatorAccount(): Account {
+  assertTestnetNetwork()
   const provider = getProvider()
   const privateKey = getPrivateKey()
   const keyPair = KeyPair.fromString(privateKey as `ed25519:${string}`)
   const signer = new KeyPairSigner(keyPair)
   return new Account(OPERATOR_ID, provider, signer)
+}
+
+export interface AccountStateInfo {
+  exists: boolean
+  nativeBalanceYocto: bigint
+  nativeBalanceNear: number
+}
+
+/**
+ * Inspect on-chain account existence and native NEAR balance via single RPC call
+ */
+export async function getAccountState(accountId: string): Promise<AccountStateInfo> {
+  const provider = getProvider()
+  try {
+    const res: any = await provider.query({
+      request_type: 'view_account',
+      finality: 'final',
+      account_id: accountId,
+    })
+    if (!res || res.amount === undefined) {
+      return { exists: false, nativeBalanceYocto: 0n, nativeBalanceNear: 0 }
+    }
+    const nativeBalanceYocto = BigInt(res.amount)
+    return {
+      exists: true,
+      nativeBalanceYocto,
+      nativeBalanceNear: yoctoToNearNumber(nativeBalanceYocto),
+    }
+  } catch {
+    return { exists: false, nativeBalanceYocto: 0n, nativeBalanceNear: 0 }
+  }
+}
+
+/**
+ * Calculate the conditional native NEAR delta required to reach TARGET_MIN_NATIVE_YOCTO.
+ * Pure helper so eligibility and reserve guardrails are deterministic and unit-tested.
+ */
+export function computeNativeNearTopUpDelta(params: {
+  recipientBalanceYocto: bigint
+  operatorBalanceYocto: bigint
+  isFirstTimeWallet: boolean
+  ipDripAllowed: boolean
+}): {
+  deltaYocto: bigint
+  skippedReason?: Exclude<NativeNearSkipReason, 'transfer_failed'>
+} {
+  const { recipientBalanceYocto, operatorBalanceYocto, isFirstTimeWallet, ipDripAllowed } = params
+
+  if (recipientBalanceYocto >= TARGET_MIN_NATIVE_YOCTO) {
+    return { deltaYocto: 0n, skippedReason: 'already_funded' }
+  }
+
+  if (!isFirstTimeWallet) {
+    return { deltaYocto: 0n, skippedReason: 'repeat_wallet' }
+  }
+
+  if (!ipDripAllowed) {
+    return { deltaYocto: 0n, skippedReason: 'ip_drip_cap' }
+  }
+
+  const deltaYocto = TARGET_MIN_NATIVE_YOCTO - recipientBalanceYocto
+  if (operatorBalanceYocto <= OPERATOR_NEAR_RESERVE_FLOOR_YOCTO + deltaYocto) {
+    return { deltaYocto: 0n, skippedReason: 'operator_low_reserve' }
+  }
+
+  return { deltaYocto }
 }
 
 /**
@@ -84,24 +176,19 @@ export async function isStorageRegistered(contractId: string, accountId: string)
  * Prevents Sybil attacks that drain operator NEAR on storage deposits for fake accounts.
  */
 export async function verifyAccountExists(accountId: string): Promise<boolean> {
-  const provider = getProvider()
-  try {
-    const res: any = await provider.query({
-      request_type: 'view_account',
-      finality: 'final',
-      account_id: accountId,
-    })
-    return Boolean(res && res.amount !== undefined)
-  } catch {
-    return false
-  }
+  const state = await getAccountState(accountId)
+  return state.exists
 }
 
 /**
- * Ensure account is registered on NEP-145 storage, depositing 0.0125 NEAR if needed
+ * Ensure account is registered on NEP-145 storage, depositing 0.00125 NEAR if needed
  */
-export async function ensureStorageRegistered(contractId: string, accountId: string): Promise<string | null> {
-  const registered = await isStorageRegistered(contractId, accountId)
+export async function ensureStorageRegistered(
+  contractId: string,
+  accountId: string,
+  knownRegistered?: boolean,
+): Promise<string | null> {
+  const registered = knownRegistered ?? (await isStorageRegistered(contractId, accountId))
   if (registered) return null
 
   console.log(`[Faucet] Registering storage for ${accountId} on ${contractId}...`)
@@ -135,6 +222,16 @@ export async function getTokenBalance(contractId: string, accountId: string): Pr
   }
 }
 
+export interface NativeNearTopUpInfo {
+  toppedUp: boolean
+  amountNear: number
+  previousBalanceNear: number
+  currentBalanceNear: number
+  txHash: string | null
+  explorerUrl: string | null
+  skippedReason?: NativeNearSkipReason
+}
+
 export interface DispenseResult {
   receiverId: string
   tokens: {
@@ -144,16 +241,19 @@ export interface DispenseResult {
     txHash: string
     explorerUrl: string
   }[]
+  nativeNear: NativeNearTopUpInfo
 }
 
 /**
- * Dispense testnet stablecoins to a receiver
+ * Dispense testnet stablecoins (plus conditional native NEAR stipend for zero/low-balance wallets)
  */
 export async function dispenseTokens(params: {
   receiverId: string
   token: 'USDC' | 'EURE'
   amount?: number
+  ipDripAllowed?: boolean
 }): Promise<DispenseResult> {
+  assertTestnetNetwork()
   const { receiverId, token } = params
   const rawAmount = Number(params.amount)
   const dispenseAmount = isNaN(rawAmount) ? DISPENSE_AMOUNT_PER_TOKEN : Math.floor(rawAmount)
@@ -166,9 +266,9 @@ export async function dispenseTokens(params: {
     throw new Error('Invalid account ID: must be a valid NEAR testnet account ending with .testnet')
   }
 
-  // 1. Verify recipient account actually exists on NEAR testnet (Sybil defense)
-  const accountExists = await verifyAccountExists(receiverId)
-  if (!accountExists) {
+  // 1. Verify recipient account exists and read its live native NEAR balance (Sybil defense)
+  const recipientState = await getAccountState(receiverId)
+  if (!recipientState.exists) {
     throw new Error(`Account "${receiverId}" does not exist on NEAR testnet. Please activate your testnet wallet first.`)
   }
 
@@ -186,26 +286,65 @@ export async function dispenseTokens(params: {
   }
 
   // 3. Verify operator has sufficient NEAR gas reserves
-  const provider = getProvider()
-  try {
-    const operatorState: any = await provider.query({
-      request_type: 'view_account',
-      finality: 'final',
-      account_id: OPERATOR_ID,
-    })
-    const operatorNear = Number(BigInt(operatorState.amount || '0') / 10n**22n) / 100
-    if (operatorNear < 0.05) {
-      throw new Error('Faucet operator NEAR reserves are temporarily low. Please try again shortly.')
-    }
-  } catch (err: any) {
-    if (err.message?.includes('temporarily low')) throw err
+  const operatorState = await getAccountState(OPERATOR_ID)
+  if (operatorState.exists && operatorState.nativeBalanceNear < 0.05) {
+    throw new Error('Faucet operator NEAR reserves are temporarily low. Please try again shortly.')
   }
+
+  // 4. Inspect on-chain registration state across both tokens before mutating state
+  const [usdcRegistered, eureRegistered] = await Promise.all([
+    isStorageRegistered(USDC_CONTRACT_ID, receiverId),
+    isStorageRegistered(EURE_CONTRACT_ID, receiverId),
+  ])
+  const isFirstTimeWallet = !usdcRegistered && !eureRegistered
+
+  const nearPlan = computeNativeNearTopUpDelta({
+    recipientBalanceYocto: recipientState.nativeBalanceYocto,
+    operatorBalanceYocto: operatorState.nativeBalanceYocto,
+    isFirstTimeWallet,
+    ipDripAllowed: params.ipDripAllowed ?? true,
+  })
 
   const account = getOperatorAccount()
   const results: DispenseResult['tokens'] = []
+  let nativeNear: NativeNearTopUpInfo = {
+    toppedUp: false,
+    amountNear: 0,
+    previousBalanceNear: recipientState.nativeBalanceNear,
+    currentBalanceNear: recipientState.nativeBalanceNear,
+    txHash: null,
+    explorerUrl: null,
+    skippedReason: nearPlan.skippedReason,
+  }
 
-  // Ensure storage registration
-  await ensureStorageRegistered(targetToken.contractId, receiverId)
+  // Execute operator transactions strictly sequentially so access-key nonces never collide
+  if (nearPlan.deltaYocto > 0n) {
+    try {
+      const amountNear = yoctoToNearNumber(nearPlan.deltaYocto)
+      console.log(`[Faucet] Sponsoring +${amountNear} NEAR gas/import stipend to ${receiverId}...`)
+      const transferOutcome: any = await account.transfer({
+        receiverId,
+        amount: nearPlan.deltaYocto,
+      })
+      const transferTxHash =
+        transferOutcome?.transaction?.hash || transferOutcome?.transaction_outcome?.id || null
+      nativeNear = {
+        toppedUp: true,
+        amountNear,
+        previousBalanceNear: recipientState.nativeBalanceNear,
+        currentBalanceNear: yoctoToNearNumber(recipientState.nativeBalanceYocto + nearPlan.deltaYocto),
+        txHash: transferTxHash,
+        explorerUrl: transferTxHash ? `https://testnet.nearblocks.io/txns/${transferTxHash}` : null,
+      }
+    } catch (err) {
+      console.warn(`[Faucet] Non-fatal native NEAR stipend transfer failed for ${receiverId}:`, err)
+      nativeNear.skippedReason = 'transfer_failed'
+    }
+  }
+
+  // Ensure NEP-145 storage registration on target token
+  const targetRegistered = token === 'EURE' ? eureRegistered : usdcRegistered
+  await ensureStorageRegistered(targetToken.contractId, receiverId, targetRegistered)
 
   // Mint tokens
   const atomicAmount = (BigInt(dispenseAmount) * 1_000_000n).toString()
@@ -234,6 +373,7 @@ export async function dispenseTokens(params: {
   return {
     receiverId,
     tokens: results,
+    nativeNear,
   }
 }
 

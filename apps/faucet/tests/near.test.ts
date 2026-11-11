@@ -5,8 +5,13 @@ import {
   USDC_CONTRACT_ID,
   EURE_CONTRACT_ID,
   NETWORK_ID,
+  TARGET_MIN_NATIVE_YOCTO,
+  OPERATOR_NEAR_RESERVE_FLOOR_YOCTO,
   getFaucetStatus,
   getTokenBalance,
+  getAccountState,
+  computeNativeNearTopUpDelta,
+  yoctoToNearNumber,
 } from '../src/lib/near.js'
 
 describe('Serverless NEAR Engine', () => {
@@ -31,12 +36,83 @@ describe('Serverless NEAR Engine', () => {
     assert.ok(bal >= 0)
   })
 
-  test('validates on-chain account existence (Sybil defense)', async () => {
+  test('validates on-chain account existence and native balance (Sybil defense)', async () => {
     const { verifyAccountExists } = await import('../src/lib/near.js')
     const realExists = await verifyAccountExists(OPERATOR_ID)
     assert.equal(realExists, true, 'Operator account should exist on NEAR testnet')
 
-    const fakeExists = await verifyAccountExists('nonexistent-random-xyz-987654.testnet')
-    assert.equal(fakeExists, false, 'Non-existent account must return false')
+    const opState = await getAccountState(OPERATOR_ID)
+    assert.equal(opState.exists, true)
+    assert.ok(opState.nativeBalanceYocto > 0n)
+    assert.ok(opState.nativeBalanceNear > 0)
+
+    const fakeState = await getAccountState('nonexistent-random-xyz-987654.testnet')
+    assert.equal(fakeState.exists, false, 'Non-existent account must return exists=false')
+    assert.equal(fakeState.nativeBalanceYocto, 0n)
+  })
+
+  test('computes conditional native NEAR stipend deltas with anti-drain guardrails', () => {
+    const healthyOp = 5n * 10n ** 24n // 5 NEAR
+
+    // Zero-balance first-time wallet gets full 0.16 NEAR
+    const zeroBal = computeNativeNearTopUpDelta({
+      recipientBalanceYocto: 0n,
+      operatorBalanceYocto: healthyOp,
+      isFirstTimeWallet: true,
+      ipDripAllowed: true,
+    })
+    assert.equal(zeroBal.deltaYocto, TARGET_MIN_NATIVE_YOCTO)
+    assert.equal(yoctoToNearNumber(zeroBal.deltaYocto), 0.16)
+    assert.equal(zeroBal.skippedReason, undefined)
+
+    // Partially funded wallet (0.05 NEAR) gets exact 0.11 NEAR shortfall
+    const partialBal = computeNativeNearTopUpDelta({
+      recipientBalanceYocto: 5n * 10n ** 22n,
+      operatorBalanceYocto: healthyOp,
+      isFirstTimeWallet: true,
+      ipDripAllowed: true,
+    })
+    assert.equal(partialBal.deltaYocto, 11n * 10n ** 22n)
+    assert.equal(yoctoToNearNumber(partialBal.deltaYocto), 0.11)
+
+    // Wallet already at >= 0.16 NEAR gets 0 NEAR
+    const funded = computeNativeNearTopUpDelta({
+      recipientBalanceYocto: 2n * 10n ** 23n,
+      operatorBalanceYocto: healthyOp,
+      isFirstTimeWallet: true,
+      ipDripAllowed: true,
+    })
+    assert.equal(funded.deltaYocto, 0n)
+    assert.equal(funded.skippedReason, 'already_funded')
+
+    // Repeat wallet gets 0 NEAR even if balance dipped below 0.16 NEAR
+    const repeat = computeNativeNearTopUpDelta({
+      recipientBalanceYocto: 5n * 10n ** 22n,
+      operatorBalanceYocto: healthyOp,
+      isFirstTimeWallet: false,
+      ipDripAllowed: true,
+    })
+    assert.equal(repeat.deltaYocto, 0n)
+    assert.equal(repeat.skippedReason, 'repeat_wallet')
+
+    // IP drip cap reached blocks native NEAR drip
+    const ipCapped = computeNativeNearTopUpDelta({
+      recipientBalanceYocto: 0n,
+      operatorBalanceYocto: healthyOp,
+      isFirstTimeWallet: true,
+      ipDripAllowed: false,
+    })
+    assert.equal(ipCapped.deltaYocto, 0n)
+    assert.equal(ipCapped.skippedReason, 'ip_drip_cap')
+
+    // Low operator reserve protects minting gas by skipping NEAR drip
+    const lowOp = computeNativeNearTopUpDelta({
+      recipientBalanceYocto: 0n,
+      operatorBalanceYocto: OPERATOR_NEAR_RESERVE_FLOOR_YOCTO + 10n ** 22n,
+      isFirstTimeWallet: true,
+      ipDripAllowed: true,
+    })
+    assert.equal(lowOp.deltaYocto, 0n)
+    assert.equal(lowOp.skippedReason, 'operator_low_reserve')
   })
 })

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { dispenseTokens, getTokenBalance, USDC_CONTRACT_ID, EURE_CONTRACT_ID } from '@/lib/near'
-import { checkRateLimit, recordClaim } from '@/lib/rate-limit'
+import { checkRateLimit, recordClaim, checkNearDripIpLimit, recordNearDrip } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,16 +61,21 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 5. Dispense tokens on NEAR Testnet
+    // 5. Dispense tokens (and conditional native NEAR stipend for zero/low-balance wallets)
+    const nearDripCheck = checkNearDripIpLimit(clientIp)
     console.log(`[API /dispense] Dispensing ${amount} ${token} to ${accountId}...`)
     const result = await dispenseTokens({
       receiverId: accountId,
       token: token as 'USDC' | 'EURE',
       amount,
+      ipDripAllowed: nearDripCheck.allowed,
     })
 
-    // 6. Record claim for rate limiting
+    // 6. Record claim & native NEAR drip for rate limiting
     recordClaim(accountId, clientIp)
+    if (result.nativeNear.toppedUp) {
+      recordNearDrip(clientIp)
+    }
 
     // 7. Fetch updated balances
     const [usdcBal, eureBal] = await Promise.all([
@@ -82,6 +87,7 @@ export async function POST(req: NextRequest) {
       success: true,
       receiverId: accountId,
       dispensed: result.tokens,
+      nativeNear: result.nativeNear,
       balances: {
         usdc: usdcBal,
         eure: eureBal,
