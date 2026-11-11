@@ -547,15 +547,16 @@ export default function FaucetHome() {
 
                   {lastResult.nativeNear &&
                     !lastResult.nativeNear.toppedUp &&
-                    (lastResult.nativeNear.currentBalanceNear < 0.04 ||
-                      (lastResult.nativeNear.currentBalanceNear < 0.14 &&
-                        lastResult.nativeNear.skippedReason !== "repeat_wallet" &&
-                        lastResult.nativeNear.skippedReason !== "already_funded")) && (
+                    ((lastResult.nativeNear.skippedReason === "repeat_wallet" &&
+                      lastResult.nativeNear.currentBalanceNear < 0.31) ||
+                      (lastResult.nativeNear.skippedReason !== "repeat_wallet" &&
+                        lastResult.nativeNear.skippedReason !== "already_funded" &&
+                        lastResult.nativeNear.currentBalanceNear < 0.44)) && (
                       <div className="p-2.5 rounded-lg border border-amber-800/70 bg-amber-950/30 text-[11px] text-amber-200 flex items-start gap-2">
                         <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
                         <div className="space-y-1">
                           <p className="leading-relaxed">
-                            Your wallet holds {lastResult.nativeNear.currentBalanceNear} NEAR. Importing a custom token in Meteor Wallet requires ~0.131 NEAR for ref-finance-101.testnet registration.
+                            Your wallet holds {lastResult.nativeNear.currentBalanceNear} NEAR. Meteor Wallet requires ~0.44 NEAR liquid upfront (0.10 NEAR storage + 300 Tgas NEP-642 reserve; unused gas refunds automatically).
                           </p>
                           <a
                             href="https://near-faucet.io/"
