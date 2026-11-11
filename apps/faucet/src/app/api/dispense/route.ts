@@ -3,6 +3,8 @@ import { dispenseTokens, getTokenBalance, USDC_CONTRACT_ID, EURE_CONTRACT_ID } f
 import { checkRateLimit, recordClaim, checkNearDripIpLimit, recordNearDrip } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
+export const fetchCache = 'force-no-store'
 
 const NEAR_ACCOUNT_REGEX = /^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/
 
