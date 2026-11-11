@@ -9,6 +9,11 @@ export default function SettingsPage() {
   const [contractId] = useState("fx-budget.chilliroger-operator.testnet");
   const [daoId] = useState("chilliroger-dao.sputnik-v2.testnet");
   const [agentId] = useState("chilliroger-agent.testnet");
+  const [settlementToken, setSettlementToken] = useState("eure.chilliroger-operator.testnet");
+  const [autoCapUsdc, setAutoCapUsdc] = useState(100);
+  const [maxChunkUsdc, setMaxChunkUsdc] = useState(20);
+  const [minIntervalSec, setMinIntervalSec] = useState(60);
+  const [isPaused, setIsPaused] = useState(false);
   const [rpcStatus, setRpcStatus] = useState<"checking" | "online" | "degraded">("checking");
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
 
@@ -28,6 +33,22 @@ export default function SettingsPage() {
       }
     };
     checkRpc();
+    fetch("/api/near")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.contract?.limits) {
+          setAutoCapUsdc(Number(d.contract.limits.auto_cap_in) / 1e6);
+          setMaxChunkUsdc(Number(d.contract.limits.max_chunk_in) / 1e6);
+          setMinIntervalSec(Math.round(Number(d.contract.limits.min_interval_ns) / 1e9));
+        }
+        if (typeof d?.contract?.isPaused === "boolean") {
+          setIsPaused(d.contract.isPaused);
+        }
+        if (d?.contract?.settlementToken) {
+          setSettlementToken(d.contract.settlementToken);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   return (
@@ -85,15 +106,19 @@ export default function SettingsPage() {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted">Auto-Cap Limit</span>
-            <span className="font-mono font-semibold text-foreground">100.00 USDC</span>
+            <span className="font-mono font-semibold text-foreground">{autoCapUsdc.toFixed(2)} USDC</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted">Max Chunk Limit</span>
-            <span className="font-mono font-semibold text-foreground">20.00 USDC</span>
+            <span className="font-mono font-semibold text-foreground">{maxChunkUsdc.toFixed(2)} USDC</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted">Min Chunk Interval</span>
-            <span className="font-mono text-foreground">60 seconds</span>
+            <span className="font-mono text-foreground">{minIntervalSec} seconds</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted">Settlement Token (NEP-141)</span>
+            <span className="font-mono text-foreground">{settlementToken}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted">Max Order Horizon</span>
@@ -101,7 +126,9 @@ export default function SettingsPage() {
           </div>
           <div className="flex items-center justify-between pt-1 border-t border-border">
             <span className="text-muted">Contract Paused</span>
-            <span className="font-mono font-medium text-green-400">NO (Active)</span>
+            <span className={`font-mono font-medium ${isPaused ? "text-red-400" : "text-green-400"}`}>
+              {isPaused ? "YES (Paused)" : "NO (Active)"}
+            </span>
           </div>
         </div>
       </Card>
@@ -140,8 +167,7 @@ export default function SettingsPage() {
               <Lock className="h-3.5 w-3.5 text-accent-blue" />
               <span>Cryptographic Constraint</span>
             </div>
-            The agent runner cannot transfer NEAR, drain funds, or change contract state. Its function-call access key
-            is hard-restricted at the NEAR protocol level.
+            The agent runner&apos;s operational FunctionCall key can call only <code className="font-mono">execute_chunk</code> on FxBudget and cannot transfer NEAR or override limits. Supplier balance reduces solely after cross-contract <code className="font-mono">ft_transfer</code> callback confirmation; deviation caps remain an on-chain policy check on an agent-reported value.
           </div>
         </div>
       </Card>

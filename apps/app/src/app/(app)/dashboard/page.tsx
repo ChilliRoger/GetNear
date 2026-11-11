@@ -22,15 +22,28 @@ import {
 interface ContractOrder {
   id: number;
   requester: string;
+  recipient?: string;
+  invoice_ref?: string | null;
   pair_label: string;
   total_in: string;
   executed_in: string;
+  pending_in?: string;
+  target_out?: string;
+  settled_out?: string;
+  pending_out?: string;
   max_chunk_in: string;
   deadline_ns: number;
   max_dev_bps: number;
   status: "Pending" | "Active" | "Completed" | "Expired" | "Cancelled";
   last_chunk_ns: number;
   chunks_count: number;
+}
+
+interface ContractLimits {
+  auto_cap_in: string;
+  max_chunk_in: string;
+  min_interval_ns: number;
+  max_horizon_ns: number;
 }
 
 interface DaoProposal {
@@ -47,14 +60,19 @@ interface AgentFill {
   id: number;
   order_id: number;
   chunk_index: number;
+  idempotency_key?: string | null;
   amount_in: string;
+  settlement_out?: string | null;
   simulated_out: string;
+  recipient?: string | null;
   quote_ref: string;
   deviation_bps: number;
   tx_hash: string | null;
   explorer_url: string | null;
   ft_transfer_tx_hash?: string | null;
   ft_transfer_url?: string | null;
+  settlement_status?: string | null;
+  failure_reason?: string | null;
   is_simulated: boolean;
   timestamp: number;
 }
@@ -64,7 +82,7 @@ interface AgentDecision {
   order_id: number;
   timestamp: number;
   score: number;
-  decision: "EXECUTE" | "WAIT";
+  decision: string;
   reason: string;
   chunk_size: string;
   deviation_bps?: number;
@@ -95,15 +113,26 @@ export default function DashboardPage() {
     userEure: 0,
     vaultEure: 0,
   });
+  const [limits, setLimits] = useState<ContractLimits>({
+    auto_cap_in: "100000000",
+    max_chunk_in: "20000000",
+    min_interval_ns: 60000000000,
+    max_horizon_ns: 604800000000000,
+  });
 
-  // Order intake quick inputs
+  // Order intake & supplier invoice inputs
   const [orderAmount, setOrderAmount] = useState("50");
   const [maxChunk, setMaxChunk] = useState("20");
   const [maxDevBps, setMaxDevBps] = useState("120");
   const [deadlineHours, setDeadlineHours] = useState("4");
+  const [recipientAccount, setRecipientAccount] = useState("");
+  const [targetEure, setTargetEure] = useState("");
+  const [invoiceRef, setInvoiceRef] = useState("");
 
+  const autoCapUsdc = Number(limits.auto_cap_in || "100000000") / 1e6;
+  const maxChunkLimitUsdc = Number(limits.max_chunk_in || "20000000") / 1e6;
   const numAmount = parseFloat(orderAmount) || 0;
-  const isAboveCap = numAmount > 100;
+  const isAboveCap = numAmount > autoCapUsdc;
 
   const loadData = useCallback(async () => {
     try {
@@ -116,6 +145,9 @@ export default function DashboardPage() {
         }
         if (data.contract?.orders) {
           setOrders(data.contract.orders);
+        }
+        if (data.contract?.limits) {
+          setLimits(data.contract.limits);
         }
         if (data.contract?.id) {
           setContractId(data.contract.id);
@@ -166,6 +198,11 @@ export default function DashboardPage() {
       const devBps = parseInt(maxDevBps || "120", 10);
       const hours = parseFloat(deadlineHours || "4");
       const deadlineNs = Date.now() * 1_000_000 + Math.round(hours * 3600 * 1_000_000_000);
+      const trimmedRecipient = recipientAccount.trim();
+      const targetEureNum = parseFloat(targetEure);
+      const targetOutAtomic =
+        targetEureNum > 0 ? BigInt(Math.round(targetEureNum * 1e6)).toString() : undefined;
+      const trimmedInvoiceRef = invoiceRef.trim();
 
       const res = await signAndSendTransaction({
         receiverId: contractId,
@@ -176,10 +213,13 @@ export default function DashboardPage() {
           max_chunk_in: chunkIn,
           deadline_ns: deadlineNs,
           max_dev_bps: devBps,
+          ...(trimmedRecipient ? { recipient: trimmedRecipient } : {}),
+          ...(targetOutAtomic ? { target_out: targetOutAtomic } : {}),
+          ...(trimmedInvoiceRef ? { invoice_ref: trimmedInvoiceRef } : {}),
         },
       });
 
-      const label = amtNum <= 100 ? "Active (Within Auto-Cap)" : "Pending (Submitted to Sputnik DAO)";
+      const label = amtNum <= autoCapUsdc ? "Active (Within Auto-Cap)" : "Pending (Needs Sputnik DAO Approval)";
       showToast(`Order created successfully: ${amtNum} USDC [${label}]`, {
         type: "success",
         explorerUrl: res.explorerUrl,
@@ -346,11 +386,11 @@ export default function DashboardPage() {
           </div>
           <div>
             <span className="text-muted">Auto-Cap: </span>
-            <span className="font-mono font-medium text-foreground">100.00 USDC</span>
+            <span className="font-mono font-medium text-foreground">{autoCapUsdc.toFixed(2)} USDC</span>
           </div>
           <div>
             <span className="text-muted">Max Chunk: </span>
-            <span className="font-mono font-medium text-foreground">20.00 USDC</span>
+            <span className="font-mono font-medium text-foreground">{maxChunkLimitUsdc.toFixed(2)} USDC</span>
           </div>
         </div>
       </div>
@@ -454,6 +494,45 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* Supplier Invoice Settlement Fields */}
+          <div className="rounded-lg border border-border bg-background/60 p-2.5 space-y-2">
+            <div className="text-[11px] font-medium text-muted">
+              Optional Supplier Invoice Payable (EURe settled via on-chain callback)
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="col-span-2">
+                <label className="text-[10px] text-muted block mb-1">Supplier Account</label>
+                <input
+                  type="text"
+                  value={recipientAccount}
+                  onChange={(e) => setRecipientAccount(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                  placeholder={accountId || "supplier.testnet"}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted block mb-1">Target Due (EURe)</label>
+                <input
+                  type="number"
+                  value={targetEure}
+                  onChange={(e) => setTargetEure(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                  placeholder="1000"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] text-muted block mb-1">Invoice Reference</label>
+              <input
+                type="text"
+                value={invoiceRef}
+                onChange={(e) => setInvoiceRef(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                placeholder="INV-2026-001"
+              />
+            </div>
+          </div>
+
           {/* Dynamic Cap Badge */}
           <div
             className={`rounded-lg px-2.5 py-1.5 text-xs flex items-center justify-between ${
@@ -469,7 +548,7 @@ export default function DashboardPage() {
               </span>
             </div>
             <span className="text-[10px] font-mono opacity-80">
-              {isAboveCap ? "> $100 Auto-Cap" : "<= $100 Auto-Cap"}
+              {isAboveCap ? `> $${autoCapUsdc} Auto-Cap` : `<= $${autoCapUsdc} Auto-Cap`}
             </span>
           </div>
 
@@ -508,15 +587,25 @@ export default function DashboardPage() {
               const total = Number(o.total_in) / 1e6;
               const executed = Number(o.executed_in) / 1e6;
               const pct = total > 0 ? Math.min(100, Math.round((executed / total) * 100)) : 0;
+              const targetOutEur = Number(o.target_out || "0") / 1e6;
+              const settledOutEur = Number(o.settled_out || "0") / 1e6;
+              const pendingOutEur = Number(o.pending_out || "0") / 1e6;
+              const remainingDueEur = Math.max(0, targetOutEur - settledOutEur);
+              const invoicePct = targetOutEur > 0 ? Math.min(100, Math.round((settledOutEur / targetOutEur) * 100)) : 0;
               const isPending = o.status === "Pending";
               const isActive = o.status === "Active";
 
               return (
                 <div key={o.id} className="rounded-xl border border-border bg-background p-3 text-xs">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono font-bold text-foreground">Order #{o.id}</span>
                       <span className="font-mono text-[11px] text-muted">{o.pair_label}</span>
+                      {o.invoice_ref && (
+                        <span className="rounded bg-surface border border-border px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">
+                          {o.invoice_ref}
+                        </span>
+                      )}
                     </div>
                     <span
                       className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
@@ -531,11 +620,43 @@ export default function DashboardPage() {
                     </span>
                   </div>
 
-                  {/* Progress Bar */}
+                  {/* Callback-Confirmed Invoice Balance Panel */}
+                  {targetOutEur > 0 && (
+                    <div className="mb-2.5 rounded-lg border border-border bg-surface p-2 space-y-1.5">
+                      <div className="flex items-center justify-between text-[10px] text-muted">
+                        <span>
+                          Supplier:{" "}
+                          <strong className="font-mono text-foreground">{o.recipient || o.requester}</strong>
+                        </span>
+                        <span className="font-mono">{invoicePct}% settled</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-[11px]">
+                        <div>
+                          <div className="text-[10px] text-muted">Invoice Target</div>
+                          <div className="font-mono font-semibold text-foreground">{targetOutEur.toFixed(2)} EURe</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-muted">Confirmed Paid</div>
+                          <div className="font-mono font-semibold text-emerald-400">{settledOutEur.toFixed(2)} EURe</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-muted">Amount Due</div>
+                          <div className="font-mono font-bold text-amber-400">{remainingDueEur.toFixed(2)} EURe</div>
+                        </div>
+                      </div>
+                      {pendingOutEur > 0 && (
+                        <div className="text-[10px] font-mono text-accent-blue">
+                          In-Flight Settlement Callback: {pendingOutEur.toFixed(2)} EURe
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Budget Execution Progress Bar */}
                   <div className="mb-2">
                     <div className="flex justify-between text-[11px] mb-1">
                       <span className="text-muted">
-                        Filled: <strong className="text-foreground">{executed.toFixed(2)}</strong> / {total.toFixed(2)} USDC
+                        Budget Settled: <strong className="text-foreground">{executed.toFixed(2)}</strong> / {total.toFixed(2)} USDC
                       </span>
                       <span className="font-mono font-medium text-foreground">{pct}%</span>
                     </div>
@@ -550,8 +671,8 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="flex items-center justify-between text-[10px] text-muted">
-                    <span>Chunks Executed: {o.chunks_count}</span>
-                    <span>Max Dev: {o.max_dev_bps} bps</span>
+                    <span>Confirmed Chunks: {o.chunks_count}</span>
+                    <span>Agent-Reported Dev Cap: {o.max_dev_bps} bps</span>
                   </div>
 
                   {/* Governance & Sputnik DAO Approval Panel for Pending Orders */}
@@ -871,10 +992,10 @@ export default function DashboardPage() {
         )}
       </Card>
 
-      {/* 6. Agent Ops & Recent Simulated Fills */}
+      {/* 6. Agent Ops & Callback-Verified Settlement Log */}
       <Card
-        title="Agent Runner & Execution Log"
-        subtitle="Simulated accounting fills with verifiable on-chain execute_chunk transactions"
+        title="Agent Runner & Settlement Log"
+        subtitle="Callback-verified NEP-141 EURe transfers (1Click dry:true indicative quotes + agent-reported deviation check)"
       >
         <div className="flex items-center justify-between pb-2 mb-2 border-b border-border">
           <div className="flex items-center gap-1.5 text-xs">
@@ -896,42 +1017,66 @@ export default function DashboardPage() {
           <div className="py-4 text-center text-xs text-muted">No fills executed yet.</div>
         ) : (
           <div className="space-y-1.5">
-            {fills.slice(0, 5).map((f) => {
+            {fills.slice(0, 8).map((f) => {
               const inAmt = (Number(f.amount_in) / 1e6).toFixed(2);
-              const outAmt = (Number(f.simulated_out) / 1e18).toFixed(4);
+              const outAmtNum = f.settlement_out
+                ? Number(f.settlement_out) / 1e6
+                : Number(f.simulated_out) >= 1e14
+                ? Number(f.simulated_out) / 1e18
+                : Number(f.simulated_out) / 1e6;
+              const outAmt = outAmtNum.toFixed(2);
+              const status =
+                f.settlement_status ||
+                (!f.is_simulated && f.ft_transfer_tx_hash ? "CONFIRMED" : "UNVERIFIED_LEGACY");
+              const isConfirmed = status === "CONFIRMED";
+              const isFailed = status === "FAILED";
+              const isInFlight = status === "IN_FLIGHT";
 
               return (
                 <div
                   key={f.id}
-                  className="flex items-center justify-between rounded-lg border border-border bg-background px-2.5 py-2 text-xs"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background px-2.5 py-2 text-xs"
                 >
-                  <div>
-                    <div className="font-semibold text-foreground flex items-center gap-1.5">
-                      <span>Chunk #{f.chunk_index} for Order #{f.order_id}</span>
-                      {f.is_simulated ? (
-                        <span className="rounded bg-amber-500/15 px-1 py-0.2 text-[9px] font-bold text-amber-400 uppercase">
-                          Simulated
+                  <div className="min-w-0">
+                    <div className="font-semibold text-foreground flex items-center gap-1.5 flex-wrap">
+                      <span>Chunk #{f.chunk_index} · Order #{f.order_id}</span>
+                      {isConfirmed ? (
+                        <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400 uppercase">
+                          Confirmed On-Chain
+                        </span>
+                      ) : isFailed ? (
+                        <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[9px] font-bold text-red-400 uppercase">
+                          Failed · Balance Unchanged
+                        </span>
+                      ) : isInFlight ? (
+                        <span className="rounded bg-accent-blue/15 px-1.5 py-0.5 text-[9px] font-bold text-accent-blue uppercase">
+                          In-Flight Callback
                         </span>
                       ) : (
-                        <span className="rounded bg-emerald-500/15 px-1 py-0.2 text-[9px] font-bold text-emerald-400 uppercase">
-                          On-Chain Settlement
+                        <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-400 uppercase">
+                          Simulated / Unverified
                         </span>
                       )}
                     </div>
                     <div className="text-[10px] text-muted font-mono mt-0.5">
-                      {inAmt} USDC &rarr; ~{outAmt} EURe ({f.deviation_bps} bps)
+                      {inAmt} USDC (budget) &rarr; {outAmt} EURe {f.recipient ? `to ${f.recipient}` : ""} ({f.deviation_bps} bps agent-reported)
                     </div>
+                    {f.failure_reason && (
+                      <div className="text-[10px] text-red-400 font-mono mt-0.5 truncate">
+                        {f.failure_reason}
+                      </div>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    {f.ft_transfer_url && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isConfirmed && f.ft_transfer_url && (
                       <a
                         href={f.ft_transfer_url}
                         target="_blank"
                         rel="noreferrer"
                         className="flex items-center gap-1 text-[11px] font-mono text-emerald-400 hover:underline"
                       >
-                        <span>EURe Transfer</span>
+                        <span>EURe Settlement</span>
                         <ExternalLink className="h-3 w-3" />
                       </a>
                     )}
@@ -960,16 +1105,24 @@ export default function DashboardPage() {
               Recent Strategy Decisions
             </div>
             <div className="space-y-1">
-              {decisions.slice(0, 3).map((d) => (
+              {decisions.slice(0, 4).map((d) => (
                 <div
                   key={d.id}
-                  className="flex items-center justify-between text-[11px] font-mono text-zinc-400 py-0.5"
+                  className="flex items-center justify-between text-[11px] font-mono text-zinc-400 py-0.5 gap-2"
                 >
-                  <span className={d.decision === "EXECUTE" ? "text-green-400 font-semibold" : "text-amber-400"}>
+                  <span
+                    className={
+                      d.decision === "EXECUTE"
+                        ? "text-green-400 font-semibold"
+                        : d.decision.includes("FAILED")
+                        ? "text-red-400 font-semibold"
+                        : "text-amber-400"
+                    }
+                  >
                     [{d.decision}]
                   </span>
                   <span className="truncate max-w-[240px] text-zinc-300">{d.reason}</span>
-                  <span className="text-zinc-500 text-[10px]">Score: {d.score}</span>
+                  <span className="text-zinc-500 text-[10px] shrink-0">Score: {d.score}</span>
                 </div>
               ))}
             </div>

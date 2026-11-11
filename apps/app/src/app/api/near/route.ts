@@ -25,7 +25,10 @@ const EURE_ID = process.env.EURE_CONTRACT_ID || `eure.${OPERATOR}`
 // SQLite connection for agent fills and decisions
 function getAgentDb() {
   try {
-    const dbPath = path.resolve(process.cwd(), '..', 'agent', 'data', 'agent.db')
+    const envPath = process.env.GETNEAR_AGENT_DB_PATH?.trim()
+    const dbPath = envPath
+      ? path.resolve(envPath)
+      : path.resolve(process.cwd(), '..', 'agent', 'data', 'agent.db')
     if (fs.existsSync(dbPath)) {
       const db = new Database(dbPath, { readonly: true })
       return db
@@ -41,10 +44,11 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const userAccount = searchParams.get('account')?.trim()
 
-    const [ordersRes, limitsRes, isPausedRes, proposalsRes, vaultEureRes, userUsdcRes, userEureRes] = await Promise.allSettled([
+    const [ordersRes, limitsRes, isPausedRes, settlementTokenRes, proposalsRes, vaultEureRes, userUsdcRes, userEureRes] = await Promise.allSettled([
       nearClient.callView(FX_BUDGET_ID, 'list_orders', { from_index: 0, limit: 50 }),
       nearClient.callView(FX_BUDGET_ID, 'get_limits', {}),
       nearClient.callView(FX_BUDGET_ID, 'is_paused', {}),
+      nearClient.callView<string>(FX_BUDGET_ID, 'get_settlement_token', {}),
       nearClient.callView(DAO_ID, 'get_proposals', { from_index: 0, limit: 50 }),
       nearClient.callView<string>(EURE_ID, 'ft_balance_of', { account_id: FX_BUDGET_ID }),
       userAccount ? nearClient.callView<string>(USDC_ID, 'ft_balance_of', { account_id: userAccount }) : Promise.resolve('0'),
@@ -59,18 +63,23 @@ export async function GET(req: NextRequest) {
       max_horizon_ns: 604800000000000,
     }
     const isPaused = isPausedRes.status === 'fulfilled' ? isPausedRes.value : false
+    const settlementToken = settlementTokenRes.status === 'fulfilled' ? settlementTokenRes.value : EURE_ID
     const proposals = proposalsRes.status === 'fulfilled' ? proposalsRes.value : []
     const vaultEure = vaultEureRes.status === 'fulfilled' ? (Number(vaultEureRes.value || '0') / 1e6) : 0
     const userUsdc = userUsdcRes.status === 'fulfilled' ? (Number(userUsdcRes.value || '0') / 1e6) : 0
     const userEure = userEureRes.status === 'fulfilled' ? (Number(userEureRes.value || '0') / 1e6) : 0
 
-    // Read agent fills and decisions
+    // Read agent fills and decisions (normalize SQLite 0/1 integer to boolean)
     let fills: Record<string, unknown>[] = []
     let decisions: Record<string, unknown>[] = []
     const db = getAgentDb()
     if (db) {
       try {
-        fills = db.prepare('SELECT * FROM agent_fills ORDER BY id DESC LIMIT 20').all() as Record<string, unknown>[]
+        const rawFills = db.prepare('SELECT * FROM agent_fills ORDER BY id DESC LIMIT 20').all() as Record<string, unknown>[]
+        fills = rawFills.map((f) => ({
+          ...f,
+          is_simulated: Boolean(f.is_simulated),
+        }))
         decisions = db.prepare('SELECT * FROM agent_decisions ORDER BY id DESC LIMIT 20').all() as Record<string, unknown>[]
         db.close()
       } catch (e) {
@@ -101,6 +110,7 @@ export async function GET(req: NextRequest) {
       },
       contract: {
         id: FX_BUDGET_ID,
+        settlementToken,
         isPaused,
         limits,
         orders,

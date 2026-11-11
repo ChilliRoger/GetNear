@@ -18,10 +18,10 @@ export default function AppLayout({
   return (
     <ToastProvider>
       <NearWalletProvider>
-        {/* Testnet & Simulation Banner */}
-        <div className="bg-amber-500/10 border-b border-amber-500/20 px-3 py-1.5 text-center text-xs font-medium text-amber-400 tracking-wider flex items-center justify-center gap-2">
+        {/* Testnet & Settlement Provenance Banner */}
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-3 py-1.5 text-center text-[11px] font-medium text-amber-400 tracking-wide flex items-center justify-center gap-2">
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-          <span>TESTNET · SIMULATED FILLS</span>
+          <span>TESTNET · CALLBACK-VERIFIED EURe PAYOUT · SIMULATED USDC FX LEG (1Click dry:true)</span>
         </div>
 
         {/* Header */}

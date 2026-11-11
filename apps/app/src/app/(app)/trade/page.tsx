@@ -15,6 +15,10 @@ export default function TradePage() {
   const [maxChunk, setMaxChunk] = useState("20");
   const [maxDevBps, setMaxDevBps] = useState("120");
   const [deadlineHours, setDeadlineHours] = useState("4");
+  const [recipientAccount, setRecipientAccount] = useState("");
+  const [targetEure, setTargetEure] = useState("");
+  const [invoiceRef, setInvoiceRef] = useState("");
+  const [autoCapUsdc, setAutoCapUsdc] = useState(100);
   const [submitting, setSubmitting] = useState(false);
 
   // Live quote estimates
@@ -23,7 +27,18 @@ export default function TradePage() {
   const [quoteLoading, setQuoteLoading] = useState(true);
 
   const numAmount = parseFloat(amount) || 0;
-  const isAboveCap = numAmount > 100;
+  const isAboveCap = numAmount > autoCapUsdc;
+
+  useEffect(() => {
+    fetch("/api/near")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.contract?.limits?.auto_cap_in) {
+          setAutoCapUsdc(Number(d.contract.limits.auto_cap_in) / 1e6);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,6 +88,11 @@ export default function TradePage() {
       const devBps = parseInt(maxDevBps || "120", 10);
       const hours = parseFloat(deadlineHours || "4");
       const deadlineNs = Date.now() * 1_000_000 + Math.round(hours * 3600 * 1_000_000_000);
+      const trimmedRecipient = recipientAccount.trim();
+      const targetEureNum = parseFloat(targetEure);
+      const targetOutAtomic =
+        targetEureNum > 0 ? BigInt(Math.round(targetEureNum * 1e6)).toString() : undefined;
+      const trimmedInvoiceRef = invoiceRef.trim();
 
       const res = await signAndSendTransaction({
         receiverId: contractId,
@@ -83,10 +103,13 @@ export default function TradePage() {
           max_chunk_in: chunkIn,
           deadline_ns: deadlineNs,
           max_dev_bps: devBps,
+          ...(trimmedRecipient ? { recipient: trimmedRecipient } : {}),
+          ...(targetOutAtomic ? { target_out: targetOutAtomic } : {}),
+          ...(trimmedInvoiceRef ? { invoice_ref: trimmedInvoiceRef } : {}),
         },
       });
 
-      const label = numAmount <= 100 ? "Active (Auto-Approved)" : "Pending (Submitted to Sputnik DAO)";
+      const label = numAmount <= autoCapUsdc ? "Active (Auto-Approved)" : "Pending (Submitted to Sputnik DAO)";
       showToast(`Order created successfully: ${numAmount} USDC [${label}]`, {
         type: "success",
         explorerUrl: res.explorerUrl,
@@ -131,7 +154,7 @@ export default function TradePage() {
             <div>
               <div className="flex justify-between items-center mb-1">
                 <label className="text-[11px] font-medium text-foreground">Total Input Amount (USDC)</label>
-                <span className="text-[10px] text-muted font-mono">Auto-Cap: 100.00 USDC</span>
+                <span className="text-[10px] text-muted font-mono">Auto-Cap: {autoCapUsdc.toFixed(2)} USDC</span>
               </div>
               <input
                 type="number"
@@ -177,8 +200,8 @@ export default function TradePage() {
                   </div>
                   <div className="text-[10px] opacity-80">
                     {isAboveCap
-                      ? "Exceeds $100 auto-cap — creates a 2-of-3 council proposal"
-                      : "Within $100 auto-cap — becomes Active immediately"}
+                      ? `Exceeds $${autoCapUsdc} auto-cap — creates a 2-of-3 council proposal`
+                      : `Within $${autoCapUsdc} auto-cap — becomes Active immediately`}
                   </div>
                 </div>
               </div>
@@ -228,18 +251,57 @@ export default function TradePage() {
                 ))}
               </div>
             </div>
+
+            {/* Optional Supplier Invoice Payable */}
+            <div className="rounded-lg border border-border bg-background/60 p-2.5 space-y-2">
+              <div className="text-[11px] font-medium text-muted">
+                Optional Supplier Invoice Payable (EURe settled via on-chain callback)
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2">
+                  <label className="text-[10px] text-muted block mb-1">Supplier Account</label>
+                  <input
+                    type="text"
+                    value={recipientAccount}
+                    onChange={(e) => setRecipientAccount(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                    placeholder={accountId || "supplier.testnet"}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted block mb-1">Target Due (EURe)</label>
+                  <input
+                    type="number"
+                    value={targetEure}
+                    onChange={(e) => setTargetEure(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                    placeholder="1000"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-muted block mb-1">Invoice Reference</label>
+                <input
+                  type="text"
+                  value={invoiceRef}
+                  onChange={(e) => setInvoiceRef(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                  placeholder="INV-2026-001"
+                />
+              </div>
+            </div>
           </div>
         </Card>
 
         {/* 3. Output Estimate Card */}
-        <Card title="Simulated Output Preview">
+        <Card title="Indicative Quote & Callback Settlement Preview">
           <div className="grid grid-cols-2 gap-3 text-xs pt-1">
             <div>
-              <div className="text-[11px] text-muted">You Send (Testnet)</div>
+              <div className="text-[11px] text-muted">FX Budget Input (Simulated Swap)</div>
               <div className="font-mono text-sm font-semibold text-foreground">{numAmount} USDC</div>
             </div>
             <div>
-              <div className="text-[11px] text-muted">Estimated Output (Simulated)</div>
+              <div className="text-[11px] text-muted">Est. On-Chain Payout (EURe)</div>
               <div className="font-mono text-sm font-semibold text-green-400">
                 {quoteLoading ? "Fetching quote..." : `~${estimatedOut} EURe`}
               </div>
