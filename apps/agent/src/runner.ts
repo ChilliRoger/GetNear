@@ -19,23 +19,67 @@ import {
   type AgentFill,
   type AgentDecisionRecord,
 } from './db.js'
-import { runCallFunction } from '../../../scripts/near/near-runner.js'
+import { findKeyCredentialPath, runCallFunction } from '../../../scripts/near/near-runner.js'
 
 // Minimum route probe amount: $1.00 USDC (1_000_000 atomic units)
 const ROUTE_MIN_IN = 1_000_000n
 
+export function computeEuReAtomicOut(
+  amountIn: bigint,
+  simulatedOut: bigint,
+  decimalsOut: number,
+  rate: number,
+): bigint {
+  if (simulatedOut > 0n) {
+    if (decimalsOut > 6) {
+      const scaled = simulatedOut / 10n ** BigInt(decimalsOut - 6)
+      if (scaled > 0n) return scaled
+    } else if (decimalsOut < 6) {
+      const scaled = simulatedOut * 10n ** BigInt(6 - decimalsOut)
+      if (scaled > 0n) return scaled
+    } else {
+      return simulatedOut
+    }
+  }
+  return BigInt(Math.max(1, Math.round((Number(amountIn) / 1e6) * rate * 1e6)))
+}
+
 export interface ContractOrder {
   id: number
   requester: string
+  recipient: string
+  invoice_ref?: string | null
   pair_label: string
   total_in: string
   executed_in: string
+  pending_in: string
+  target_out: string
+  settled_out: string
+  pending_out: string
   max_chunk_in: string
   deadline_ns: number
   max_dev_bps: number
   status: 'Pending' | 'Active' | 'Completed' | 'Expired' | 'Cancelled'
   last_chunk_ns: number
   chunks_count: number
+}
+
+export type ContractChunkStatus = 'InFlight' | 'Settled' | 'Failed'
+
+export interface ContractChunkRecord {
+  key: string
+  order_id: number
+  amount_in: string
+  settlement_out: string
+  simulated_out: string
+  recipient: string
+  quote_ref: string
+  deviation_bps: number
+  status: ContractChunkStatus
+  attempts: number
+  initiated_ns: number
+  settled_ns?: number | null
+  failure_reason?: string | null
 }
 
 export interface ContractLimits {
@@ -74,6 +118,7 @@ export class AgentRunner {
   private agentId: string
   private operatorId: string
   private eureId: string
+  private cachedAgentCredPath?: string
   private activeLocks = new Set<number>()
   private isRunning = false
   private timer: NodeJS.Timeout | null = null
@@ -107,13 +152,77 @@ export class AgentRunner {
     return {
       agentId: this.agentId,
       contractId: this.contractId,
+      settlementTokenId: this.eureId,
       isRunning: this.isRunning,
       pollIntervalMs: this.pollIntervalMs,
       totalChunksExecuted: this.totalChunksExecuted,
       lastTickTime: this.lastTickTime,
       lastStatus: this.lastStatus,
+      restrictedKeyPath: this.cachedAgentCredPath || null,
       activeLocks: Array.from(this.activeLocks),
     }
+  }
+
+  /**
+   * Resolve the local credential file for the agent's restricted FunctionCall access key
+   * (execute_chunk only on FX_BUDGET_CONTRACT_ID) so we never sign with a FullAccess key.
+   */
+  public async resolveAgentCredentialPath(): Promise<string | undefined> {
+    if (this.cachedAgentCredPath) return this.cachedAgentCredPath
+    const envPath = process.env.AGENT_CREDENTIAL_PATH?.trim()
+    if (envPath) {
+      this.cachedAgentCredPath = envPath
+      return envPath
+    }
+
+    try {
+      const keyList = await this.client.viewAccessKeyList(this.agentId)
+      for (const item of keyList.keys) {
+        const perm = item.access_key.permission
+        if (
+          typeof perm === 'object' &&
+          'FunctionCall' in perm &&
+          perm.FunctionCall.receiver_id === this.contractId &&
+          perm.FunctionCall.method_names.includes('execute_chunk')
+        ) {
+          const found = findKeyCredentialPath(this.agentId, item.public_key)
+          if (found) {
+            this.cachedAgentCredPath = found
+            return found
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[Agent] Could not look up restricted FunctionCall key:', err)
+    }
+
+    return undefined
+  }
+
+  private async pollChunkRecord(
+    idempotencyKey: string,
+    maxPolls = 6,
+    delayMs = 1000,
+  ): Promise<ContractChunkRecord | null> {
+    for (let i = 0; i < maxPolls; i++) {
+      try {
+        const rec = await this.client.callView<ContractChunkRecord | null>(
+          this.contractId,
+          'get_chunk_record',
+          { key: idempotencyKey },
+        )
+        if (rec && rec.status !== 'InFlight') {
+          return rec
+        }
+        if (i === maxPolls - 1) {
+          return rec
+        }
+      } catch {
+        // Transient view RPC error; continue bounded polling
+      }
+      await new Promise((r) => setTimeout(r, delayMs))
+    }
+    return null
   }
 
   public start() {
@@ -191,16 +300,34 @@ export class AgentRunner {
       const nowMs = Date.now()
       const nowNs = BigInt(nowMs) * 1_000_000n
 
-      // Check remaining amount
+      // Check remaining budget and in-flight settlement lock
       const totalIn = BigInt(order.total_in)
-      const executedIn = BigInt(order.executed_in)
-      const remainingIn = totalIn - executedIn
+      const executedIn = BigInt(order.executed_in || '0')
+      const pendingIn = BigInt(order.pending_in || '0')
+      const targetOut = BigInt(order.target_out || '0')
+      const settledOut = BigInt(order.settled_out || '0')
+      const pendingOut = BigInt(order.pending_out || '0')
 
-      if (remainingIn <= 0n) {
+      if (pendingIn > 0n || pendingOut > 0n) {
+        recordDecision({
+          order_id: order.id,
+          timestamp: nowMs,
+          score: 0,
+          decision: 'WAIT',
+          reason: 'IN_FLIGHT_SETTLEMENT_PENDING',
+          chunk_size: '0',
+        })
         return
       }
 
-      // Check deadline
+      const remainingIn = totalIn - executedIn - pendingIn
+      const remainingDueOut = targetOut > settledOut ? targetOut - settledOut : 0n
+
+      if (remainingIn <= 0n || (targetOut > 0n && remainingDueOut === 0n)) {
+        return
+      }
+
+      // Check deadline (expire_order is permissionless; run via operator so agent stays restricted to execute_chunk)
       if (nowNs >= BigInt(order.deadline_ns)) {
         console.log(`[Agent] Order #${order.id} deadline has passed. Expiring...`)
         runCallFunction({
@@ -209,7 +336,7 @@ export class AgentRunner {
           args: { id: order.id },
           deposit: '0 NEAR',
           gas: '50.0 Tgas',
-          signerId: this.agentId,
+          signerId: this.operatorId,
         })
         recordDecision({
           order_id: order.id,
@@ -305,21 +432,48 @@ export class AgentRunner {
         return
       }
 
-      // Execute Chunk on NEAR Testnet
+      // Execute Chunk on NEAR Testnet via FxBudget::execute_chunk (cross-contract NEP-141 payout + callback)
       const quoteRef = computeQuoteRef(quote.quoteId, quote.amountIn, quote.amountOut, nowMs)
+      const decimalsOut = quote.decimalsOut ?? 18
       const simulatedOut = computeSimulatedOutput(
         candidateChunk,
         BigInt(quote.amountIn),
         BigInt(quote.amountOut),
       )
 
-      console.log(`\n[Agent] 🚀 EXECUTING CHUNK for Order #${order.id}:`)
-      console.log(`  Amount In: ${Number(candidateChunk) / 1e6} USDC`)
-      console.log(`  Simulated Out: ${(Number(simulatedOut) / Math.pow(10, quote.decimalsOut ?? 18)).toFixed(4)} EURe`)
-      console.log(`  Quote Rate: ${quote.rate.toFixed(4)} | Ref Rate: ${refRate.toFixed(4)} | Dev: ${deviationBps} bps`)
+      let settlementOut = computeEuReAtomicOut(candidateChunk, simulatedOut, decimalsOut, quote.rate)
+      if (targetOut > 0n && remainingDueOut > 0n && settlementOut > remainingDueOut) {
+        settlementOut = remainingDueOut
+      }
+
+      const idempotencyKey = `order-${order.id}-seq-${order.chunks_count + 1}`
+      const recipient = order.recipient || order.requester
+
+      console.log(`\n[Agent] EXECUTING CHUNK for Order #${order.id} (key=${idempotencyKey}):`)
+      console.log(`  Amount In (USDC budget): ${Number(candidateChunk) / 1e6} USDC`)
+      console.log(`  Indicative Out (1Click decimals=${decimalsOut}): ${(Number(simulatedOut) / Math.pow(10, decimalsOut)).toFixed(4)} EURe`)
+      console.log(`  Settlement Payout (6-dec EURe): ${Number(settlementOut) / 1e6} EURe -> ${recipient}`)
+      console.log(`  Quote Rate: ${quote.rate.toFixed(4)} | Ref Rate: ${refRate.toFixed(4)} | Agent-Reported Dev: ${deviationBps} bps`)
       console.log(`  Quote Ref: ${quoteRef}`)
 
-      // Execute transaction with bounded retries
+      const agentCredPath = await this.resolveAgentCredentialPath()
+      if (!agentCredPath) {
+        const msg = `Restricted FunctionCall credential for ${this.agentId} (${this.contractId}::execute_chunk) not found locally`
+        console.error(`[Agent] ${msg}`)
+        recordDecision({
+          order_id: order.id,
+          timestamp: nowMs,
+          score: 0,
+          decision: 'WAIT',
+          reason: `RESTRICTED_KEY_MISSING: ${msg}`,
+          chunk_size: candidateChunk.toString(),
+          quote_ref: quoteRef,
+          deviation_bps: deviationBps,
+        })
+        return
+      }
+
+      // Execute transaction with bounded retries (using ONLY the restricted execute_chunk key)
       let txResult: any = null
       let attempts = 0
       const maxAttempts = 3
@@ -336,10 +490,13 @@ export class AgentRunner {
               quote_ref: quoteRef,
               deviation_bps: deviationBps,
               simulated_out: simulatedOut.toString(),
+              settlement_out: settlementOut.toString(),
+              idempotency_key: idempotencyKey,
             },
             deposit: '0 NEAR',
-            gas: '100.0 Tgas',
+            gas: '120.0 Tgas',
             signerId: this.agentId,
+            credentialPath: agentCredPath,
           })
           break
         } catch (err: any) {
@@ -362,84 +519,85 @@ export class AgentRunner {
         }
       }
 
-      this.totalChunksExecuted++
+      // Query on-chain callback-confirmed settlement status before persisting fill truth
+      const chunkRecord = await this.pollChunkRecord(idempotencyKey)
+      const isConfirmed = chunkRecord?.status === 'Settled'
 
-      // Transfer real on-chain NEP-141 EURe tokens to requester's wallet
-      let ftTransferTx: any = null
-      const eureAtomic = BigInt(
-        Math.max(1, Math.round((Number(candidateChunk) / 1e6) * quote.rate * 1e6)),
-      ).toString()
-
-      try {
-        // Ensure requester has storage registered on the EURe contract
-        const reg = await this.client.callView<any>(this.eureId, 'storage_balance_of', {
-          account_id: order.requester,
-        })
-        if (!reg || BigInt(reg.total || '0') === 0n) {
-          console.log(`[Agent] Registering EURe storage for requester ${order.requester}...`)
-          runCallFunction({
-            contractId: this.eureId,
-            methodName: 'storage_deposit',
-            args: { account_id: order.requester, registration_only: false },
-            deposit: '0.0125 NEAR',
-            gas: '30.0 Tgas',
-            signerId: this.operatorId,
-          })
+      if (isConfirmed) {
+        this.totalChunksExecuted++
+        const fill: AgentFill = {
+          order_id: order.id,
+          chunk_index: order.chunks_count + 1,
+          idempotency_key: idempotencyKey,
+          amount_in: candidateChunk.toString(),
+          settlement_out: chunkRecord.settlement_out || settlementOut.toString(),
+          simulated_out: simulatedOut.toString(),
+          recipient: chunkRecord.recipient || recipient,
+          quote_ref: quoteRef,
+          deviation_bps: deviationBps,
+          tx_hash: txResult?.txHash,
+          explorer_url: txResult?.explorerUrl,
+          ft_transfer_tx_hash: txResult?.txHash,
+          ft_transfer_url: txResult?.explorerUrl,
+          settlement_status: 'CONFIRMED',
+          is_simulated: false,
+          timestamp: nowMs,
         }
+        recordFill(fill)
 
-        console.log(`[Agent] 💸 Dispatching real on-chain EURe transfer:`)
-        console.log(`  Amount: ${Number(eureAtomic) / 1e6} EURe -> ${order.requester}`)
-
-        ftTransferTx = runCallFunction({
-          contractId: this.eureId,
-          methodName: 'ft_transfer',
-          args: {
-            receiver_id: order.requester,
-            amount: eureAtomic,
-            memo: `GetNear FX Settlement Order #${order.id} Chunk #${order.chunks_count + 1}`,
-          },
-          deposit: '1 yoctoNEAR',
-          gas: '50.0 Tgas',
-          signerId: this.contractId,
+        recordDecision({
+          order_id: order.id,
+          timestamp: nowMs,
+          score: 88,
+          decision: 'EXECUTE',
+          reason: `CHUNK_SETTLED_ONCHAIN: ${Number(candidateChunk) / 1e6} USDC -> ${(Number(fill.settlement_out) / 1e6).toFixed(2)} EURe (${deviationBps} bps)`,
+          chunk_size: candidateChunk.toString(),
+          quote_ref: quoteRef,
+          deviation_bps: deviationBps,
         })
 
-        console.log(`✓ Real EURe transferred to ${order.requester}! Tx: ${ftTransferTx.txHash || 'confirmed'}`)
-      } catch (err: any) {
-        console.warn(`[Agent] Real EURe transfer notice: ${err.message}`)
-      }
+        console.log(`✅ Chunk confirmed by on-chain ft_transfer callback!`)
+        if (txResult?.txHash) {
+          console.log(`  Tx Hash: ${txResult.txHash}`)
+          console.log(`  Explorer: ${txResult.explorerUrl}`)
+        }
+      } else {
+        const status = chunkRecord?.status === 'InFlight' ? 'IN_FLIGHT' : 'FAILED'
+        const failureReason =
+          chunkRecord?.failure_reason ||
+          `On-chain chunk status is ${chunkRecord?.status || 'UNKNOWN'} — invoice balance unchanged`
 
-      // Record fill with on-chain settlement details
-      const fill: AgentFill = {
-        order_id: order.id,
-        chunk_index: order.chunks_count + 1,
-        amount_in: candidateChunk.toString(),
-        simulated_out: simulatedOut.toString(),
-        quote_ref: quoteRef,
-        deviation_bps: deviationBps,
-        tx_hash: txResult?.txHash,
-        explorer_url: txResult?.explorerUrl,
-        ft_transfer_tx_hash: ftTransferTx?.txHash,
-        ft_transfer_url: ftTransferTx?.explorerUrl,
-        is_simulated: false, // Real NEP-141 token transferred to user wallet
-        timestamp: nowMs,
-      }
-      recordFill(fill)
+        const fill: AgentFill = {
+          order_id: order.id,
+          chunk_index: order.chunks_count + 1,
+          idempotency_key: idempotencyKey,
+          amount_in: candidateChunk.toString(),
+          settlement_out: chunkRecord?.settlement_out || settlementOut.toString(),
+          simulated_out: simulatedOut.toString(),
+          recipient,
+          quote_ref: quoteRef,
+          deviation_bps: deviationBps,
+          tx_hash: txResult?.txHash,
+          explorer_url: txResult?.explorerUrl,
+          settlement_status: status,
+          failure_reason: failureReason,
+          is_simulated: true, // CRITICAL: Never label an unconfirmed/failed transfer non-simulated
+          timestamp: nowMs,
+        }
+        recordFill(fill)
 
-      recordDecision({
-        order_id: order.id,
-        timestamp: nowMs,
-        score: 88,
-        decision: 'EXECUTE',
-        reason: `CHUNK_EXECUTED: ${Number(candidateChunk) / 1e6} USDC (${deviationBps} bps)`,
-        chunk_size: candidateChunk.toString(),
-        quote_ref: quoteRef,
-        deviation_bps: deviationBps,
-      })
+        recordDecision({
+          order_id: order.id,
+          timestamp: nowMs,
+          score: 0,
+          decision: status === 'FAILED' ? 'SETTLEMENT_FAILED_BALANCE_UNCHANGED' : 'WAIT',
+          reason: failureReason,
+          chunk_size: candidateChunk.toString(),
+          quote_ref: quoteRef,
+          deviation_bps: deviationBps,
+        })
 
-      console.log(`✅ Chunk successfully executed and persisted!`)
-      if (txResult?.txHash) {
-        console.log(`  Tx Hash: ${txResult.txHash}`)
-        console.log(`  Explorer: ${txResult.explorerUrl}`)
+        console.warn(`[Agent] ⚠ Chunk NOT settled (${status}): ${failureReason}`)
       }
     } finally {
       this.activeLocks.delete(order.id)
