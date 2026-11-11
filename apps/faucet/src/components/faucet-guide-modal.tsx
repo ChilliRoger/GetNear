@@ -97,7 +97,7 @@ export function FaucetGuideModal({
                     2. Paste the address into the faucet input box, select your token (<strong>USDC</strong> or <strong>EURe</strong>), and specify your desired amount (up to 500 tokens).
                   </p>
                   <p>
-                    3. Click <strong>Request Tokens</strong>. The faucet sponsors your NEP-145 storage deposit, tops up first-time zero/low-NEAR wallets dynamically (~0.45 NEAR under NEP-642) for gas &amp; wallet token import, and mints your requested tokens.
+                    3. Click <strong>Request Tokens</strong>. The faucet sponsors your NEP-145 storage deposit, tops up first-time zero/low-NEAR wallets dynamically (~0.45 NEAR under NEP-642) for gas &amp; wallet token import, and transfers your requested tokens.
                   </p>
                 </div>
               </div>

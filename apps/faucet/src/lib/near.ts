@@ -346,13 +346,15 @@ export async function dispenseTokens(params: {
     throw new Error('Faucet operator NEAR reserves are temporarily low. Please try again shortly.')
   }
 
-  // 4. Inspect on-chain registration state and live gas price before mutating state
-  const [usdcRegistered, eureRegistered, refStorageTotal, liveGasPriceYocto] = await Promise.all([
-    isStorageRegistered(USDC_CONTRACT_ID, receiverId),
-    isStorageRegistered(EURE_CONTRACT_ID, receiverId),
-    getStorageTotal(REF_CONTRACT_ID, receiverId),
-    getLiveGasPrice(),
-  ])
+  // 4. Inspect on-chain registration state, gas price, and operator token inventory
+  const [usdcRegistered, eureRegistered, refStorageTotal, liveGasPriceYocto, operatorTokenBal] =
+    await Promise.all([
+      isStorageRegistered(USDC_CONTRACT_ID, receiverId),
+      isStorageRegistered(EURE_CONTRACT_ID, receiverId),
+      getStorageTotal(REF_CONTRACT_ID, receiverId),
+      getLiveGasPrice(),
+      getTokenBalance(targetToken.contractId, OPERATOR_ID),
+    ])
   const isFirstTimeWallet = !usdcRegistered && !eureRegistered
   const targetMinYocto = computeTargetMinNativeYocto({
     liveGasPriceYocto,
@@ -408,18 +410,33 @@ export async function dispenseTokens(params: {
   const targetRegistered = token === 'EURE' ? eureRegistered : usdcRegistered
   await ensureStorageRegistered(targetToken.contractId, receiverId, targetRegistered)
 
-  // Mint tokens
+  // Replenish operator inventory via mint() only when low, then distribute via ft_transfer
+  // (1 yoctoNEAR) so fungible_token.wasm emits a "Transfer ..." log that indexers discover.
   const atomicAmount = (BigInt(dispenseAmount) * 1_000_000n).toString()
-  console.log(`[Faucet] Minting ${dispenseAmount} ${targetToken.symbol} to ${receiverId}...`)
+  if (operatorTokenBal < dispenseAmount) {
+    console.log(`[Faucet] Replenishing operator ${targetToken.symbol} inventory (+${dispenseAmount})...`)
+    await account.callFunctionRaw({
+      contractId: targetToken.contractId,
+      methodName: 'mint',
+      args: {
+        account_id: OPERATOR_ID,
+        amount: atomicAmount,
+      },
+      deposit: 0n,
+      gas: FUNCTION_GAS,
+    })
+  }
 
+  console.log(`[Faucet] Transferring ${dispenseAmount} ${targetToken.symbol} to ${receiverId}...`)
   const outcome: any = await account.callFunctionRaw({
     contractId: targetToken.contractId,
-    methodName: 'mint',
+    methodName: 'ft_transfer',
     args: {
-      account_id: receiverId,
+      receiver_id: receiverId,
       amount: atomicAmount,
+      memo: 'GetNear Testnet Faucet',
     },
-    deposit: 0n,
+    deposit: 1n,
     gas: FUNCTION_GAS,
   })
 
