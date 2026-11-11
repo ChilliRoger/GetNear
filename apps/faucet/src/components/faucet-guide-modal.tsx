@@ -97,7 +97,7 @@ export function FaucetGuideModal({
                     2. Paste the address into the faucet input box, select your token (<strong>USDC</strong> or <strong>EURe</strong>), and specify your desired amount (up to 500 tokens).
                   </p>
                   <p>
-                    3. Click <strong>Request Tokens</strong>. The faucet automatically sponsors your NEP-145 storage deposit and mints the requested tokens in a single on-chain transaction.
+                    3. Click <strong>Request Tokens</strong>. The faucet sponsors your NEP-145 storage deposit, tops up first-time zero/low-NEAR wallets to 0.16 NEAR for gas &amp; wallet token import, and mints your requested tokens.
                   </p>
                 </div>
               </div>
@@ -148,10 +148,10 @@ export function FaucetGuideModal({
                   <div className="p-3 bg-zinc-950 rounded border border-zinc-800/80 space-y-1">
                     <div className="font-semibold text-zinc-200 flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      <span>Sponsored Storage</span>
+                      <span>Sponsored Storage &amp; Gas</span>
                     </div>
                     <div className="text-zinc-400 leading-relaxed">
-                      Operator pays 0.0125 NEAR storage deposit automatically on your first claim. Recipient must be an active testnet account.
+                      Operator pays 0.00125 NEAR NEP-145 storage automatically, plus a one-time top-up to 0.16 NEAR (up to 2 new wallets per IP / 24h) so Meteor Wallet imports succeed on zero-balance accounts.
                     </div>
                   </div>
                 </div>

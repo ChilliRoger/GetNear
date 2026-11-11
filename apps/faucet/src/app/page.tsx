@@ -10,6 +10,7 @@ import {
   ChevronDown,
   CheckCircle2,
   Clock,
+  AlertCircle,
 } from "lucide-react";
 import { useToast } from "@/components/toast";
 import { FaucetGuideModal } from "@/components/faucet-guide-modal";
@@ -32,6 +33,16 @@ interface DispensedToken {
   amount: number;
   txHash: string;
   explorerUrl: string;
+}
+
+interface NativeNearReceipt {
+  toppedUp: boolean;
+  amountNear: number;
+  previousBalanceNear: number;
+  currentBalanceNear: number;
+  txHash: string | null;
+  explorerUrl: string | null;
+  skippedReason?: string;
 }
 
 export default function FaucetHome() {
@@ -131,6 +142,7 @@ export default function FaucetHome() {
   const [lastResult, setLastResult] = useState<{
     receiverId: string;
     tokens: DispensedToken[];
+    nativeNear?: NativeNearReceipt;
     balances: { usdc: number; eure: number };
   } | null>(null);
 
@@ -225,6 +237,7 @@ export default function FaucetHome() {
       setLastResult({
         receiverId: data.receiverId,
         tokens: data.dispensed,
+        nativeNear: data.nativeNear,
         balances: data.balances,
       });
 
@@ -237,9 +250,12 @@ export default function FaucetHome() {
         );
       } catch {}
 
+      const nearNote = data.nativeNear?.toppedUp
+        ? ` + ${data.nativeNear.amountNear} NEAR gas stipend`
+        : "";
       showToast("Tokens Dispensed Successfully!", {
         type: "success",
-        description: `Delivered to ${cleanAddress} with on-chain receipts`,
+        description: `Delivered to ${cleanAddress}${nearNote} with on-chain receipts`,
       });
 
       fetchStatus();
@@ -504,12 +520,61 @@ export default function FaucetHome() {
                         </div>
                       </div>
                     ))}
+
+                    {lastResult.nativeNear?.toppedUp && (
+                      <div className="p-2.5 bg-[#090b0e] border border-[#1e2330] rounded-lg">
+                        <div className="flex justify-between font-semibold text-zinc-200">
+                          <span>+{lastResult.nativeNear.amountNear} NEAR</span>
+                          {lastResult.nativeNear.explorerUrl && (
+                            <a
+                              href={lastResult.nativeNear.explorerUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[#00ec97] hover:underline inline-flex items-center gap-1 font-mono text-[11px]"
+                            >
+                              Receipt <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-zinc-500 font-mono mt-1 truncate">
+                          {lastResult.nativeNear.txHash
+                            ? `Gas stipend · ${lastResult.nativeNear.txHash.slice(0, 12)}...`
+                            : "Gas & Token Import Stipend"}
+                        </div>
+                      </div>
+                    )}
                   </div>
+
+                  {lastResult.nativeNear &&
+                    !lastResult.nativeNear.toppedUp &&
+                    (lastResult.nativeNear.currentBalanceNear < 0.04 ||
+                      (lastResult.nativeNear.currentBalanceNear < 0.14 &&
+                        lastResult.nativeNear.skippedReason !== "repeat_wallet" &&
+                        lastResult.nativeNear.skippedReason !== "already_funded")) && (
+                      <div className="p-2.5 rounded-lg border border-amber-800/70 bg-amber-950/30 text-[11px] text-amber-200 flex items-start gap-2">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <p className="leading-relaxed">
+                            Your wallet holds {lastResult.nativeNear.currentBalanceNear} NEAR. Importing a custom token in Meteor Wallet requires ~0.131 NEAR for ref-finance-101.testnet registration.
+                          </p>
+                          <a
+                            href="https://near-faucet.io/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 font-mono text-amber-300 hover:underline"
+                          >
+                            <span>Get free testnet NEAR at near-faucet.io</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        </div>
+                      </div>
+                    )}
 
                   <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-2 border-t border-[#1c2420]">
                     <span>Updated Balances:</span>
                     <span className="font-mono text-zinc-200" suppressHydrationWarning>
                       {lastResult.balances.usdc.toLocaleString("en-US")} USDC | {lastResult.balances.eure.toLocaleString("en-US")} EURe
+                      {lastResult.nativeNear ? ` | ${lastResult.nativeNear.currentBalanceNear} NEAR` : ""}
                     </span>
                   </div>
                 </div>
