@@ -26,12 +26,21 @@ export const MIN_DISPENSE_AMOUNT = 1
 export const MAX_DISPENSE_AMOUNT = 500
 export const MAX_HOLDING_BALANCE_CAP = 2500
 
-// Dynamic native NEAR stipend so new NEP-448 zero-balance wallets (0 NEAR)
-// can complete Meteor Wallet's "Import Token" flow (ref-finance-101.testnet ~0.1309 NEAR)
-export const TARGET_MIN_NATIVE_NEAR = 0.16
-export const TARGET_MIN_NATIVE_YOCTO = 16n * 10n ** 22n // 0.16 NEAR
+// Dynamic native NEAR stipend computed from NEP-642 upfront gas purchase price (10^9 yocto/gas)
+// + Meteor Wallet ref-finance-101.testnet import (0.10 NEAR deposit + 30 Tgas + 300 Tgas = ~0.432 NEAR upfront,
+// with ~99% of prepaid gas refunded once executed)
+export const REF_CONTRACT_ID = process.env.REF_FINANCE_CONTRACT_ID || 'ref-finance-101.testnet'
+export const NEP642_MIN_GAS_PURCHASE_PRICE = 1_000_000_000n // 1 NEAR/Pgas = 0.001 NEAR/Tgas
+export const METEOR_REF_STORAGE_DEPOSIT_YOCTO = 10n * 10n ** 22n // 0.10 NEAR
+export const METEOR_IMPORT_GAS_BUDGET = 350_000_000_000_000n // 350 Tgas (332 Tgas observed + buffer)
+export const METEOR_REGISTER_ONLY_GAS_BUDGET = 320_000_000_000_000n // 320 Tgas (301 Tgas observed + buffer)
+export const DEFAULT_TARGET_MIN_NATIVE_YOCTO =
+  METEOR_REF_STORAGE_DEPOSIT_YOCTO + METEOR_IMPORT_GAS_BUDGET * NEP642_MIN_GAS_PURCHASE_PRICE // 0.45 NEAR
+export const TARGET_MIN_NATIVE_YOCTO = DEFAULT_TARGET_MIN_NATIVE_YOCTO
+export const TARGET_MIN_NATIVE_NEAR = 0.45
 export const OPERATOR_NEAR_RESERVE_FLOOR_YOCTO = 40n * 10n ** 22n // 0.40 NEAR
-export const MIN_SIGNABLE_IMPORT_NEAR = 0.14
+export const MIN_SIGNABLE_IMPORT_NEAR = 0.44
+export const MIN_SIGNABLE_REGISTER_ONLY_NEAR = 0.31
 
 // 0.00125 NEAR deposit matching on-chain storage_balance_bounds for NEP-145 registration
 const STORAGE_DEPOSIT_YOCTO = 125n * 10n ** 19n // 0.00125 NEAR
@@ -120,7 +129,39 @@ export async function getAccountState(accountId: string): Promise<AccountStateIn
 }
 
 /**
- * Calculate the conditional native NEAR delta required to reach TARGET_MIN_NATIVE_YOCTO.
+ * Fetch live NEAR Testnet gas price (yoctoNEAR per gas unit). Returns 0n on transient error.
+ */
+export async function getLiveGasPrice(): Promise<bigint> {
+  const provider = getProvider()
+  try {
+    const res = await provider.viewGasPrice()
+    return BigInt(res?.gas_price || '0')
+  } catch {
+    return 0n
+  }
+}
+
+/**
+ * Compute required upfront native NEAR dynamically using live gas price and NEP-642
+ * minimum gas purchase price floor (0.001 NEAR per Tgas).
+ */
+export function computeTargetMinNativeYocto(params?: {
+  liveGasPriceYocto?: bigint
+  refStorageAlreadyPaid?: boolean
+}): bigint {
+  const live = params?.liveGasPriceYocto ?? 0n
+  const effectiveGasPrice =
+    live > NEP642_MIN_GAS_PURCHASE_PRICE ? live : NEP642_MIN_GAS_PURCHASE_PRICE
+
+  if (params?.refStorageAlreadyPaid) {
+    return METEOR_REGISTER_ONLY_GAS_BUDGET * effectiveGasPrice
+  }
+
+  return METEOR_REF_STORAGE_DEPOSIT_YOCTO + METEOR_IMPORT_GAS_BUDGET * effectiveGasPrice
+}
+
+/**
+ * Calculate the conditional native NEAR delta required to reach targetMinYocto.
  * Pure helper so eligibility and reserve guardrails are deterministic and unit-tested.
  */
 export function computeNativeNearTopUpDelta(params: {
@@ -128,13 +169,20 @@ export function computeNativeNearTopUpDelta(params: {
   operatorBalanceYocto: bigint
   isFirstTimeWallet: boolean
   ipDripAllowed: boolean
+  targetMinYocto?: bigint
 }): {
   deltaYocto: bigint
   skippedReason?: Exclude<NativeNearSkipReason, 'transfer_failed'>
 } {
-  const { recipientBalanceYocto, operatorBalanceYocto, isFirstTimeWallet, ipDripAllowed } = params
+  const {
+    recipientBalanceYocto,
+    operatorBalanceYocto,
+    isFirstTimeWallet,
+    ipDripAllowed,
+    targetMinYocto = DEFAULT_TARGET_MIN_NATIVE_YOCTO,
+  } = params
 
-  if (recipientBalanceYocto >= TARGET_MIN_NATIVE_YOCTO) {
+  if (recipientBalanceYocto >= targetMinYocto) {
     return { deltaYocto: 0n, skippedReason: 'already_funded' }
   }
 
@@ -146,7 +194,7 @@ export function computeNativeNearTopUpDelta(params: {
     return { deltaYocto: 0n, skippedReason: 'ip_drip_cap' }
   }
 
-  const deltaYocto = TARGET_MIN_NATIVE_YOCTO - recipientBalanceYocto
+  const deltaYocto = targetMinYocto - recipientBalanceYocto
   if (operatorBalanceYocto <= OPERATOR_NEAR_RESERVE_FLOOR_YOCTO + deltaYocto) {
     return { deltaYocto: 0n, skippedReason: 'operator_low_reserve' }
   }
@@ -155,9 +203,9 @@ export function computeNativeNearTopUpDelta(params: {
 }
 
 /**
- * Check if an account is registered on NEP-145 storage
+ * Query total NEP-145 storage deposit balance (yoctoNEAR) for an account on any contract.
  */
-export async function isStorageRegistered(contractId: string, accountId: string): Promise<boolean> {
+export async function getStorageTotal(contractId: string, accountId: string): Promise<bigint> {
   const provider = getProvider()
   try {
     const res: any = await provider.callFunction({
@@ -165,10 +213,17 @@ export async function isStorageRegistered(contractId: string, accountId: string)
       method: 'storage_balance_of',
       args: { account_id: accountId },
     })
-    return Boolean(res && BigInt(res.total || '0') > 0n)
+    return BigInt(res?.total || '0')
   } catch {
-    return false
+    return 0n
   }
+}
+
+/**
+ * Check if an account is registered on NEP-145 storage
+ */
+export async function isStorageRegistered(contractId: string, accountId: string): Promise<boolean> {
+  return (await getStorageTotal(contractId, accountId)) > 0n
 }
 
 /**
@@ -291,18 +346,25 @@ export async function dispenseTokens(params: {
     throw new Error('Faucet operator NEAR reserves are temporarily low. Please try again shortly.')
   }
 
-  // 4. Inspect on-chain registration state across both tokens before mutating state
-  const [usdcRegistered, eureRegistered] = await Promise.all([
+  // 4. Inspect on-chain registration state and live gas price before mutating state
+  const [usdcRegistered, eureRegistered, refStorageTotal, liveGasPriceYocto] = await Promise.all([
     isStorageRegistered(USDC_CONTRACT_ID, receiverId),
     isStorageRegistered(EURE_CONTRACT_ID, receiverId),
+    getStorageTotal(REF_CONTRACT_ID, receiverId),
+    getLiveGasPrice(),
   ])
   const isFirstTimeWallet = !usdcRegistered && !eureRegistered
+  const targetMinYocto = computeTargetMinNativeYocto({
+    liveGasPriceYocto,
+    refStorageAlreadyPaid: refStorageTotal >= METEOR_REF_STORAGE_DEPOSIT_YOCTO,
+  })
 
   const nearPlan = computeNativeNearTopUpDelta({
     recipientBalanceYocto: recipientState.nativeBalanceYocto,
     operatorBalanceYocto: operatorState.nativeBalanceYocto,
     isFirstTimeWallet,
     ipDripAllowed: params.ipDripAllowed ?? true,
+    targetMinYocto,
   })
 
   const account = getOperatorAccount()

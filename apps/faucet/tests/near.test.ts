@@ -10,6 +10,8 @@ import {
   getFaucetStatus,
   getTokenBalance,
   getAccountState,
+  getLiveGasPrice,
+  computeTargetMinNativeYocto,
   computeNativeNearTopUpDelta,
   yoctoToNearNumber,
 } from '../src/lib/near.js'
@@ -51,10 +53,36 @@ describe('Serverless NEAR Engine', () => {
     assert.equal(fakeState.nativeBalanceYocto, 0n)
   })
 
+  test('computes dynamic NEP-642 target NEAR balance from live RPC gas price', async () => {
+    const liveGasPrice = await getLiveGasPrice()
+    assert.ok(liveGasPrice > 0n, 'Live gas price should be positive')
+
+    // Standard testnet gas_price (10^8) uses NEP-642 10^9 floor -> 0.45 NEAR
+    const standardTarget = computeTargetMinNativeYocto({
+      liveGasPriceYocto: 100_000_000n,
+      refStorageAlreadyPaid: false,
+    })
+    assert.equal(yoctoToNearNumber(standardTarget), 0.45)
+
+    // When Ref storage (0.10 NEAR) is already registered, only 320 Tgas buffer -> 0.32 NEAR
+    const regOnlyTarget = computeTargetMinNativeYocto({
+      liveGasPriceYocto: 100_000_000n,
+      refStorageAlreadyPaid: true,
+    })
+    assert.equal(yoctoToNearNumber(regOnlyTarget), 0.32)
+
+    // Higher congestion gas_price (2 * 10^9) scales dynamically -> 0.10 + 0.70 = 0.80 NEAR
+    const congestedTarget = computeTargetMinNativeYocto({
+      liveGasPriceYocto: 2_000_000_000n,
+      refStorageAlreadyPaid: false,
+    })
+    assert.equal(yoctoToNearNumber(congestedTarget), 0.8)
+  })
+
   test('computes conditional native NEAR stipend deltas with anti-drain guardrails', () => {
     const healthyOp = 5n * 10n ** 24n // 5 NEAR
 
-    // Zero-balance first-time wallet gets full 0.16 NEAR
+    // Zero-balance first-time wallet gets full 0.45 NEAR
     const zeroBal = computeNativeNearTopUpDelta({
       recipientBalanceYocto: 0n,
       operatorBalanceYocto: healthyOp,
@@ -62,22 +90,22 @@ describe('Serverless NEAR Engine', () => {
       ipDripAllowed: true,
     })
     assert.equal(zeroBal.deltaYocto, TARGET_MIN_NATIVE_YOCTO)
-    assert.equal(yoctoToNearNumber(zeroBal.deltaYocto), 0.16)
+    assert.equal(yoctoToNearNumber(zeroBal.deltaYocto), 0.45)
     assert.equal(zeroBal.skippedReason, undefined)
 
-    // Partially funded wallet (0.05 NEAR) gets exact 0.11 NEAR shortfall
+    // Partially funded wallet (0.05 NEAR) gets exact 0.40 NEAR shortfall
     const partialBal = computeNativeNearTopUpDelta({
       recipientBalanceYocto: 5n * 10n ** 22n,
       operatorBalanceYocto: healthyOp,
       isFirstTimeWallet: true,
       ipDripAllowed: true,
     })
-    assert.equal(partialBal.deltaYocto, 11n * 10n ** 22n)
-    assert.equal(yoctoToNearNumber(partialBal.deltaYocto), 0.11)
+    assert.equal(partialBal.deltaYocto, 40n * 10n ** 22n)
+    assert.equal(yoctoToNearNumber(partialBal.deltaYocto), 0.4)
 
-    // Wallet already at >= 0.16 NEAR gets 0 NEAR
+    // Wallet already at >= 0.45 NEAR gets 0 NEAR
     const funded = computeNativeNearTopUpDelta({
-      recipientBalanceYocto: 2n * 10n ** 23n,
+      recipientBalanceYocto: 5n * 10n ** 23n,
       operatorBalanceYocto: healthyOp,
       isFirstTimeWallet: true,
       ipDripAllowed: true,
@@ -85,7 +113,7 @@ describe('Serverless NEAR Engine', () => {
     assert.equal(funded.deltaYocto, 0n)
     assert.equal(funded.skippedReason, 'already_funded')
 
-    // Repeat wallet gets 0 NEAR even if balance dipped below 0.16 NEAR
+    // Repeat wallet gets 0 NEAR even if balance dipped below 0.45 NEAR
     const repeat = computeNativeNearTopUpDelta({
       recipientBalanceYocto: 5n * 10n ** 22n,
       operatorBalanceYocto: healthyOp,
