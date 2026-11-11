@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect } from "react";
 import {
   ExternalLink,
@@ -276,11 +277,14 @@ export default function FaucetHome() {
       <header className="w-full max-w-6xl mx-auto px-4 sm:px-6 pt-4 pb-2 sm:pt-5 sm:pb-3 flex items-center justify-between">
         {/* Brand Logo & Name */}
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-[#00ec97] flex items-center justify-center p-1.5 shadow-sm">
-            <svg viewBox="0 0 24 24" fill="none" className="w-full h-full text-black stroke-current stroke-[2.5]">
-              <path d="M4 19V5l12 14V5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
+          <Image
+            src="/near-logo.png"
+            alt="NEAR Protocol logo"
+            width={32}
+            height={32}
+            className="w-8 h-8 rounded-lg object-cover shrink-0 shadow-sm"
+            priority
+          />
           <div className="flex items-center gap-2">
             <span className="text-base sm:text-lg font-bold tracking-tight text-white">
               NEAR Faucet
