@@ -291,16 +291,11 @@ export default function FaucetHome() {
           </div>
         </div>
 
-        {/* Right Actions: How it Works */}
-        <div className="flex items-center gap-3">
+        {/* Right Actions: Tutorial & Guide */}
+        <div className="flex items-center gap-2">
           <FaucetGuideModal
             usdcContractId={status.usdcContractId}
             eureContractId={status.eureContractId}
-            trigger={
-              <button className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-[#222634] bg-[#13151b] text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors cursor-pointer">
-                <span>How it Works</span>
-              </button>
-            }
           />
         </div>
       </header>
