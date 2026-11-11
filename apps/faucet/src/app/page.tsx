@@ -255,9 +255,9 @@ export default function FaucetHome() {
   };
 
   return (
-    <div className="min-h-screen near-grid-bg text-white flex flex-col justify-between selection:bg-[#00ec97] selection:text-black">
+    <div className="min-h-screen near-grid-bg text-white flex flex-col selection:bg-[#00ec97] selection:text-black">
       {/* Top Navbar */}
-      <header className="w-full max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-4 flex items-center justify-between">
+      <header className="w-full max-w-6xl mx-auto px-4 sm:px-6 pt-4 pb-2 sm:pt-5 sm:pb-3 flex items-center justify-between">
         {/* Brand Logo & Name */}
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-[#00ec97] flex items-center justify-center p-1.5 shadow-sm">
@@ -290,25 +290,25 @@ export default function FaucetHome() {
       </header>
 
       {/* Hero Section: Two-Column Split */}
-      <main className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-6 md:py-12 flex-1 flex items-center">
-        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+      <main className="w-full max-w-6xl mx-auto px-4 sm:px-6 pt-2 pb-8 sm:pt-3 sm:pb-10 flex-1 flex items-start">
+        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
           {/* Left Column: Floating Faucet Card */}
           <div className="lg:col-span-7">
-            <div className="bg-[#13151b] border border-[#222634] rounded-2xl p-6 sm:p-8 md:p-9 shadow-2xl space-y-6">
+            <div className="bg-[#13151b] border border-[#222634] rounded-2xl p-5 sm:p-6 md:p-7 shadow-2xl space-y-4 sm:space-y-5">
               {/* Card Header */}
               <div>
-                <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
                   NEAR Faucet
                 </h1>
-                <p className="text-xs sm:text-sm text-zinc-400 mt-2 leading-relaxed">
+                <p className="text-xs sm:text-sm text-zinc-400 mt-1 leading-relaxed">
                   Get free testnet USDC &amp; EURe to build and test your dApps.
                 </p>
               </div>
 
               {/* Faucet Form */}
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form onSubmit={handleSubmit} className="space-y-3.5 sm:space-y-4">
                 {/* Account ID Input */}
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <label htmlFor="account-address" className="block text-xs font-medium text-zinc-300">
                     Enter your Account ID or Address
                   </label>
@@ -319,13 +319,13 @@ export default function FaucetHome() {
                       value={accountId}
                       onChange={(e) => setAccountId(e.target.value.toLowerCase())}
                       placeholder="e.g., wallet.testnet or 0x..."
-                      className="w-full bg-[#0c0e13] border border-[#222634] focus:border-[#00ec97] rounded-xl px-4 py-3.5 text-sm text-zinc-100 placeholder-[#525866] font-mono focus:outline-none transition-colors"
+                      className="w-full bg-[#0c0e13] border border-[#222634] focus:border-[#00ec97] rounded-xl px-4 py-2.5 sm:py-3 pr-20 text-sm text-zinc-100 placeholder-[#525866] font-mono focus:outline-none transition-colors"
                       disabled={isSubmitting}
                     />
                     <button
                       type="button"
                       onClick={handlePaste}
-                      className="absolute right-2.5 top-2.5 px-2.5 py-1 text-xs text-zinc-400 hover:text-white bg-[#1a1d26] border border-[#262a38] rounded-md flex items-center gap-1 transition-colors cursor-pointer"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1 text-xs text-zinc-400 hover:text-white bg-[#1a1d26] border border-[#262a38] rounded-md flex items-center gap-1 transition-colors cursor-pointer"
                       title="Paste from clipboard"
                     >
                       <Clipboard className="w-3 h-3" />
@@ -335,7 +335,7 @@ export default function FaucetHome() {
                 </div>
 
                 {/* Token Selector Dropdown */}
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
                     <span className="block text-xs font-medium text-zinc-300">
                       Select Token
@@ -346,19 +346,19 @@ export default function FaucetHome() {
                     <select
                       value={tokenChoice}
                       onChange={(e) => setTokenChoice(e.target.value as "USDC" | "EURE")}
-                      className="w-full appearance-none bg-[#0c0e13] border border-[#222634] focus:border-[#00ec97] rounded-xl px-4 py-3.5 text-sm text-zinc-200 font-medium focus:outline-none transition-colors cursor-pointer"
+                      className="w-full appearance-none bg-[#0c0e13] border border-[#222634] focus:border-[#00ec97] rounded-xl px-4 py-2.5 sm:py-3 text-sm text-zinc-200 font-medium focus:outline-none transition-colors cursor-pointer"
                     >
                       <option value="USDC">USD Coin (USDC)</option>
                       <option value="EURE">Euro Stablecoin (EURe)</option>
                     </select>
-                    <div className="absolute right-4 top-4 pointer-events-none text-zinc-400">
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">
                       <ChevronDown className="w-4 h-4" />
                     </div>
                   </div>
                 </div>
 
                 {/* Token Amount Input */}
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <label htmlFor="token-amount" className="block text-xs font-medium text-zinc-300">
@@ -380,16 +380,16 @@ export default function FaucetHome() {
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       placeholder="e.g., 500"
-                      className="w-full bg-[#0c0e13] border border-[#222634] focus:border-[#00ec97] rounded-xl px-4 py-3.5 pr-20 text-sm text-zinc-100 placeholder-[#525866] font-mono focus:outline-none transition-colors"
+                      className="w-full bg-[#0c0e13] border border-[#222634] focus:border-[#00ec97] rounded-xl px-4 py-2.5 sm:py-3 pr-20 text-sm text-zinc-100 placeholder-[#525866] font-mono focus:outline-none transition-colors"
                       disabled={isSubmitting}
                     />
-                    <div className="absolute right-3 top-2.5 flex items-center px-2.5 py-1 rounded bg-[#1a1d26] border border-[#262a38] text-xs font-mono font-semibold text-zinc-300 pointer-events-none">
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center px-2.5 py-1 rounded bg-[#1a1d26] border border-[#262a38] text-xs font-mono font-semibold text-zinc-300 pointer-events-none">
                       {tokenChoice}
                     </div>
                   </div>
 
                   {/* Preset Amount Pills */}
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="flex items-center gap-2 pt-0.5">
                     <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Presets:</span>
                     {[50, 100, 250, 500].map((preset) => {
                       const isActive = Number(amount) === preset;
@@ -422,7 +422,7 @@ export default function FaucetHome() {
 
                 {/* Active Rate Limit Cooldown Warning Box */}
                 {cooldownSeconds !== null && cooldownSeconds > 0 && (
-                  <div className="p-3.5 rounded-xl border border-amber-900/60 bg-amber-950/20 text-amber-300 text-xs space-y-1 animate-in fade-in duration-200">
+                  <div className="p-3 rounded-xl border border-amber-900/60 bg-amber-950/20 text-amber-300 text-xs space-y-1 animate-in fade-in duration-200">
                     <div className="flex items-center justify-between font-semibold">
                       <div className="flex items-center gap-1.5">
                         <Clock className="w-4 h-4 text-amber-400" />
@@ -447,7 +447,7 @@ export default function FaucetHome() {
                     !isAmountValid ||
                     (cooldownSeconds !== null && cooldownSeconds > 0)
                   }
-                  className="w-full py-4 px-4 rounded-xl bg-[#00ec97] hover:bg-[#00c980] disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-lg shadow-[#00ec97]/10 cursor-pointer"
+                  className="w-full py-3 sm:py-3.5 px-4 rounded-xl bg-[#00ec97] hover:bg-[#00c980] disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-lg shadow-[#00ec97]/10 cursor-pointer"
                 >
                   {isSubmitting ? (
                     <>
