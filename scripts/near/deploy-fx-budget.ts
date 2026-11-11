@@ -16,8 +16,10 @@ import { NearClient } from '@getnear/near-client'
 import { runCreateSubaccount, runDeployContract } from './near-runner.js'
 
 const OPERATOR_ID = process.env.OPERATOR_ACCOUNT_ID || 'chilliroger-operator.testnet'
-const CONTRACT_ID = `fx-budget.${OPERATOR_ID}`
-const DAO_ID = `chilliroger-dao.sputnik-v2.testnet`
+const CONTRACT_ID = process.env.FX_BUDGET_CONTRACT_ID || `fx-budget.${OPERATOR_ID}`
+const DAO_ID = process.env.SPUTNIK_DAO_ACCOUNT_ID || 'chilliroger-dao.sputnik-v2.testnet'
+const EURE_ID = process.env.EURE_CONTRACT_ID || `eure.${OPERATOR_ID}`
+const IS_MIGRATE = process.argv.includes('--migrate')
 
 const WASM_PATH = path.resolve(process.cwd(), 'contracts/fx-budget/res/fx_budget.wasm')
 
@@ -61,15 +63,19 @@ async function main() {
     await new Promise((r) => setTimeout(r, 4000))
   }
 
-  // 2. Deploy contract WASM and initialize with new(owner = DAO)
-  console.log(`\nDeploying FxBudget WASM to ${CONTRACT_ID} with init call new(owner: "${DAO_ID}")...`)
+  // 2. Deploy contract WASM with either migrate(...) or fresh new(...) init call
+  const initMethod = IS_MIGRATE || accountExists ? 'migrate' : 'new'
+  const initArgs =
+    initMethod === 'migrate'
+      ? { settlement_token: EURE_ID }
+      : { owner: DAO_ID, settlement_token: EURE_ID }
+
+  console.log(`\nDeploying FxBudget WASM to ${CONTRACT_ID} with ${initMethod}(${JSON.stringify(initArgs)})...`)
   const deployRes = runDeployContract({
     contractAccountId: CONTRACT_ID,
     wasmPath: WASM_PATH,
-    initMethod: 'new',
-    initArgs: {
-      owner: DAO_ID,
-    },
+    initMethod,
+    initArgs,
     initDeposit: '0 NEAR',
     initGas: '100.0 Tgas',
     signerId: CONTRACT_ID,
@@ -87,15 +93,19 @@ async function main() {
 
   try {
     const owner = await client.callView<string>(CONTRACT_ID, 'get_owner', {})
+    const agent = await client.callView<string | null>(CONTRACT_ID, 'get_agent', {})
+    const settlementToken = await client.callView<string | null>(CONTRACT_ID, 'get_settlement_token', {})
     const limits = await client.callView<any>(CONTRACT_ID, 'get_limits', {})
     const paused = await client.callView<boolean>(CONTRACT_ID, 'is_paused', {})
-    const orders = await client.callView<any[]>(CONTRACT_ID, 'list_orders', { from_index: 0, limit: 10 })
+    const orders = await client.callView<any[]>(CONTRACT_ID, 'list_orders', { from_index: 0, limit: 50 })
 
     console.log('✅ FxBudget Contract successfully deployed and verified!')
     console.log(`  Contract ID: ${CONTRACT_ID}`)
     console.log(`  Owner (DAO): ${owner}`)
+    console.log(`  Agent: ${agent}`)
+    console.log(`  Settlement Token: ${settlementToken}`)
     console.log(`  Paused: ${paused}`)
-    console.log(`  Limits: Auto-Cap ${Number(limits.auto_cap_in) / 1e6} USDC | Max Chunk ${Number(limits.max_chunk_in) / 1e6} USDC | Min Interval ${Number(limits.min_interval_ns) / 1e9}s`)
+    console.log(`  Limits: Auto-Cap ${Number(limits.auto_cap_in) / 1e6} | Max Chunk ${Number(limits.max_chunk_in) / 1e6} | Min Interval ${Number(limits.min_interval_ns) / 1e9}s`)
     console.log(`  Orders Count: ${orders.length}`)
   } catch (err) {
     console.error('⚠ Error querying deployed contract:', err)

@@ -1,17 +1,33 @@
 use near_sdk::json_types::U128;
 use near_sdk::store::{IterableMap, IterableSet, LookupMap};
-use near_sdk::{env, near, require, AccountId};
+use near_sdk::{
+    env, ext_contract, near, require, AccountId, Gas, NearToken, PromiseOrValue,
+};
 use serde::Serialize;
 
 // ---------------------------------------------------------------------------
 // Constants & Defaults
 // ---------------------------------------------------------------------------
 
-pub const DEFAULT_AUTO_CAP_IN: u128 = 100_000_000; // 100 USDC (6 decimals)
+pub const DEFAULT_AUTO_CAP_IN: u128 = 100_000_000; // 100 USDC / EURe (6 decimals)
 pub const DEFAULT_MAX_CHUNK_IN: u128 = 20_000_000; // 20 USDC (6 decimals)
 pub const DEFAULT_MIN_INTERVAL_NS: u64 = 60_000_000_000; // 60 seconds
 pub const DEFAULT_MAX_HORIZON_NS: u64 = 604_800_000_000_000; // 7 days
 pub const MAX_OPEN_ORDERS_PER_REQUESTER: u32 = 16; // Bound storage griefing
+pub const MAX_INVOICE_REF_LEN: usize = 64;
+pub const MAX_IDEMPOTENCY_KEY_LEN: usize = 128;
+
+pub const FT_TRANSFER_GAS: Gas = Gas::from_tgas(15);
+pub const CALLBACK_GAS: Gas = Gas::from_tgas(25);
+
+// ---------------------------------------------------------------------------
+// External NEP-141 Interface
+// ---------------------------------------------------------------------------
+
+#[ext_contract(ext_ft)]
+pub trait FungibleToken {
+    fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128, memo: Option<String>);
+}
 
 // ---------------------------------------------------------------------------
 // Types & Enums
@@ -28,8 +44,99 @@ pub enum OrderStatus {
 }
 
 #[near(serializers = [json, borsh])]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ChunkStatus {
+    InFlight,
+    Settled,
+    Failed,
+}
+
+#[near(serializers = [json, borsh])]
 #[derive(Clone, Debug)]
 pub struct Order {
+    pub id: u64,
+    pub requester: AccountId,
+    pub recipient: AccountId,
+    pub invoice_ref: String,
+    pub pair_label: String,
+    pub total_in: U128,
+    pub executed_in: U128,
+    pub pending_in: U128,
+    pub target_out: U128,
+    pub settled_out: U128,
+    pub pending_out: U128,
+    pub max_chunk_in: U128,
+    pub deadline_ns: u64,
+    pub max_dev_bps: u32,
+    pub status: OrderStatus,
+    pub last_chunk_ns: u64,
+    pub chunks_count: u32,
+}
+
+#[near(serializers = [json, borsh])]
+#[derive(Clone, Debug)]
+pub struct ChunkRecord {
+    pub key: String,
+    pub order_id: u64,
+    pub amount_in: U128,
+    pub settlement_out: U128,
+    pub simulated_out: U128,
+    pub recipient: AccountId,
+    pub quote_ref: String,
+    pub deviation_bps: i32,
+    pub status: ChunkStatus,
+    pub attempts: u32,
+    pub initiated_ns: u64,
+    pub settled_ns: u64,
+    pub failure_reason: Option<String>,
+}
+
+#[near(serializers = [json])]
+#[derive(Clone, Debug)]
+pub struct ChunkSettlementView {
+    pub key: String,
+    pub order_id: u64,
+    pub status: ChunkStatus,
+    pub idempotent_replay: bool,
+    pub amount_in: U128,
+    pub settlement_out: U128,
+    pub settled_out_total: U128,
+    pub remaining_due_out: U128,
+    pub order_status: OrderStatus,
+    pub failure_reason: Option<String>,
+}
+
+#[near(serializers = [json])]
+#[derive(Clone, Debug)]
+pub struct InvoiceSummaryView {
+    pub id: u64,
+    pub requester: AccountId,
+    pub recipient: AccountId,
+    pub invoice_ref: String,
+    pub target_out: U128,
+    pub settled_out: U128,
+    pub pending_out: U128,
+    pub remaining_due_out: U128,
+    pub total_in: U128,
+    pub executed_in: U128,
+    pub pending_in: U128,
+    pub chunks_count: u32,
+    pub status: OrderStatus,
+}
+
+#[near(serializers = [json])]
+#[derive(Clone, Debug)]
+pub struct LimitsView {
+    pub auto_cap_in: U128,
+    pub max_chunk_in: U128,
+    pub min_interval_ns: u64,
+    pub max_horizon_ns: u64,
+    pub paused: bool,
+}
+
+// Legacy structs used strictly for state migration from pre-callback deployments.
+#[near(serializers = [borsh])]
+pub struct OldOrder {
     pub id: u64,
     pub requester: AccountId,
     pub pair_label: String,
@@ -43,14 +150,19 @@ pub struct Order {
     pub chunks_count: u32,
 }
 
-#[near(serializers = [json])]
-#[derive(Clone, Debug)]
-pub struct LimitsView {
-    pub auto_cap_in: U128,
-    pub max_chunk_in: U128,
+#[near(serializers = [borsh])]
+pub struct OldFxBudget {
+    pub owner: AccountId,
+    pub agent: Option<AccountId>,
+    pub requesters: IterableSet<AccountId>,
+    pub auto_cap_in: u128,
+    pub max_chunk_in: u128,
     pub min_interval_ns: u64,
     pub max_horizon_ns: u64,
     pub paused: bool,
+    pub next_order_id: u64,
+    pub orders: IterableMap<u64, OldOrder>,
+    pub open_orders_count: LookupMap<AccountId, u32>,
 }
 
 // ---------------------------------------------------------------------------
@@ -84,17 +196,19 @@ fn emit_event<T: Serialize>(event_name: &str, data: &T) {
 
 #[near(contract_state)]
 pub struct FxBudget {
-    /// Owner account ID (Sputnik DAO contract in P8)
+    /// Owner account ID (Sputnik DAO contract on testnet)
     pub owner: AccountId,
     /// Automated execution agent account ID
     pub agent: Option<AccountId>,
+    /// NEP-141 settlement token contract held by this vault (e.g. eure.*.testnet)
+    pub settlement_token: Option<AccountId>,
     /// Authorized requester accounts
     pub requesters: IterableSet<AccountId>,
-    /// Orders <= auto_cap_in are auto-activated; larger orders require DAO approval
+    /// Orders above this threshold require DAO approval
     pub auto_cap_in: u128,
     /// Maximum allowable chunk size across the contract
     pub max_chunk_in: u128,
-    /// Minimum interval between successive chunk executions (nanoseconds)
+    /// Minimum interval between confirmed chunk settlements (nanoseconds)
     pub min_interval_ns: u64,
     /// Maximum deadline horizon from creation time (nanoseconds)
     pub max_horizon_ns: u64,
@@ -102,10 +216,14 @@ pub struct FxBudget {
     pub paused: bool,
     /// Auto-incrementing order ID counter
     pub next_order_id: u64,
-    /// Orders registry
+    /// Orders registry (prefix b"O" cleanly separates migrated v2 records from legacy b"o")
     pub orders: IterableMap<u64, Order>,
     /// Open orders count per requester (storage bounding)
     pub open_orders_count: LookupMap<AccountId, u32>,
+    /// Idempotent chunk settlement records keyed by idempotency_key
+    pub chunk_records: LookupMap<String, ChunkRecord>,
+    /// Ordered list of chunk idempotency keys per order for views/auditing
+    pub order_chunk_keys: LookupMap<u64, Vec<String>>,
 }
 
 impl Default for FxBudget {
@@ -117,15 +235,16 @@ impl Default for FxBudget {
 #[near]
 impl FxBudget {
     // -----------------------------------------------------------------------
-    // Initialization
+    // Initialization & Migration
     // -----------------------------------------------------------------------
 
     #[init]
-    pub fn new(owner: AccountId) -> Self {
+    pub fn new(owner: AccountId, settlement_token: Option<AccountId>) -> Self {
         require!(!env::state_exists(), "Already initialized");
         Self {
             owner,
             agent: None,
+            settlement_token,
             requesters: IterableSet::new(b"r"),
             auto_cap_in: DEFAULT_AUTO_CAP_IN,
             max_chunk_in: DEFAULT_MAX_CHUNK_IN,
@@ -133,8 +252,61 @@ impl FxBudget {
             max_horizon_ns: DEFAULT_MAX_HORIZON_NS,
             paused: false,
             next_order_id: 1,
-            orders: IterableMap::new(b"o"),
+            orders: IterableMap::new(b"O"),
             open_orders_count: LookupMap::new(b"c"),
+            chunk_records: LookupMap::new(b"k"),
+            order_chunk_keys: LookupMap::new(b"l"),
+        }
+    }
+
+    /// Upgrade existing on-chain state cleanly to invoice + callback-confirmed settlement storage.
+    #[init(ignore_state)]
+    #[private]
+    pub fn migrate(settlement_token: AccountId) -> Self {
+        let mut old: OldFxBudget = env::state_read().expect("No legacy state found to migrate");
+        let mut new_orders: IterableMap<u64, Order> = IterableMap::new(b"O");
+
+        for (id, legacy) in old.orders.iter() {
+            new_orders.insert(
+                *id,
+                Order {
+                    id: legacy.id,
+                    requester: legacy.requester.clone(),
+                    recipient: legacy.requester.clone(),
+                    invoice_ref: format!("ORDER-{}", legacy.id),
+                    pair_label: legacy.pair_label.clone(),
+                    total_in: legacy.total_in,
+                    executed_in: legacy.executed_in,
+                    pending_in: U128(0),
+                    target_out: U128(0),
+                    settled_out: U128(0),
+                    pending_out: U128(0),
+                    max_chunk_in: legacy.max_chunk_in,
+                    deadline_ns: legacy.deadline_ns,
+                    max_dev_bps: legacy.max_dev_bps,
+                    status: legacy.status,
+                    last_chunk_ns: legacy.last_chunk_ns,
+                    chunks_count: legacy.chunks_count,
+                },
+            );
+        }
+        old.orders.clear();
+
+        Self {
+            owner: old.owner,
+            agent: old.agent,
+            settlement_token: Some(settlement_token),
+            requesters: old.requesters,
+            auto_cap_in: old.auto_cap_in,
+            max_chunk_in: old.max_chunk_in,
+            min_interval_ns: old.min_interval_ns,
+            max_horizon_ns: old.max_horizon_ns,
+            paused: old.paused,
+            next_order_id: old.next_order_id,
+            orders: new_orders,
+            open_orders_count: old.open_orders_count,
+            chunk_records: LookupMap::new(b"k"),
+            order_chunk_keys: LookupMap::new(b"l"),
         }
     }
 
@@ -151,6 +323,17 @@ impl FxBudget {
             agent: &'a AccountId,
         }
         emit_event("set_agent", &AgentSetEvent { agent: &agent });
+    }
+
+    pub fn set_settlement_token(&mut self, token: AccountId) {
+        self.assert_owner();
+        self.settlement_token = Some(token.clone());
+
+        #[derive(Serialize)]
+        struct SettlementTokenSetEvent<'a> {
+            token: &'a AccountId,
+        }
+        emit_event("set_settlement_token", &SettlementTokenSetEvent { token: &token });
     }
 
     pub fn add_requester(&mut self, account: AccountId) {
@@ -238,6 +421,7 @@ impl FxBudget {
     // Order Lifecycle Methods
     // -----------------------------------------------------------------------
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_order(
         &mut self,
         pair_label: String,
@@ -245,6 +429,9 @@ impl FxBudget {
         deadline_ns: u64,
         max_chunk_in: U128,
         max_dev_bps: u32,
+        recipient: Option<AccountId>,
+        target_out: Option<U128>,
+        invoice_ref: Option<String>,
     ) -> u64 {
         require!(!self.paused, "Contract is paused");
         let predecessor = env::predecessor_account_id();
@@ -254,6 +441,10 @@ impl FxBudget {
         );
 
         let now = env::block_timestamp();
+        let target_out_val = target_out.map_or(0, |v| v.0);
+        let invoice_ref_val = invoice_ref.unwrap_or_default();
+        let recipient_id = recipient.unwrap_or_else(|| predecessor.clone());
+
         require!(total_in.0 > 0, "total_in must be positive");
         require!(deadline_ns > now, "deadline must be in the future");
         require!(
@@ -266,8 +457,11 @@ impl FxBudget {
         );
         require!(max_chunk_in.0 <= total_in.0, "max_chunk_in cannot exceed total_in");
         require!(max_dev_bps <= 5000, "max_dev_bps exceeds reasonable bound (50%)");
+        require!(
+            invoice_ref_val.len() <= MAX_INVOICE_REF_LEN,
+            "invoice_ref exceeds maximum length"
+        );
 
-        // Storage bounding guard
         let current_open = self.open_orders_count.get(&predecessor).copied().unwrap_or(0);
         require!(
             current_open < MAX_OPEN_ORDERS_PER_REQUESTER,
@@ -277,19 +471,26 @@ impl FxBudget {
         let id = self.next_order_id;
         self.next_order_id = self.next_order_id.checked_add(1).expect("Order ID overflow");
 
-        // Auto-cap evaluation: small orders become Active immediately; large orders stay Pending
-        let initial_status = if total_in.0 <= self.auto_cap_in {
-            OrderStatus::Active
-        } else {
+        // Orders above auto_cap on either input budget or invoice target require DAO approval.
+        let exceeds_auto_cap = total_in.0 > self.auto_cap_in || target_out_val > self.auto_cap_in;
+        let initial_status = if exceeds_auto_cap {
             OrderStatus::Pending
+        } else {
+            OrderStatus::Active
         };
 
         let order = Order {
             id,
             requester: predecessor.clone(),
+            recipient: recipient_id.clone(),
+            invoice_ref: invoice_ref_val.clone(),
             pair_label: pair_label.clone(),
             total_in,
             executed_in: U128(0),
+            pending_in: U128(0),
+            target_out: U128(target_out_val),
+            settled_out: U128(0),
+            pending_out: U128(0),
             max_chunk_in,
             deadline_ns,
             max_dev_bps,
@@ -298,15 +499,18 @@ impl FxBudget {
             chunks_count: 0,
         };
 
-        self.orders.insert(id, order.clone());
+        self.orders.insert(id, order);
         self.open_orders_count.insert(predecessor.clone(), current_open + 1);
 
         #[derive(Serialize)]
         struct OrderCreatedEvent<'a> {
             id: u64,
             requester: &'a AccountId,
+            recipient: &'a AccountId,
+            invoice_ref: &'a str,
             pair_label: &'a str,
             total_in: U128,
+            target_out: U128,
             max_chunk_in: U128,
             deadline_ns: u64,
             max_dev_bps: u32,
@@ -317,8 +521,11 @@ impl FxBudget {
             &OrderCreatedEvent {
                 id,
                 requester: &predecessor,
+                recipient: &recipient_id,
+                invoice_ref: &invoice_ref_val,
                 pair_label: &pair_label,
                 total_in,
+                target_out: U128(target_out_val),
                 max_chunk_in,
                 deadline_ns,
                 max_dev_bps,
@@ -365,6 +572,10 @@ impl FxBudget {
                 order.status == OrderStatus::Pending || order.status == OrderStatus::Active,
                 "Only Pending or Active orders can be cancelled"
             );
+            require!(
+                order.pending_in.0 == 0 && order.pending_out.0 == 0,
+                "Cannot cancel while a chunk settlement is in flight"
+            );
 
             order.status = OrderStatus::Cancelled;
             order.requester.clone()
@@ -385,11 +596,13 @@ impl FxBudget {
         );
     }
 
-    /// Execute a chunk against an active order.
+    /// Initiate an idempotent chunk settlement against an active order.
     ///
     /// Callable only by the designated agent (or owner).
-    /// Pure testnet accounting: no deposit required and no tokens move on-chain.
-    /// `deviation_bps` and `simulated_out` are agent-reported and verified against policy.
+    /// - `deviation_bps` is an agent-reported value checked against the order's `max_dev_bps` policy.
+    /// - Replaying an already-settled `idempotency_key` short-circuits cleanly without paying twice.
+    /// - Invoice `settled_out` and `executed_in` ONLY advance in `on_chunk_settled` if `ft_transfer` succeeds.
+    #[allow(clippy::too_many_arguments)]
     pub fn execute_chunk(
         &mut self,
         id: u64,
@@ -397,86 +610,332 @@ impl FxBudget {
         quote_ref: String,
         deviation_bps: i32,
         simulated_out: U128,
-    ) {
+        settlement_out: Option<U128>,
+        idempotency_key: Option<String>,
+    ) -> PromiseOrValue<ChunkSettlementView> {
         require!(!self.paused, "Contract is paused");
         self.assert_agent_or_owner();
 
         let now = env::block_timestamp();
-        let order = self.orders.get_mut(&id).expect("Order not found");
+        let order_snapshot = self.orders.get(&id).expect("Order not found").clone();
 
-        require!(order.status == OrderStatus::Active, "Order is not Active");
-        require!(now < order.deadline_ns, "Order deadline has passed");
+        let key = idempotency_key
+            .map(|k| k.trim().to_string())
+            .filter(|k| !k.is_empty())
+            .unwrap_or_else(|| format!("order-{}-seq-{}", id, order_snapshot.chunks_count + 1));
+        require!(key.len() <= MAX_IDEMPOTENCY_KEY_LEN, "idempotency_key too long");
+
+        // Idempotency check BEFORE policy checks so duplicate retries of completed chunks
+        // cleanly no-op even after invoice completion or interval ticks.
+        let mut attempt_num: u32 = 1;
+        if let Some(existing) = self.chunk_records.get(&key) {
+            require!(
+                existing.order_id == id,
+                "Idempotency key belongs to a different order"
+            );
+            match existing.status {
+                ChunkStatus::Settled => {
+                    let rem = order_snapshot
+                        .target_out
+                        .0
+                        .saturating_sub(order_snapshot.settled_out.0);
+                    #[derive(Serialize)]
+                    struct IdempotentReplayEvent<'a> {
+                        id: u64,
+                        key: &'a str,
+                        settlement_out: U128,
+                    }
+                    emit_event(
+                        "chunk_idempotent_replay",
+                        &IdempotentReplayEvent {
+                            id,
+                            key: &key,
+                            settlement_out: existing.settlement_out,
+                        },
+                    );
+                    return PromiseOrValue::Value(ChunkSettlementView {
+                        key,
+                        order_id: id,
+                        status: ChunkStatus::Settled,
+                        idempotent_replay: true,
+                        amount_in: existing.amount_in,
+                        settlement_out: existing.settlement_out,
+                        settled_out_total: order_snapshot.settled_out,
+                        remaining_due_out: U128(rem),
+                        order_status: order_snapshot.status,
+                        failure_reason: None,
+                    });
+                }
+                ChunkStatus::InFlight => {
+                    env::panic_str("Chunk settlement is already in flight");
+                }
+                ChunkStatus::Failed => {
+                    attempt_num = existing.attempts.saturating_add(1);
+                }
+            }
+        }
+
+        let ft_contract = self
+            .settlement_token
+            .clone()
+            .expect("Settlement token is not configured");
+
+        require!(order_snapshot.status == OrderStatus::Active, "Order is not Active");
+        require!(now < order_snapshot.deadline_ns, "Order deadline has passed");
+        require!(
+            order_snapshot.pending_in.0 == 0 && order_snapshot.pending_out.0 == 0,
+            "Another chunk settlement is currently in flight for this order"
+        );
         require!(amount_in.0 > 0, "amount_in must be positive");
         require!(
-            amount_in.0 <= order.max_chunk_in.0,
+            amount_in.0 <= order_snapshot.max_chunk_in.0,
             "amount_in exceeds order max_chunk_in"
         );
 
-        let new_executed_in = order
+        let committed_in = order_snapshot
             .executed_in
             .0
             .checked_add(amount_in.0)
             .expect("executed_in overflow");
         require!(
-            new_executed_in <= order.total_in.0,
+            committed_in <= order_snapshot.total_in.0,
             "executed_in exceeds order total_in"
         );
 
-        if order.chunks_count > 0 {
+        if order_snapshot.chunks_count > 0 {
             require!(
-                now.saturating_sub(order.last_chunk_ns) >= self.min_interval_ns,
+                now.saturating_sub(order_snapshot.last_chunk_ns) >= self.min_interval_ns,
                 "Minimum interval between chunks has not elapsed"
             );
         }
 
-        // Deviation guard: reject if adverse deviation exceeds order limit
+        // On-chain policy check on agent-reported deviation value.
         require!(
-            deviation_bps >= -(order.max_dev_bps as i32),
+            deviation_bps >= -(order_snapshot.max_dev_bps as i32),
             "Adverse deviation exceeds order max_dev_bps tolerance"
         );
 
-        order.executed_in = U128(new_executed_in);
-        order.last_chunk_ns = now;
-        order.chunks_count = order.chunks_count.checked_add(1).expect("chunk count overflow");
+        let out_amount = settlement_out
+            .expect("settlement_out must be specified explicitly for on-chain FT transfer")
+            .0;
+        require!(out_amount > 0, "settlement_out must be positive");
 
-        let completed = new_executed_in == order.total_in.0;
-        let mut completed_requester = None;
-        if completed {
-            order.status = OrderStatus::Completed;
-            completed_requester = Some(order.requester.clone());
+        if order_snapshot.target_out.0 > 0 {
+            let committed_out = order_snapshot
+                .settled_out
+                .0
+                .checked_add(out_amount)
+                .expect("settled_out overflow");
+            require!(
+                committed_out <= order_snapshot.target_out.0,
+                "settlement_out exceeds remaining invoice balance due"
+            );
         }
 
-        let chunks_count = order.chunks_count;
-        let final_status = order.status;
-
-        if let Some(r) = completed_requester {
-            self.decrement_open_orders(&r);
+        // Lock in-flight amounts without reducing balance due until ft_transfer confirms.
+        let recipient = order_snapshot.recipient.clone();
+        {
+            let order = self.orders.get_mut(&id).expect("Order not found");
+            order.pending_in = U128(amount_in.0);
+            order.pending_out = U128(out_amount);
         }
 
-        #[derive(Serialize)]
-        struct ChunkExecutedEvent<'a> {
-            id: u64,
-            amount_in: U128,
-            executed_in: U128,
-            quote_ref: &'a str,
-            deviation_bps: i32,
-            simulated_out: U128,
-            chunks_count: u32,
-            status: OrderStatus,
-        }
-        emit_event(
-            "chunk_executed",
-            &ChunkExecutedEvent {
-                id,
+        let is_new_key = !self.chunk_records.contains_key(&key);
+        self.chunk_records.insert(
+            key.clone(),
+            ChunkRecord {
+                key: key.clone(),
+                order_id: id,
                 amount_in,
-                executed_in: U128(new_executed_in),
-                quote_ref: &quote_ref,
-                deviation_bps,
+                settlement_out: U128(out_amount),
                 simulated_out,
-                chunks_count,
-                status: final_status,
+                recipient: recipient.clone(),
+                quote_ref: quote_ref.clone(),
+                deviation_bps,
+                status: ChunkStatus::InFlight,
+                attempts: attempt_num,
+                initiated_ns: now,
+                settled_ns: 0,
+                failure_reason: None,
             },
         );
+        if is_new_key {
+            let mut keys = self.order_chunk_keys.get(&id).cloned().unwrap_or_default();
+            keys.push(key.clone());
+            self.order_chunk_keys.insert(id, keys);
+        }
+
+        let memo = if order_snapshot.invoice_ref.is_empty() {
+            format!("GetNear FX Order #{} [{}]", id, key)
+        } else {
+            format!("GetNear Invoice {} Order #{} [{}]", order_snapshot.invoice_ref, id, key)
+        };
+
+        PromiseOrValue::Promise(
+            ext_ft::ext(ft_contract)
+                .with_attached_deposit(NearToken::from_yoctonear(1))
+                .with_static_gas(FT_TRANSFER_GAS)
+                .ft_transfer(recipient, U128(out_amount), Some(memo))
+                .then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(CALLBACK_GAS)
+                        .on_chunk_settled(id, key, amount_in, U128(out_amount)),
+                ),
+        )
+    }
+
+    /// Private cross-contract callback verifying whether NEP-141 ft_transfer succeeded.
+    ///
+    /// Invoice balance due and executed input ONLY advance when `PromiseResult` confirms success.
+    #[private]
+    pub fn on_chunk_settled(
+        &mut self,
+        id: u64,
+        key: String,
+        amount_in: U128,
+        settlement_out: U128,
+    ) -> ChunkSettlementView {
+        let now = env::block_timestamp();
+        let transfer_succeeded = env::promise_result_checked(0, 1024).is_ok();
+
+        let (requester, target_out, final_settled_out, final_status, recipient, quote_ref, deviation_bps, simulated_out, chunks_count) = {
+            let order = self.orders.get_mut(&id).expect("Order not found in callback");
+            order.pending_in = U128(0);
+            order.pending_out = U128(0);
+
+            if transfer_succeeded {
+                order.executed_in = U128(order.executed_in.0.saturating_add(amount_in.0));
+                order.settled_out = U128(order.settled_out.0.saturating_add(settlement_out.0));
+                order.last_chunk_ns = now;
+                order.chunks_count = order.chunks_count.checked_add(1).expect("chunk count overflow");
+
+                let invoice_paid = order.target_out.0 > 0 && order.settled_out.0 >= order.target_out.0;
+                let budget_exhausted = order.executed_in.0 >= order.total_in.0;
+                if (invoice_paid || budget_exhausted) && order.status == OrderStatus::Active {
+                    order.status = OrderStatus::Completed;
+                }
+            }
+
+            let record = self
+                .chunk_records
+                .get(&key)
+                .expect("Chunk record missing in callback")
+                .clone();
+
+            (
+                order.requester.clone(),
+                order.target_out,
+                order.settled_out,
+                order.status,
+                order.recipient.clone(),
+                record.quote_ref,
+                record.deviation_bps,
+                record.simulated_out,
+                order.chunks_count,
+            )
+        };
+
+        if transfer_succeeded && final_status == OrderStatus::Completed {
+            self.decrement_open_orders(&requester);
+        }
+
+        let failure_reason = if transfer_succeeded {
+            None
+        } else {
+            Some("NEP-141 ft_transfer promise failed on-chain".to_string())
+        };
+
+        if let Some(mut chunk) = self.chunk_records.get(&key).cloned() {
+            chunk.status = if transfer_succeeded {
+                ChunkStatus::Settled
+            } else {
+                ChunkStatus::Failed
+            };
+            chunk.settled_ns = now;
+            chunk.failure_reason = failure_reason.clone();
+            self.chunk_records.insert(key.clone(), chunk);
+        }
+
+        let remaining_due = U128(target_out.0.saturating_sub(final_settled_out.0));
+
+        if transfer_succeeded {
+            #[derive(Serialize)]
+            struct ChunkSettledEvent<'a> {
+                id: u64,
+                key: &'a str,
+                recipient: &'a AccountId,
+                amount_in: U128,
+                settlement_out: U128,
+                settled_out_total: U128,
+                remaining_due_out: U128,
+                quote_ref: &'a str,
+                deviation_bps: i32,
+                simulated_out: U128,
+                chunks_count: u32,
+                status: OrderStatus,
+            }
+            emit_event(
+                "chunk_settled",
+                &ChunkSettledEvent {
+                    id,
+                    key: &key,
+                    recipient: &recipient,
+                    amount_in,
+                    settlement_out,
+                    settled_out_total: final_settled_out,
+                    remaining_due_out: remaining_due,
+                    quote_ref: &quote_ref,
+                    deviation_bps,
+                    simulated_out,
+                    chunks_count,
+                    status: final_status,
+                },
+            );
+        } else {
+            #[derive(Serialize)]
+            struct ChunkSettlementFailedEvent<'a> {
+                id: u64,
+                key: &'a str,
+                recipient: &'a AccountId,
+                amount_in: U128,
+                attempted_out: U128,
+                settled_out_total: U128,
+                remaining_due_out: U128,
+                status: OrderStatus,
+                reason: &'a str,
+            }
+            emit_event(
+                "chunk_settlement_failed",
+                &ChunkSettlementFailedEvent {
+                    id,
+                    key: &key,
+                    recipient: &recipient,
+                    amount_in,
+                    attempted_out: settlement_out,
+                    settled_out_total: final_settled_out,
+                    remaining_due_out: remaining_due,
+                    status: final_status,
+                    reason: "NEP-141 ft_transfer promise failed; invoice balance due unchanged",
+                },
+            );
+        }
+
+        ChunkSettlementView {
+            key,
+            order_id: id,
+            status: if transfer_succeeded {
+                ChunkStatus::Settled
+            } else {
+                ChunkStatus::Failed
+            },
+            idempotent_replay: false,
+            amount_in,
+            settlement_out,
+            settled_out_total: final_settled_out,
+            remaining_due_out: remaining_due,
+            order_status: final_status,
+            failure_reason,
+        }
     }
 
     pub fn expire_order(&mut self, id: u64) {
@@ -488,6 +947,10 @@ impl FxBudget {
                 "Order is already finalized"
             );
             require!(now >= order.deadline_ns, "Order deadline has not yet passed");
+            require!(
+                order.pending_in.0 == 0 && order.pending_out.0 == 0,
+                "Cannot expire while a chunk settlement is in flight"
+            );
 
             order.status = OrderStatus::Expired;
             order.requester.clone()
@@ -528,6 +991,37 @@ impl FxBudget {
             .collect()
     }
 
+    pub fn get_invoice_summary(&self, id: u64) -> Option<InvoiceSummaryView> {
+        self.orders.get(&id).map(|o| InvoiceSummaryView {
+            id: o.id,
+            requester: o.requester.clone(),
+            recipient: o.recipient.clone(),
+            invoice_ref: o.invoice_ref.clone(),
+            target_out: o.target_out,
+            settled_out: o.settled_out,
+            pending_out: o.pending_out,
+            remaining_due_out: U128(o.target_out.0.saturating_sub(o.settled_out.0)),
+            total_in: o.total_in,
+            executed_in: o.executed_in,
+            pending_in: o.pending_in,
+            chunks_count: o.chunks_count,
+            status: o.status,
+        })
+    }
+
+    pub fn get_chunk_record(&self, key: String) -> Option<ChunkRecord> {
+        self.chunk_records.get(&key).cloned()
+    }
+
+    pub fn list_order_chunks(&self, order_id: u64) -> Vec<ChunkRecord> {
+        let Some(keys) = self.order_chunk_keys.get(&order_id) else {
+            return Vec::new();
+        };
+        keys.iter()
+            .filter_map(|k| self.chunk_records.get(k).cloned())
+            .collect()
+    }
+
     pub fn get_limits(&self) -> LimitsView {
         LimitsView {
             auto_cap_in: U128(self.auto_cap_in),
@@ -544,6 +1038,10 @@ impl FxBudget {
 
     pub fn get_agent(&self) -> Option<AccountId> {
         self.agent.clone()
+    }
+
+    pub fn get_settlement_token(&self) -> Option<AccountId> {
+        self.settlement_token.clone()
     }
 
     pub fn is_requester(&self, account: AccountId) -> bool {
@@ -583,5 +1081,307 @@ impl FxBudget {
         if count > 0 {
             self.open_orders_count.insert(requester.clone(), count - 1);
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Unit Tests (Callback-Verified Settlement, Failure Rollback & Idempotency)
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use near_sdk::test_utils::{get_created_receipts, VMContextBuilder};
+    use near_sdk::{test_vm_config, testing_env, PromiseResult};
+
+    fn acct(name: &str) -> AccountId {
+        name.parse().unwrap()
+    }
+
+    fn init_invoice_contract() -> (FxBudget, AccountId, AccountId, AccountId, AccountId, AccountId) {
+        let owner = acct("dao.testnet");
+        let agent = acct("agent.testnet");
+        let requester = acct("treasury.testnet");
+        let supplier = acct("supplier.testnet");
+        let token = acct("eure.testnet");
+
+        let mut ctx = VMContextBuilder::new();
+        ctx.predecessor_account_id(owner.clone())
+            .current_account_id(acct("fx-budget.testnet"))
+            .block_timestamp(1_000_000_000_000);
+        testing_env!(ctx.build());
+
+        let mut contract = FxBudget::new(owner.clone(), Some(token.clone()));
+        contract.set_agent(agent.clone());
+        contract.add_requester(requester.clone());
+        contract.set_limits(
+            U128(500_000_000),      // 500 auto-cap
+            U128(500_000_000),      // 500 max chunk
+            10_000_000_000,         // 10s interval
+            604_800_000_000_000,    // 7 days
+        );
+
+        (contract, owner, agent, requester, supplier, token)
+    }
+
+    #[test]
+    fn supplier_invoice_settlement_failure_and_idempotent_retry() {
+        let (mut contract, owner, agent, requester, supplier, _token) = init_invoice_contract();
+
+        // 1. Requester creates a €1,000 invoice payable to supplier (€1,000 = 1_000_000_000).
+        let mut ctx = VMContextBuilder::new();
+        ctx.predecessor_account_id(requester.clone())
+            .current_account_id(acct("fx-budget.testnet"))
+            .block_timestamp(1_000_000_000_000);
+        testing_env!(ctx.build());
+
+        let order_id = contract.create_order(
+            "USDC/EURe".to_string(),
+            U128(1_200_000_000), // $1,200 USDC budget > 500 auto_cap -> Pending
+            2_000_000_000_000,
+            U128(500_000_000),
+            120,
+            Some(supplier.clone()),
+            Some(U128(1_000_000_000)), // €1,000.00 EURe invoice due
+            Some("INV-2026-1000".to_string()),
+        );
+        assert_eq!(
+            contract.get_invoice_summary(order_id).unwrap().status,
+            OrderStatus::Pending
+        );
+
+        // 2. DAO approves the €1,000 invoice order.
+        ctx.predecessor_account_id(owner.clone());
+        testing_env!(ctx.build());
+        contract.approve_order(order_id);
+
+        // 3. Chunk #1 (€400 EURe) initiated by agent -> ft_transfer promise created.
+        ctx.predecessor_account_id(agent.clone())
+            .block_timestamp(1_100_000_000_000);
+        testing_env!(ctx.build());
+        let res1 = contract.execute_chunk(
+            order_id,
+            U128(450_000_000),
+            "sha256:q1".to_string(),
+            -20,
+            U128(400_000_000),
+            Some(U128(400_000_000)),
+            Some("inv1-chunk-1".to_string()),
+        );
+        assert!(matches!(res1, PromiseOrValue::Promise(_)));
+        assert_eq!(get_created_receipts().len(), 2); // ft_transfer + on_chunk_settled callback
+        // Before callback completes, settled_out must still be 0 and pending_out == 400!
+        let pre_cb = contract.get_invoice_summary(order_id).unwrap();
+        assert_eq!(pre_cb.settled_out.0, 0);
+        assert_eq!(pre_cb.pending_out.0, 400_000_000);
+        assert_eq!(pre_cb.remaining_due_out.0, 1_000_000_000);
+
+        // 4. Callback confirms Chunk #1 ft_transfer succeeded -> balance due drops to €600.
+        ctx.predecessor_account_id(acct("fx-budget.testnet"))
+            .block_timestamp(1_101_000_000_000);
+        testing_env!(
+            ctx.build(),
+            test_vm_config(),
+            Default::default(),
+            Default::default(),
+            vec![PromiseResult::Successful(vec![])],
+        );
+        let settled_1 = contract.on_chunk_settled(
+            order_id,
+            "inv1-chunk-1".to_string(),
+            U128(450_000_000),
+            U128(400_000_000),
+        );
+        assert_eq!(settled_1.status, ChunkStatus::Settled);
+        assert_eq!(settled_1.settled_out_total.0, 400_000_000);
+        assert_eq!(settled_1.remaining_due_out.0, 600_000_000);
+
+        // 5. Idempotent replay of Chunk #1 must NEVER transfer tokens or reduce due twice!
+        ctx.predecessor_account_id(agent.clone())
+            .block_timestamp(1_120_000_000_000);
+        testing_env!(ctx.build());
+        let replay = contract.execute_chunk(
+            order_id,
+            U128(450_000_000),
+            "sha256:q1".to_string(),
+            -20,
+            U128(400_000_000),
+            Some(U128(400_000_000)),
+            Some("inv1-chunk-1".to_string()),
+        );
+        assert!(matches!(replay, PromiseOrValue::Value(_)));
+        assert_eq!(get_created_receipts().len(), 0); // Zero cross-contract ft_transfer calls!
+        assert_eq!(
+            contract.get_invoice_summary(order_id).unwrap().remaining_due_out.0,
+            600_000_000
+        );
+
+        // 6. Chunk #2 (€300 EURe) initiated -> simulated on-chain ft_transfer FAILS.
+        let res2 = contract.execute_chunk(
+            order_id,
+            U128(340_000_000),
+            "sha256:q2".to_string(),
+            -15,
+            U128(300_000_000),
+            Some(U128(300_000_000)),
+            Some("inv1-chunk-2".to_string()),
+        );
+        assert!(matches!(res2, PromiseOrValue::Promise(_)));
+
+        ctx.predecessor_account_id(acct("fx-budget.testnet"))
+            .block_timestamp(1_121_000_000_000);
+        testing_env!(
+            ctx.build(),
+            test_vm_config(),
+            Default::default(),
+            Default::default(),
+            vec![PromiseResult::Failed],
+        );
+        let failed_2 = contract.on_chunk_settled(
+            order_id,
+            "inv1-chunk-2".to_string(),
+            U128(340_000_000),
+            U128(300_000_000),
+        );
+        assert_eq!(failed_2.status, ChunkStatus::Failed);
+        assert_eq!(failed_2.remaining_due_out.0, 600_000_000); // UNCHANGED!
+
+        let post_fail = contract.get_invoice_summary(order_id).unwrap();
+        assert_eq!(post_fail.settled_out.0, 400_000_000);
+        assert_eq!(post_fail.pending_out.0, 0);
+        assert_eq!(post_fail.remaining_due_out.0, 600_000_000);
+        assert_eq!(post_fail.chunks_count, 1);
+        assert_eq!(post_fail.status, OrderStatus::Active);
+
+        // 7. Retrying Chunk #2 after vault replenish succeeds cleanly and settles €300!
+        ctx.predecessor_account_id(agent.clone())
+            .block_timestamp(1_140_000_000_000);
+        testing_env!(ctx.build());
+        let retry_2 = contract.execute_chunk(
+            order_id,
+            U128(340_000_000),
+            "sha256:q2-retry".to_string(),
+            -10,
+            U128(300_000_000),
+            Some(U128(300_000_000)),
+            Some("inv1-chunk-2".to_string()),
+        );
+        assert!(matches!(retry_2, PromiseOrValue::Promise(_)));
+
+        ctx.predecessor_account_id(acct("fx-budget.testnet"))
+            .block_timestamp(1_141_000_000_000);
+        testing_env!(
+            ctx.build(),
+            test_vm_config(),
+            Default::default(),
+            Default::default(),
+            vec![PromiseResult::Successful(vec![])],
+        );
+        let settled_2 = contract.on_chunk_settled(
+            order_id,
+            "inv1-chunk-2".to_string(),
+            U128(340_000_000),
+            U128(300_000_000),
+        );
+        assert_eq!(settled_2.status, ChunkStatus::Settled);
+        assert_eq!(settled_2.settled_out_total.0, 700_000_000);
+        assert_eq!(settled_2.remaining_due_out.0, 300_000_000);
+
+        // 8. Final Chunk #3 (€300 EURe) completes the €1,000 invoice -> balance due becomes €0.
+        ctx.predecessor_account_id(agent.clone())
+            .block_timestamp(1_160_000_000_000);
+        testing_env!(ctx.build());
+        contract.execute_chunk(
+            order_id,
+            U128(340_000_000),
+            "sha256:q3".to_string(),
+            -5,
+            U128(300_000_000),
+            Some(U128(300_000_000)),
+            Some("inv1-chunk-3".to_string()),
+        );
+        ctx.predecessor_account_id(acct("fx-budget.testnet"))
+            .block_timestamp(1_161_000_000_000);
+        testing_env!(
+            ctx.build(),
+            test_vm_config(),
+            Default::default(),
+            Default::default(),
+            vec![PromiseResult::Successful(vec![])],
+        );
+        let settled_3 = contract.on_chunk_settled(
+            order_id,
+            "inv1-chunk-3".to_string(),
+            U128(340_000_000),
+            U128(300_000_000),
+        );
+        assert_eq!(settled_3.remaining_due_out.0, 0);
+        assert_eq!(settled_3.order_status, OrderStatus::Completed);
+        assert_eq!(contract.get_open_orders_count(requester), 0);
+    }
+
+    #[test]
+    fn migrates_legacy_state_cleanly() {
+        let owner = acct("dao.testnet");
+        let requester = acct("operator.testnet");
+        let agent = acct("agent.testnet");
+        let token = acct("eure.testnet");
+
+        let mut ctx = VMContextBuilder::new();
+        ctx.predecessor_account_id(acct("fx-budget.testnet"))
+            .current_account_id(acct("fx-budget.testnet"));
+        testing_env!(ctx.build());
+
+        let mut old_orders = IterableMap::new(b"o");
+        old_orders.insert(
+            7,
+            OldOrder {
+                id: 7,
+                requester: requester.clone(),
+                pair_label: "USDC/EURe".to_string(),
+                total_in: U128(250_000_000),
+                executed_in: U128(40_000_000),
+                max_chunk_in: U128(20_000_000),
+                deadline_ns: 2_000_000_000_000,
+                max_dev_bps: 120,
+                status: OrderStatus::Active,
+                last_chunk_ns: 1_500_000_000_000,
+                chunks_count: 2,
+            },
+        );
+        old_orders.flush();
+
+        let mut requesters = IterableSet::new(b"r");
+        requesters.insert(requester.clone());
+        requesters.flush();
+
+        let mut open_counts = LookupMap::new(b"c");
+        open_counts.insert(requester.clone(), 1);
+        open_counts.flush();
+
+        let legacy = OldFxBudget {
+            owner: owner.clone(),
+            agent: Some(agent.clone()),
+            requesters,
+            auto_cap_in: DEFAULT_AUTO_CAP_IN,
+            max_chunk_in: DEFAULT_MAX_CHUNK_IN,
+            min_interval_ns: DEFAULT_MIN_INTERVAL_NS,
+            max_horizon_ns: DEFAULT_MAX_HORIZON_NS,
+            paused: false,
+            next_order_id: 8,
+            orders: old_orders,
+            open_orders_count: open_counts,
+        };
+        let bytes = near_sdk::borsh::to_vec(&legacy).unwrap();
+        env::storage_write(b"STATE", &bytes);
+
+        let migrated = FxBudget::migrate(token.clone());
+        assert_eq!(migrated.get_owner(), owner);
+        assert_eq!(migrated.get_agent(), Some(agent));
+        assert_eq!(migrated.get_settlement_token(), Some(token));
+        assert!(migrated.is_requester(requester.clone()));
+        let ord = migrated.get_order(7).expect("Legacy Order #7 must survive migration");
+        assert_eq!(ord.executed_in.0, 40_000_000);
+        assert_eq!(ord.recipient, requester);
     }
 }

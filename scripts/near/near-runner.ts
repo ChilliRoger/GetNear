@@ -20,12 +20,24 @@ export function getNearBin(): string {
   return 'near'
 }
 
-export function getCredentialPath(accountId: string): string {
+export function getCredentialPath(accountId: string, overridePath?: string): string {
+  if (overridePath && fs.existsSync(overridePath)) {
+    return overridePath
+  }
   const p = path.join(os.homedir(), '.near-credentials', 'testnet', `${accountId}.json`)
   if (!fs.existsSync(p)) {
     throw new Error(`Credentials file not found for ${accountId} at ${p}`)
   }
   return p
+}
+
+export function findKeyCredentialPath(accountId: string, publicKey: string): string | undefined {
+  const normalized = publicKey.replace(':', '_')
+  const subPath = path.join(os.homedir(), '.near-credentials', 'testnet', accountId, `${normalized}.json`)
+  if (fs.existsSync(subPath)) {
+    return subPath
+  }
+  return undefined
 }
 
 export interface TxResult {
@@ -68,9 +80,10 @@ export function runCallFunction(params: {
   deposit: string
   gas: string
   signerId: string
+  credentialPath?: string
 }): TxResult {
   const bin = getNearBin()
-  const credPath = getCredentialPath(params.signerId)
+  const credPath = getCredentialPath(params.signerId, params.credentialPath)
 
   const argsList = [
     'contract',

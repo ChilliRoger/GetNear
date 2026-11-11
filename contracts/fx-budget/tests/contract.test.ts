@@ -37,7 +37,9 @@ describe('FxBudget WASM Binary Verification', () => {
 
     const expectedMethods = [
       'new',
+      'migrate',
       'set_agent',
+      'set_settlement_token',
       'add_requester',
       'remove_requester',
       'set_limits',
@@ -47,12 +49,17 @@ describe('FxBudget WASM Binary Verification', () => {
       'approve_order',
       'cancel_order',
       'execute_chunk',
+      'on_chunk_settled',
       'expire_order',
       'get_order',
       'list_orders',
+      'get_invoice_summary',
+      'get_chunk_record',
+      'list_order_chunks',
       'get_limits',
       'get_owner',
       'get_agent',
+      'get_settlement_token',
       'is_requester',
       'is_paused',
       'get_open_orders_count',
@@ -325,5 +332,115 @@ describe('FxBudget Contract State Machine & Logic Tests', () => {
     // One completes
     openCount -= 1
     assert.equal(openCount < maxAllowed, true, 'Can open new order after completion')
+  })
+
+  test('Invoice Payable: balance due depends on callback confirmation, failure leaves unchanged, retry is idempotent', () => {
+    type ChunkStatus = 'InFlight' | 'Settled' | 'Failed'
+    interface ChunkRecord {
+      key: string
+      amountIn: bigint
+      settlementOut: bigint
+      status: ChunkStatus
+      attempts: number
+    }
+
+    const invoice = {
+      id: 10,
+      requester: 'operator.testnet',
+      recipient: 'supplier.testnet',
+      targetOut: 1_000_000_000n, // €1,000.00 EURe (6 decimals)
+      settledOut: 0n,
+      pendingOut: 0n,
+      totalIn: 1_200_000_000n,
+      executedIn: 0n,
+      pendingIn: 0n,
+      chunksCount: 0,
+      status: 'Active' as OrderStatus,
+    }
+    const chunks = new Map<string, ChunkRecord>()
+    const transfersExecuted: Array<{ key: string; amountOut: bigint }> = []
+
+    const initiateChunk = (key: string, amountIn: bigint, outAmt: bigint) => {
+      const existing = chunks.get(key)
+      if (existing?.status === 'Settled') {
+        return { replayed: true }
+      }
+      if (existing?.status === 'InFlight') {
+        throw new Error('Chunk settlement is already in flight')
+      }
+      if (invoice.pendingOut > 0n) {
+        throw new Error('Another chunk settlement is currently in flight')
+      }
+      if (invoice.settledOut + outAmt > invoice.targetOut) {
+        throw new Error('settlement_out exceeds remaining invoice balance due')
+      }
+
+      invoice.pendingIn = amountIn
+      invoice.pendingOut = outAmt
+      chunks.set(key, {
+        key,
+        amountIn,
+        settlementOut: outAmt,
+        status: 'InFlight',
+        attempts: (existing?.attempts ?? 0) + 1,
+      })
+      return { replayed: false }
+    }
+
+    const onChunkSettled = (key: string, promiseSucceeded: boolean) => {
+      const rec = chunks.get(key)!
+      invoice.pendingIn = 0n
+      invoice.pendingOut = 0n
+      if (promiseSucceeded) {
+        rec.status = 'Settled'
+        invoice.executedIn += rec.amountIn
+        invoice.settledOut += rec.settlementOut
+        invoice.chunksCount += 1
+        transfersExecuted.push({ key, amountOut: rec.settlementOut })
+        if (invoice.settledOut >= invoice.targetOut) {
+          invoice.status = 'Completed'
+        }
+      } else {
+        rec.status = 'Failed'
+      }
+    }
+
+    const remainingDue = () => invoice.targetOut - invoice.settledOut
+
+    // 1. Initial €1,000 due
+    assert.equal(remainingDue(), 1_000_000_000n)
+
+    // 2. Chunk #1 (€400) initiated -> remaining due must NOT drop until callback confirms
+    const r1 = initiateChunk('inv-chunk-1', 450_000_000n, 400_000_000n)
+    assert.equal(r1.replayed, false)
+    assert.equal(remainingDue(), 1_000_000_000n)
+
+    // 3. Callback confirms ft_transfer succeeded -> remaining due drops to €600
+    onChunkSettled('inv-chunk-1', true)
+    assert.equal(remainingDue(), 600_000_000n)
+    assert.equal(invoice.chunksCount, 1)
+
+    // 4. Retrying Chunk #1 with the same key must NOT pay twice
+    const replay = initiateChunk('inv-chunk-1', 450_000_000n, 400_000_000n)
+    assert.equal(replay.replayed, true)
+    assert.equal(remainingDue(), 600_000_000n)
+    assert.equal(transfersExecuted.length, 1)
+
+    // 5. Chunk #2 (€300) initiated, but ft_transfer fails on-chain -> balance due stays €600
+    initiateChunk('inv-chunk-2', 340_000_000n, 300_000_000n)
+    onChunkSettled('inv-chunk-2', false)
+    assert.equal(chunks.get('inv-chunk-2')?.status, 'Failed')
+    assert.equal(invoice.pendingOut, 0n)
+    assert.equal(remainingDue(), 600_000_000n)
+    assert.equal(invoice.chunksCount, 1)
+    assert.equal(invoice.status, 'Active')
+
+    // 6. Retry failed Chunk #2 after vault funded -> settles cleanly, balance due becomes €300
+    const retry2 = initiateChunk('inv-chunk-2', 340_000_000n, 300_000_000n)
+    assert.equal(retry2.replayed, false)
+    assert.equal(chunks.get('inv-chunk-2')?.attempts, 2)
+    onChunkSettled('inv-chunk-2', true)
+    assert.equal(remainingDue(), 300_000_000n)
+    assert.equal(transfersExecuted.length, 2)
   })
 })
