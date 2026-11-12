@@ -13,13 +13,16 @@ try {
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 import { NearClient } from '@getnear/near-client'
-import { runCreateSubaccount, runDeployContract } from './near-runner.js'
+import { runCallFunction, runCreateSubaccount, runDeployContract } from './near-runner.js'
 
+const CIRCLE_NEAR_TESTNET_USDC = '3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af'
 const OPERATOR_ID = process.env.OPERATOR_ACCOUNT_ID || 'chilliroger-operator.testnet'
 const CONTRACT_ID = process.env.FX_BUDGET_CONTRACT_ID || `fx-budget.${OPERATOR_ID}`
 const DAO_ID = process.env.SPUTNIK_DAO_ACCOUNT_ID || 'chilliroger-dao.sputnik-v2.testnet'
 const EURE_ID = process.env.EURE_CONTRACT_ID || `eure.${OPERATOR_ID}`
+const INPUT_USDC_ID = process.env.USDC_CONTRACT_ID || CIRCLE_NEAR_TESTNET_USDC
 const IS_MIGRATE = process.argv.includes('--migrate')
+const IS_MIGRATE_V3 = process.argv.includes('--migrate-v3')
 
 const WASM_PATH = path.resolve(process.cwd(), 'contracts/fx-budget/res/fx_budget.wasm')
 
@@ -63,10 +66,24 @@ async function main() {
     await new Promise((r) => setTimeout(r, 4000))
   }
 
-  // 2. Deploy contract WASM with either migrate(...) or fresh new(...) init call
-  const initMethod = IS_MIGRATE || accountExists ? 'migrate' : 'new'
+  // 2. Deploy contract WASM with either migrate_v3, legacy migrate, or fresh new(...) init call
+  let hasV2Settlement = false
+  if (accountExists) {
+    try {
+      const tok = await client.callView<string | null>(CONTRACT_ID, 'get_settlement_token', {})
+      hasV2Settlement = Boolean(tok)
+    } catch {}
+  }
+
+  const initMethod = IS_MIGRATE_V3 || hasV2Settlement
+    ? 'migrate_v3'
+    : IS_MIGRATE || accountExists
+    ? 'migrate'
+    : 'new'
   const initArgs =
-    initMethod === 'migrate'
+    initMethod === 'migrate_v3'
+      ? { input_token: INPUT_USDC_ID }
+      : initMethod === 'migrate'
       ? { settlement_token: EURE_ID }
       : { owner: DAO_ID, settlement_token: EURE_ID }
 
@@ -95,6 +112,7 @@ async function main() {
     const owner = await client.callView<string>(CONTRACT_ID, 'get_owner', {})
     const agent = await client.callView<string | null>(CONTRACT_ID, 'get_agent', {})
     const settlementToken = await client.callView<string | null>(CONTRACT_ID, 'get_settlement_token', {})
+    const inputToken = await client.callView<string | null>(CONTRACT_ID, 'get_input_token', {})
     const limits = await client.callView<any>(CONTRACT_ID, 'get_limits', {})
     const paused = await client.callView<boolean>(CONTRACT_ID, 'is_paused', {})
     const orders = await client.callView<any[]>(CONTRACT_ID, 'list_orders', { from_index: 0, limit: 50 })
@@ -104,9 +122,29 @@ async function main() {
     console.log(`  Owner (DAO): ${owner}`)
     console.log(`  Agent: ${agent}`)
     console.log(`  Settlement Token: ${settlementToken}`)
+    console.log(`  Input Escrow Token: ${inputToken}`)
     console.log(`  Paused: ${paused}`)
     console.log(`  Limits: Auto-Cap ${Number(limits.auto_cap_in) / 1e6} | Max Chunk ${Number(limits.max_chunk_in) / 1e6} | Min Interval ${Number(limits.min_interval_ns) / 1e9}s`)
     console.log(`  Orders Count: ${orders.length}`)
+
+    // Ensure FxBudget contract is storage-registered on the configured Circle USDC contract
+    if (inputToken) {
+      const storage = await client.callView<any>(inputToken, 'storage_balance_of', {
+        account_id: CONTRACT_ID,
+      })
+      if (!storage || BigInt(storage.total || '0') === 0n) {
+        console.log(`\nRegistering ${CONTRACT_ID} on Circle USDC (${inputToken})...`)
+        const regRes = runCallFunction({
+          contractId: inputToken,
+          methodName: 'storage_deposit',
+          args: { account_id: CONTRACT_ID, registration_only: true },
+          deposit: '0.00125 NEAR',
+          gas: '30.0 Tgas',
+          signerId: OPERATOR_ID,
+        })
+        console.log(`✓ Storage registered! Tx: ${regRes.txHash}`)
+      }
+    }
   } catch (err) {
     console.error('⚠ Error querying deployed contract:', err)
   }
