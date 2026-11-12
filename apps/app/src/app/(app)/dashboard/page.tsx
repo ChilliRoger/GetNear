@@ -46,6 +46,22 @@ interface ContractLimits {
   max_horizon_ns: number;
 }
 
+interface ContractChunkRecord {
+  key: string;
+  order_id: number;
+  amount_in: string;
+  settlement_out: string;
+  simulated_out: string;
+  recipient: string;
+  quote_ref: string;
+  deviation_bps: number;
+  status: "InFlight" | "Settled" | "Failed";
+  attempts: number;
+  initiated_ns: number;
+  settled_ns: number;
+  failure_reason?: string | null;
+}
+
 interface DaoProposal {
   id: number;
   proposer: string;
@@ -101,6 +117,7 @@ export default function DashboardPage() {
 
   // NEAR state
   const [orders, setOrders] = useState<ContractOrder[]>([]);
+  const [chunksByOrder, setChunksByOrder] = useState<Record<number, ContractChunkRecord[]>>({});
   const [proposals, setProposals] = useState<DaoProposal[]>([]);
   const [fills, setFills] = useState<AgentFill[]>([]);
   const [decisions, setDecisions] = useState<AgentDecision[]>([]);
@@ -145,6 +162,9 @@ export default function DashboardPage() {
         }
         if (data.contract?.orders) {
           setOrders(data.contract.orders);
+        }
+        if (data.contract?.chunksByOrder) {
+          setChunksByOrder(data.contract.chunksByOrder);
         }
         if (data.contract?.limits) {
           setLimits(data.contract.limits);
@@ -675,6 +695,54 @@ export default function DashboardPage() {
                     <span>Agent-Reported Dev Cap: {o.max_dev_bps} bps</span>
                   </div>
 
+                  {/* Expired Deadline Unpaid Remainder Notice */}
+                  {o.status === "Expired" && (
+                    <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-mono text-amber-300">
+                      {targetOutEur > 0 && remainingDueEur > 0
+                        ? `Deadline Expired - Unpaid Remainder: ${remainingDueEur.toFixed(2)} EURe due to ${o.recipient || o.requester}`
+                        : total > executed
+                        ? `Deadline Expired - Unspent Budget Remainder: ${(total - executed).toFixed(2)} USDC`
+                        : "Deadline Expired - Balance Closed"}
+                    </div>
+                  )}
+
+                  {/* Live On-Chain Chunk Records (Pending / Confirmed / Failed) */}
+                  {(chunksByOrder[o.id]?.length ?? 0) > 0 && (
+                    <div className="mt-2 space-y-1 border-t border-border/70 pt-2">
+                      <div className="text-[10px] uppercase tracking-wider text-muted font-medium">
+                        On-Chain Chunk Ledger ({chunksByOrder[o.id].length})
+                      </div>
+                      {chunksByOrder[o.id].map((c) => {
+                        const label =
+                          c.status === "Settled" ? "Confirmed" : c.status === "InFlight" ? "Pending" : "Failed";
+                        const badgeClass =
+                          c.status === "Settled"
+                            ? "bg-emerald-500/15 text-emerald-400"
+                            : c.status === "InFlight"
+                            ? "bg-accent-blue/15 text-accent-blue"
+                            : "bg-red-500/15 text-red-400";
+                        return (
+                          <div key={c.key} className="rounded border border-border/70 bg-surface px-2 py-1 text-[10px] font-mono">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-zinc-300 truncate">{c.key}</span>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="text-zinc-400">
+                                  {(Number(c.amount_in) / 1e6).toFixed(2)} USDC (sim) -&gt; {(Number(c.settlement_out) / 1e6).toFixed(2)} EURe
+                                </span>
+                                <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${badgeClass}`}>
+                                  {label}
+                                </span>
+                              </div>
+                            </div>
+                            {c.failure_reason && (
+                              <div className="text-red-400 truncate mt-0.5">{c.failure_reason}</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {/* Governance & Sputnik DAO Approval Panel for Pending Orders */}
                   {isPending && (
                     <div className="mt-2.5 pt-2.5 border-t border-border bg-surface/50 -mx-3 -mb-3 p-3 rounded-b-xl">
@@ -1012,91 +1080,140 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {/* Fills list */}
-        {fills.length === 0 ? (
-          <div className="py-4 text-center text-xs text-muted">No fills executed yet.</div>
-        ) : (
-          <div className="space-y-1.5">
-            {fills.slice(0, 8).map((f) => {
-              const inAmt = (Number(f.amount_in) / 1e6).toFixed(2);
-              const outAmtNum = f.settlement_out
-                ? Number(f.settlement_out) / 1e6
-                : Number(f.simulated_out) >= 1e14
-                ? Number(f.simulated_out) / 1e18
-                : Number(f.simulated_out) / 1e6;
-              const outAmt = outAmtNum.toFixed(2);
-              const status =
-                f.settlement_status ||
-                (!f.is_simulated && f.ft_transfer_tx_hash ? "CONFIRMED" : "UNVERIFIED_LEGACY");
-              const isConfirmed = status === "CONFIRMED";
-              const isFailed = status === "FAILED";
-              const isInFlight = status === "IN_FLIGHT";
+        {/* Fills list — combines local SQLite fill receipts with live on-chain ChunkRecords */}
+        {(() => {
+          const onChainFallback: AgentFill[] = Object.values(chunksByOrder)
+            .flat()
+            .sort((a, b) => (b.initiated_ns || 0) - (a.initiated_ns || 0))
+            .map((c, idx) => ({
+              id: -(idx + 1),
+              order_id: c.order_id,
+              chunk_index: idx + 1,
+              idempotency_key: c.key,
+              amount_in: c.amount_in,
+              settlement_out: c.settlement_out,
+              simulated_out: c.simulated_out,
+              recipient: c.recipient,
+              quote_ref: c.quote_ref,
+              deviation_bps: c.deviation_bps,
+              tx_hash: null,
+              explorer_url: null,
+              ft_transfer_tx_hash: null,
+              ft_transfer_url: null,
+              settlement_status:
+                c.status === "Settled" ? "CONFIRMED" : c.status === "InFlight" ? "IN_FLIGHT" : "FAILED",
+              failure_reason: c.failure_reason ?? null,
+              is_simulated: c.status !== "Settled",
+              timestamp: Math.floor((c.settled_ns || c.initiated_ns || 0) / 1_000_000),
+            }));
 
-              return (
-                <div
-                  key={f.id}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background px-2.5 py-2 text-xs"
-                >
-                  <div className="min-w-0">
-                    <div className="font-semibold text-foreground flex items-center gap-1.5 flex-wrap">
-                      <span>Chunk #{f.chunk_index} · Order #{f.order_id}</span>
-                      {isConfirmed ? (
-                        <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400 uppercase">
-                          Confirmed On-Chain
-                        </span>
-                      ) : isFailed ? (
-                        <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[9px] font-bold text-red-400 uppercase">
-                          Failed · Balance Unchanged
-                        </span>
-                      ) : isInFlight ? (
-                        <span className="rounded bg-accent-blue/15 px-1.5 py-0.5 text-[9px] font-bold text-accent-blue uppercase">
-                          In-Flight Callback
-                        </span>
-                      ) : (
-                        <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-400 uppercase">
-                          Simulated / Unverified
-                        </span>
-                      )}
+          const displayFills = fills.length > 0 ? fills : onChainFallback;
+
+          if (displayFills.length === 0) {
+            return <div className="py-4 text-center text-xs text-muted">No fills executed yet.</div>;
+          }
+
+          return (
+            <div className="space-y-2">
+              {displayFills.slice(0, 8).map((f) => {
+                const inAmt = (Number(f.amount_in) / 1e6).toFixed(2);
+                const outAmtNum = f.settlement_out
+                  ? Number(f.settlement_out) / 1e6
+                  : Number(f.simulated_out) >= 1e14
+                  ? Number(f.simulated_out) / 1e18
+                  : Number(f.simulated_out) / 1e6;
+                const outAmt = outAmtNum.toFixed(2);
+                const status =
+                  f.settlement_status ||
+                  (!f.is_simulated && f.ft_transfer_tx_hash ? "CONFIRMED" : "UNVERIFIED_LEGACY");
+                const isConfirmed = status === "CONFIRMED";
+                const isFailed = status === "FAILED";
+                const isInFlight = status === "IN_FLIGHT";
+
+                return (
+                  <div
+                    key={f.id}
+                    className="rounded-lg border border-border bg-background px-3 py-2 text-xs space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-semibold text-foreground flex items-center gap-1.5 flex-wrap">
+                        <span>{f.idempotency_key || `Chunk #${f.chunk_index}`} · Order #{f.order_id}</span>
+                        {isConfirmed ? (
+                          <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400 uppercase">
+                            Confirmed
+                          </span>
+                        ) : isFailed ? (
+                          <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[9px] font-bold text-red-400 uppercase">
+                            Failed · Balance Unchanged
+                          </span>
+                        ) : isInFlight ? (
+                          <span className="rounded bg-accent-blue/15 px-1.5 py-0.5 text-[9px] font-bold text-accent-blue uppercase">
+                            Pending
+                          </span>
+                        ) : (
+                          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-400 uppercase">
+                            Simulated / Unverified
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {isConfirmed && f.ft_transfer_url && (
+                          <a
+                            href={f.ft_transfer_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1 text-[11px] font-mono text-emerald-400 hover:underline"
+                          >
+                            <span>Transfer Receipt</span>
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                        {f.explorer_url && (
+                          <a
+                            href={f.explorer_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1 text-[11px] font-mono text-accent-blue hover:underline"
+                          >
+                            <span>execute_chunk</span>
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-[10px] text-muted font-mono mt-0.5">
-                      {inAmt} USDC (budget) &rarr; {outAmt} EURe {f.recipient ? `to ${f.recipient}` : ""} ({f.deviation_bps} bps agent-reported)
+
+                    {/* Three explicitly separated provenance facts */}
+                    <div className="grid grid-cols-1 gap-0.5 text-[10px] font-mono text-zinc-400 pl-2 border-l border-border">
+                      <div>
+                        <span className="text-zinc-500">1. Live 1Click dry quote: </span>
+                        <span className="text-zinc-300">{f.quote_ref}</span>
+                        <span> ({f.deviation_bps} bps agent-reported)</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500">2. Simulated FX conversion: </span>
+                        <span className="text-amber-300">{inAmt} USDC input</span>
+                        <span> (indicative FX only, no on-chain USDC debit)</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500">3. NEAR testnet token transfer: </span>
+                        <span className={isConfirmed ? "text-emerald-400 font-semibold" : "text-zinc-300"}>
+                          {outAmt} demo EURe
+                        </span>
+                        <span> (prefunded {tokens.eureId} vault{f.recipient ? ` -> ${f.recipient}` : ""})</span>
+                      </div>
                     </div>
+
                     {f.failure_reason && (
-                      <div className="text-[10px] text-red-400 font-mono mt-0.5 truncate">
+                      <div className="text-[10px] text-red-400 font-mono truncate">
                         {f.failure_reason}
                       </div>
                     )}
                   </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    {isConfirmed && f.ft_transfer_url && (
-                      <a
-                        href={f.ft_transfer_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-1 text-[11px] font-mono text-emerald-400 hover:underline"
-                      >
-                        <span>EURe Settlement</span>
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                    {f.explorer_url && (
-                      <a
-                        href={f.explorer_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-1 text-[11px] font-mono text-accent-blue hover:underline"
-                      >
-                        <span>execute_chunk</span>
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {/* Recent Strategy Decisions */}
         {decisions.length > 0 && (

@@ -55,7 +55,29 @@ export async function GET(req: NextRequest) {
       userAccount ? nearClient.callView<string>(EURE_ID, 'ft_balance_of', { account_id: userAccount }) : Promise.resolve('0'),
     ])
 
-    const orders = ordersRes.status === 'fulfilled' ? ordersRes.value : []
+    const orders = (ordersRes.status === 'fulfilled' ? ordersRes.value : []) as Array<{
+      id: number
+      chunks_count?: number
+      pending_in?: string
+      pending_out?: string
+    }>
+
+    // Dynamically fetch on-chain chunk records (Pending/Confirmed/Failed ledger) from NEAR RPC
+    const chunkEntries = await Promise.allSettled(
+      orders.slice(-15).map(async (o) => {
+        const list = await nearClient.callView<unknown[]>(FX_BUDGET_ID, 'list_order_chunks', {
+          order_id: o.id,
+        })
+        return [o.id, list] as const
+      }),
+    )
+    const chunksByOrder: Record<number, unknown[]> = {}
+    for (const entry of chunkEntries) {
+      if (entry.status === 'fulfilled') {
+        const [orderId, list] = entry.value
+        chunksByOrder[orderId] = list
+      }
+    }
     const limits = limitsRes.status === 'fulfilled' ? limitsRes.value : {
       auto_cap_in: '100000000',
       max_chunk_in: '20000000',
@@ -114,6 +136,7 @@ export async function GET(req: NextRequest) {
         isPaused,
         limits,
         orders,
+        chunksByOrder,
       },
       dao: {
         id: DAO_ID,
