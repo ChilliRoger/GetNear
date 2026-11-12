@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { Card } from "@/components/card";
+import { AiOrderIntake } from "@/components/ai-order-intake";
 import { useToast } from "@/components/toast-provider";
 import { useNearWallet } from "@/lib/near-wallet";
+import type { ParsedOrderData } from "@getnear/shared";
 import { CheckCircle2, AlertCircle, PlusCircle } from "lucide-react";
 
 export default function TradePage() {
@@ -181,6 +183,20 @@ export default function TradePage() {
       <form onSubmit={handleSubmit} className="space-y-3">
         <Card title="Order Parameters">
           <div className="space-y-3 pt-1 text-xs">
+            <AiOrderIntake
+              onApply={(parsed: ParsedOrderData) => {
+                setAmount(String(parsed.totalUsdc));
+                if (parsed.maxChunkUsdc !== null) setMaxChunk(String(parsed.maxChunkUsdc));
+                if (parsed.deadlineHours !== null) setDeadlineHours(String(Math.max(1, Math.round(parsed.deadlineHours))));
+                if (parsed.maxDevBps !== null) setMaxDevBps(String(parsed.maxDevBps));
+                if (parsed.recipient !== null) setRecipientAccount(parsed.recipient);
+                if (parsed.targetEuRe !== null) setTargetEure(String(parsed.targetEuRe));
+                if (parsed.invoiceRef !== null) setInvoiceRef(parsed.invoiceRef);
+                if (parsed.fundingMode === "circle_escrow") setFundWithCircleEscrow(true);
+                if (parsed.fundingMode === "accounting") setFundWithCircleEscrow(false);
+                showToast("AI draft applied to order form. Review all fields before signing.", "info");
+              }}
+            />
             {/* Pair display */}
             <div className="flex items-center justify-between rounded-lg border border-border bg-background p-2.5">
               <div>

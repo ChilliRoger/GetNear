@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/card";
 import { LiveQuoteCard } from "@/components/live-quote-card";
 import { TokenBalanceCard } from "@/components/token-balance-card";
+import { AiOrderIntake } from "@/components/ai-order-intake";
 import { useToast } from "@/components/toast-provider";
+import type { ParsedOrderData } from "@getnear/shared";
 import { useNearWallet } from "@/lib/near-wallet";
 import { explorerAccountUrl } from "@getnear/shared";
 import {
@@ -504,6 +506,20 @@ export default function DashboardPage() {
       {/* 3. Interactive Order Intake Card */}
       <Card title="Create FX Goal (NEAR Testnet)" subtitle="Auto-executes small orders, requires DAO 2-of-3 approval above $100">
         <div className="space-y-3 pt-1">
+          <AiOrderIntake
+            onApply={(parsed: ParsedOrderData) => {
+              setOrderAmount(String(parsed.totalUsdc));
+              if (parsed.maxChunkUsdc !== null) setMaxChunk(String(parsed.maxChunkUsdc));
+              if (parsed.deadlineHours !== null) setDeadlineHours(String(Math.max(1, Math.round(parsed.deadlineHours))));
+              if (parsed.maxDevBps !== null) setMaxDevBps(String(parsed.maxDevBps));
+              if (parsed.recipient !== null) setRecipientAccount(parsed.recipient);
+              if (parsed.targetEuRe !== null) setTargetEure(String(parsed.targetEuRe));
+              if (parsed.invoiceRef !== null) setInvoiceRef(parsed.invoiceRef);
+              if (parsed.fundingMode === "circle_escrow") setFundWithCircleEscrow(true);
+              if (parsed.fundingMode === "accounting") setFundWithCircleEscrow(false);
+              showToast("AI draft applied to order form. Review all fields before signing.", "info");
+            }}
+          />
           <div className="flex gap-2">
             <button
               type="button"
