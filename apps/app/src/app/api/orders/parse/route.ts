@@ -4,7 +4,7 @@ import * as path from 'node:path'
 import {
   AI_PROVIDER_DEFAULTS,
   getAvailableProviders,
-  parseNaturalLanguageOrder,
+  parseOrderWithFailover,
   resolveAiProviderConfig,
   type AiProviderId,
 } from '@getnear/shared'
@@ -85,9 +85,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await parseNaturalLanguageOrder({
+    const result = await parseOrderWithFailover({
       prompt,
-      config,
+      env: process.env,
+      requestedProvider,
     })
 
     if (!result.ok) {

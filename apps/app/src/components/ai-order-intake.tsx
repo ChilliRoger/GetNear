@@ -38,7 +38,6 @@ export function AiOrderIntake({ onApply }: AiOrderIntakeProps) {
       .then((data: ParseStatusResponse | null) => {
         if (data) {
           setStatus(data);
-          setSelectedProvider(data.activeProvider);
         }
       })
       .catch(() => {});
@@ -120,8 +119,19 @@ export function AiOrderIntake({ onApply }: AiOrderIntakeProps) {
       )}
 
       {status && status.configured && (
-        <div className="flex items-center gap-2 text-[10px] text-muted">
+        <div className="flex items-center gap-2 text-[10px] text-muted flex-wrap">
           <span>Provider:</span>
+          <button
+            type="button"
+            onClick={() => setSelectedProvider(undefined)}
+            className={`rounded px-1.5 py-0.5 font-mono border transition-colors ${
+              selectedProvider === undefined
+                ? "border-accent-blue bg-accent-blue/15 text-accent-blue font-semibold"
+                : "border-border bg-surface text-muted hover:text-foreground"
+            }`}
+          >
+            Auto (NEAR AI -&gt; Free Tier Fallback)
+          </button>
           {(["nearai", "gemini", "groq"] as AiProviderId[])
             .filter((p) => status.availableProviders[p])
             .map((p) => (
@@ -233,6 +243,11 @@ export function AiOrderIntake({ onApply }: AiOrderIntakeProps) {
             </span>
             <span>{audit.latencyMs}ms</span>
           </div>
+          {audit.fallbackAttempts && audit.fallbackAttempts.length > 0 && (
+            <div className="text-zinc-400">
+              Failover: {audit.fallbackAttempts.map((a) => `${a.provider} failed ->`).join(" ")} {audit.provider}
+            </div>
+          )}
           <div className="flex items-start gap-1 text-amber-300/90">
             <ShieldAlert className="h-3 w-3 shrink-0 mt-0.5" />
             <span>
