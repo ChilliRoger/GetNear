@@ -202,5 +202,30 @@ Reproduced end-to-end via `pnpm tsx scripts/near/verify-invoice-settlement.ts`:
 | Chunk #2 Retry | `execute_chunk` (`order-8-seq-2` #2) | `+€417.24 EURe` · `Completed` (`€0.00` due) | [`7D78yZ4FPtqYc4cpsFYid3JKarV1cZj578aFcerbXMoZ`](https://testnet.nearblocks.io/txns/7D78yZ4FPtqYc4cpsFYid3JKarV1cZj578aFcerbXMoZ) |
 | Restore Limits | Prop #9 2-of-3 approve | Restored `$100` cap / `$20` chunk / `60s` | [`AgTaV88Mu8s9icJZWhMFJGTgNZoRtdgyYXFhFrgNb1Vb`](https://testnet.nearblocks.io/txns/AgTaV88Mu8s9icJZWhMFJGTgNZoRtdgyYXFhFrgNb1Vb) |
 
+---
+
+## 9. Policy Bounds Rejections & Deadline-Expired Unpaid Remainder Proof
+
+Reproduced live on NEAR testnet (`fx-budget.chilliroger-operator.testnet`) via `pnpm tsx scripts/near/verify-bounds-and-expiry.ts`:
+
+- **Above-Threshold `Pending` Gate (`Order #10`, `INV-PENDING-GATE`)**: Created `120 USDC` order (`> 100 USDC` auto-cap), attempted `execute_chunk` before DAO approval -> rejected on-chain (`settled_out` remained `0`), then cancelled cleanly.
+- **Bounds & Deadline Enforcement (`Order #11`, `INV-EXPIRY-DEMO -> supplier-eu.chilliroger-operator.testnet`)**:
+  - Approved constraints: `15 USDC` max budget, `10 USDC` max chunk, `€25.00 EURe` invoice target, 65s horizon.
+  - Non-agent caller, chunk `> max_chunk_in` (`$12 > $10`), payout `> target_out` (`€26 > €25`), chunk `> remaining budget` (`$10 + $6 > $15`), and post-deadline `execute_chunk` calls were all rejected cleanly on-chain.
+- **Confirmed Partial Settlement + Expired Unpaid Remainder**: Chunk #1 (`order-11-seq-1`) transferred **`€8.70 EURe`**, leaving **`€16.30 EURe` remaining due**; after deadline expiry, `expire_order` transitioned `Order #11` to **`Expired`** while preserving the unpaid remainder on-chain (`€8.70 paid`, **`€16.30 unpaid remainder`**).
+
+| Step | Action / Assertion | On-Chain Result | NEARBlocks Explorer Link |
+| :--- | :--- | :--- | :--- |
+| Create Pending Order #10 | `create_order` (`120 USDC`) | Started `Pending` (`> 100 USDC` auto-cap) | [`G9G8YW9SWDJEzW7N9PTFv6JgQEoXSy5cbLEhtkUtHz9x`](https://testnet.nearblocks.io/txns/G9G8YW9SWDJEzW7N9PTFv6JgQEoXSy5cbLEhtkUtHz9x) |
+| Reject Unapproved Execution | `execute_chunk` on Pending #10 | Rejected (`settled_out = 0`) | [`FogZ88dxv1YaPM4H8BDPQaCiFkNpNRJC3fAw2yPKmeov`](https://testnet.nearblocks.io/txns/FogZ88dxv1YaPM4H8BDPQaCiFkNpNRJC3fAw2yPKmeov) |
+| Create Invoice Order #11 | `create_order` (`INV-EXPIRY-DEMO`) | `Active` (`€25.00` target, 65s deadline) | [`GXXG9WAtmajEoi1a2L5fyUGGLteB6fCbZSBZYaBq7FgB`](https://testnet.nearblocks.io/txns/GXXG9WAtmajEoi1a2L5fyUGGLteB6fCbZSBZYaBq7FgB) |
+| Reject Non-Agent Signer | `execute_chunk` by operator | Rejected (restricted to designated agent) | [`D72DjfBnUndsEd8uojXq2Rxs4J8cMAfWakJp5bpwTNcg`](https://testnet.nearblocks.io/txns/D72DjfBnUndsEd8uojXq2Rxs4J8cMAfWakJp5bpwTNcg) |
+| Reject Over Chunk Cap | `execute_chunk` (`$12 > $10`) | Rejected (`max_chunk_in` exceeded) | [`EHaHo7BbwZ9hAz9A5v3BzD5zrRBjFuQYbUJKGvUefrUD`](https://testnet.nearblocks.io/txns/EHaHo7BbwZ9hAz9A5v3BzD5zrRBjFuQYbUJKGvUefrUD) |
+| Reject Over Target Due | `execute_chunk` (`€26 > €25`) | Rejected (`target_out` exceeded) | [`9N1nChTVXpkW2Y4Gjnuub4NmZPk1G8rbHaLEQWsKp685`](https://testnet.nearblocks.io/txns/9N1nChTVXpkW2Y4Gjnuub4NmZPk1G8rbHaLEQWsKp685) |
+| Partial Chunk #1 Settled | `execute_chunk` (`order-11-seq-1`) | `+€8.70 EURe` paid · `€16.30` due | [`5V8BxTDbR6oF4SJoBMsLjH2X2yRD2d1UY4FwLyLRcWv6`](https://testnet.nearblocks.io/txns/5V8BxTDbR6oF4SJoBMsLjH2X2yRD2d1UY4FwLyLRcWv6) |
+| Reject Over Budget | `execute_chunk` (`$10 + $6 > $15`) | Rejected (`total_in` budget exceeded) | [`7jFtktKnY5ptCrhebY37pRyDvP5FWuea1xpCQt8ejkdo`](https://testnet.nearblocks.io/txns/7jFtktKnY5ptCrhebY37pRyDvP5FWuea1xpCQt8ejkdo) |
+| Reject Past Deadline | `execute_chunk` after deadline | Rejected (`deadline_ns` elapsed) | [`26SHaenHziV8cUdBMmDKfpQd8mE1x7y8QzkeuoM953Nf`](https://testnet.nearblocks.io/txns/26SHaenHziV8cUdBMmDKfpQd8mE1x7y8QzkeuoM953Nf) |
+| Expire With Remainder | `expire_order` (#11) | `Expired` · **`€16.30 EURe` unpaid due** | [`F12SPGcE3fS8GWFuA3qJmL5qSaRn6xEUHzCeJTGPnAUn`](https://testnet.nearblocks.io/txns/F12SPGcE3fS8GWFuA3qJmL5qSaRn6xEUHzCeJTGPnAUn) |
+
 
 
