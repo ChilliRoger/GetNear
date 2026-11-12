@@ -19,6 +19,7 @@ pub const MAX_IDEMPOTENCY_KEY_LEN: usize = 128;
 
 pub const FT_TRANSFER_GAS: Gas = Gas::from_tgas(15);
 pub const CALLBACK_GAS: Gas = Gas::from_tgas(25);
+pub const REFUND_CALLBACK_GAS: Gas = Gas::from_tgas(15);
 
 // ---------------------------------------------------------------------------
 // External NEP-141 Interface
@@ -134,6 +135,48 @@ pub struct LimitsView {
     pub paused: bool,
 }
 
+#[near(serializers = [json])]
+#[derive(Clone, Debug)]
+pub struct EscrowStatusView {
+    pub order_id: u64,
+    pub escrowed_in: U128,
+    pub executed_in: U128,
+    pub refunded_in: U128,
+    pub remaining_escrow_in: U128,
+}
+
+#[near(serializers = [json])]
+#[derive(Clone, Debug)]
+pub struct EscrowedOrderMsg {
+    pub action: Option<String>,
+    pub pair_label: String,
+    pub deadline_ns: u64,
+    pub max_chunk_in: U128,
+    pub max_dev_bps: u32,
+    pub recipient: Option<AccountId>,
+    pub target_out: Option<U128>,
+    pub invoice_ref: Option<String>,
+}
+
+// Legacy V2 layout used for non-destructive state migration to V3 escrow storage.
+#[near(serializers = [borsh])]
+pub struct V2FxBudget {
+    pub owner: AccountId,
+    pub agent: Option<AccountId>,
+    pub settlement_token: Option<AccountId>,
+    pub requesters: IterableSet<AccountId>,
+    pub auto_cap_in: u128,
+    pub max_chunk_in: u128,
+    pub min_interval_ns: u64,
+    pub max_horizon_ns: u64,
+    pub paused: bool,
+    pub next_order_id: u64,
+    pub orders: IterableMap<u64, Order>,
+    pub open_orders_count: LookupMap<AccountId, u32>,
+    pub chunk_records: LookupMap<String, ChunkRecord>,
+    pub order_chunk_keys: LookupMap<u64, Vec<String>>,
+}
+
 // Legacy structs used strictly for state migration from pre-callback deployments.
 #[near(serializers = [borsh])]
 pub struct OldOrder {
@@ -224,6 +267,12 @@ pub struct FxBudget {
     pub chunk_records: LookupMap<String, ChunkRecord>,
     /// Ordered list of chunk idempotency keys per order for views/auditing
     pub order_chunk_keys: LookupMap<u64, Vec<String>>,
+    /// Approved NEP-141 input token contract for escrowed orders (e.g. Circle native testnet USDC)
+    pub input_token: Option<AccountId>,
+    /// Actual escrowed input token balance locked per order via ft_transfer_call
+    pub escrowed_in_balances: LookupMap<u64, U128>,
+    /// Input token balance refunded (or reserved for refund) per order
+    pub refunded_in_balances: LookupMap<u64, U128>,
 }
 
 impl Default for FxBudget {
@@ -256,6 +305,9 @@ impl FxBudget {
             open_orders_count: LookupMap::new(b"c"),
             chunk_records: LookupMap::new(b"k"),
             order_chunk_keys: LookupMap::new(b"l"),
+            input_token: None,
+            escrowed_in_balances: LookupMap::new(b"e"),
+            refunded_in_balances: LookupMap::new(b"f"),
         }
     }
 
@@ -307,6 +359,35 @@ impl FxBudget {
             open_orders_count: old.open_orders_count,
             chunk_records: LookupMap::new(b"k"),
             order_chunk_keys: LookupMap::new(b"l"),
+            input_token: None,
+            escrowed_in_balances: LookupMap::new(b"e"),
+            refunded_in_balances: LookupMap::new(b"f"),
+        }
+    }
+
+    /// Upgrade existing V2 deployment to V3 with whitelisted Circle USDC ft_transfer_call escrow.
+    #[init(ignore_state)]
+    #[private]
+    pub fn migrate_v3(input_token: AccountId) -> Self {
+        let old: V2FxBudget = env::state_read().expect("No V2 state found to migrate");
+        Self {
+            owner: old.owner,
+            agent: old.agent,
+            settlement_token: old.settlement_token,
+            requesters: old.requesters,
+            auto_cap_in: old.auto_cap_in,
+            max_chunk_in: old.max_chunk_in,
+            min_interval_ns: old.min_interval_ns,
+            max_horizon_ns: old.max_horizon_ns,
+            paused: old.paused,
+            next_order_id: old.next_order_id,
+            orders: old.orders,
+            open_orders_count: old.open_orders_count,
+            chunk_records: old.chunk_records,
+            order_chunk_keys: old.order_chunk_keys,
+            input_token: Some(input_token),
+            escrowed_in_balances: LookupMap::new(b"e"),
+            refunded_in_balances: LookupMap::new(b"f"),
         }
     }
 
@@ -334,6 +415,17 @@ impl FxBudget {
             token: &'a AccountId,
         }
         emit_event("set_settlement_token", &SettlementTokenSetEvent { token: &token });
+    }
+
+    pub fn set_input_token(&mut self, token: AccountId) {
+        self.assert_owner();
+        self.input_token = Some(token.clone());
+
+        #[derive(Serialize)]
+        struct InputTokenSetEvent<'a> {
+            token: &'a AccountId,
+        }
+        emit_event("set_input_token", &InputTokenSetEvent { token: &token });
     }
 
     pub fn add_requester(&mut self, account: AccountId) {
@@ -422,8 +514,9 @@ impl FxBudget {
     // -----------------------------------------------------------------------
 
     #[allow(clippy::too_many_arguments)]
-    pub fn create_order(
+    fn create_order_internal(
         &mut self,
+        requester: AccountId,
         pair_label: String,
         total_in: U128,
         deadline_ns: u64,
@@ -434,16 +527,15 @@ impl FxBudget {
         invoice_ref: Option<String>,
     ) -> u64 {
         require!(!self.paused, "Contract is paused");
-        let predecessor = env::predecessor_account_id();
         require!(
-            self.is_requester(predecessor.clone()) || predecessor == self.owner,
+            self.is_requester(requester.clone()) || requester == self.owner,
             "Caller is not an authorized requester"
         );
 
         let now = env::block_timestamp();
         let target_out_val = target_out.map_or(0, |v| v.0);
         let invoice_ref_val = invoice_ref.unwrap_or_default();
-        let recipient_id = recipient.unwrap_or_else(|| predecessor.clone());
+        let recipient_id = recipient.unwrap_or_else(|| requester.clone());
 
         require!(total_in.0 > 0, "total_in must be positive");
         require!(deadline_ns > now, "deadline must be in the future");
@@ -462,7 +554,7 @@ impl FxBudget {
             "invoice_ref exceeds maximum length"
         );
 
-        let current_open = self.open_orders_count.get(&predecessor).copied().unwrap_or(0);
+        let current_open = self.open_orders_count.get(&requester).copied().unwrap_or(0);
         require!(
             current_open < MAX_OPEN_ORDERS_PER_REQUESTER,
             "Requester has exceeded max allowable open orders"
@@ -481,7 +573,7 @@ impl FxBudget {
 
         let order = Order {
             id,
-            requester: predecessor.clone(),
+            requester: requester.clone(),
             recipient: recipient_id.clone(),
             invoice_ref: invoice_ref_val.clone(),
             pair_label: pair_label.clone(),
@@ -500,7 +592,7 @@ impl FxBudget {
         };
 
         self.orders.insert(id, order);
-        self.open_orders_count.insert(predecessor.clone(), current_open + 1);
+        self.open_orders_count.insert(requester.clone(), current_open + 1);
 
         #[derive(Serialize)]
         struct OrderCreatedEvent<'a> {
@@ -520,7 +612,7 @@ impl FxBudget {
             "order_created",
             &OrderCreatedEvent {
                 id,
-                requester: &predecessor,
+                requester: &requester,
                 recipient: &recipient_id,
                 invoice_ref: &invoice_ref_val,
                 pair_label: &pair_label,
@@ -534,6 +626,90 @@ impl FxBudget {
         );
 
         id
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_order(
+        &mut self,
+        pair_label: String,
+        total_in: U128,
+        deadline_ns: u64,
+        max_chunk_in: U128,
+        max_dev_bps: u32,
+        recipient: Option<AccountId>,
+        target_out: Option<U128>,
+        invoice_ref: Option<String>,
+    ) -> u64 {
+        let predecessor = env::predecessor_account_id();
+        self.create_order_internal(
+            predecessor,
+            pair_label,
+            total_in,
+            deadline_ns,
+            max_chunk_in,
+            max_dev_bps,
+            recipient,
+            target_out,
+            invoice_ref,
+        )
+    }
+
+    /// NEP-141 receiver hook (`ft_transfer_call` from canonical Circle Native USDC contract).
+    /// Locks transferred `USDC` in contract escrow for the newly created order and returns 0 refund.
+    /// Any validation failure panics cleanly so NEP-141 `ft_resolve_transfer` returns tokens to sender.
+    pub fn ft_on_transfer(
+        &mut self,
+        sender_id: AccountId,
+        amount: U128,
+        msg: String,
+    ) -> PromiseOrValue<U128> {
+        let token_contract = env::predecessor_account_id();
+        let expected = self
+            .input_token
+            .as_ref()
+            .expect("Input escrow token is not configured");
+        require!(
+            &token_contract == expected,
+            "Only configured input USDC contract can fund escrowed orders"
+        );
+
+        let parsed: EscrowedOrderMsg =
+            near_sdk::serde_json::from_str(&msg).expect("Invalid escrowed order JSON msg");
+        if let Some(ref action) = parsed.action {
+            require!(action == "create_escrowed_order", "Unsupported ft_on_transfer action");
+        }
+
+        let order_id = self.create_order_internal(
+            sender_id.clone(),
+            parsed.pair_label,
+            amount,
+            parsed.deadline_ns,
+            parsed.max_chunk_in,
+            parsed.max_dev_bps,
+            parsed.recipient,
+            parsed.target_out,
+            parsed.invoice_ref,
+        );
+        self.escrowed_in_balances.insert(order_id, amount);
+
+        #[derive(Serialize)]
+        struct EscrowFundedEvent<'a> {
+            order_id: u64,
+            sender_id: &'a AccountId,
+            input_token: &'a AccountId,
+            escrowed_in: U128,
+        }
+        emit_event(
+            "escrow_funded",
+            &EscrowFundedEvent {
+                order_id,
+                sender_id: &sender_id,
+                input_token: &token_contract,
+                escrowed_in: amount,
+            },
+        );
+
+        PromiseOrValue::Value(U128(0))
     }
 
     pub fn approve_order(&mut self, id: u64) {
@@ -560,9 +736,9 @@ impl FxBudget {
         );
     }
 
-    pub fn cancel_order(&mut self, id: u64) {
+    pub fn cancel_order(&mut self, id: u64) -> PromiseOrValue<()> {
         let predecessor = env::predecessor_account_id();
-        let requester = {
+        let (requester, executed_in) = {
             let order = self.orders.get_mut(&id).expect("Order not found");
             require!(
                 predecessor == self.owner || predecessor == order.requester,
@@ -578,7 +754,7 @@ impl FxBudget {
             );
 
             order.status = OrderStatus::Cancelled;
-            order.requester.clone()
+            (order.requester.clone(), order.executed_in.0)
         };
         self.decrement_open_orders(&requester);
 
@@ -594,6 +770,8 @@ impl FxBudget {
                 status: OrderStatus::Cancelled,
             },
         );
+
+        self.dispatch_escrow_refund(id, requester, executed_in, format!("GetNear escrow refund on cancel Order #{}", id))
     }
 
     /// Initiate an idempotent chunk settlement against an active order.
@@ -938,9 +1116,9 @@ impl FxBudget {
         }
     }
 
-    pub fn expire_order(&mut self, id: u64) {
+    pub fn expire_order(&mut self, id: u64) -> PromiseOrValue<()> {
         let now = env::block_timestamp();
-        let requester = {
+        let (requester, executed_in) = {
             let order = self.orders.get_mut(&id).expect("Order not found");
             require!(
                 order.status == OrderStatus::Pending || order.status == OrderStatus::Active,
@@ -953,7 +1131,7 @@ impl FxBudget {
             );
 
             order.status = OrderStatus::Expired;
-            order.requester.clone()
+            (order.requester.clone(), order.executed_in.0)
         };
         self.decrement_open_orders(&requester);
 
@@ -969,6 +1147,66 @@ impl FxBudget {
                 status: OrderStatus::Expired,
             },
         );
+
+        self.dispatch_escrow_refund(id, requester, executed_in, format!("GetNear escrow refund on expiry Order #{}", id))
+    }
+
+    /// Claim any remaining unspent escrowed Circle USDC after an order is Completed, Cancelled, or Expired.
+    pub fn refund_unused_escrow(&mut self, id: u64) -> PromiseOrValue<()> {
+        let order = self.orders.get(&id).expect("Order not found").clone();
+        require!(
+            matches!(
+                order.status,
+                OrderStatus::Completed | OrderStatus::Cancelled | OrderStatus::Expired
+            ),
+            "Order must be finalized before claiming unspent escrow"
+        );
+        require!(
+            order.pending_in.0 == 0 && order.pending_out.0 == 0,
+            "Cannot refund escrow while a chunk settlement is in flight"
+        );
+        self.dispatch_escrow_refund(
+            id,
+            order.requester,
+            order.executed_in.0,
+            format!("GetNear unspent escrow return Order #{}", id),
+        )
+    }
+
+    #[private]
+    pub fn on_escrow_refunded(&mut self, id: u64, amount: U128) {
+        let succeeded = env::promise_result_checked(0, 1024).is_ok();
+        if succeeded {
+            #[derive(Serialize)]
+            struct EscrowRefundedEvent {
+                order_id: u64,
+                refunded_amount: U128,
+            }
+            emit_event(
+                "escrow_refunded",
+                &EscrowRefundedEvent {
+                    order_id: id,
+                    refunded_amount: amount,
+                },
+            );
+        } else {
+            let current = self.refunded_in_balances.get(&id).copied().unwrap_or(U128(0)).0;
+            self.refunded_in_balances
+                .insert(id, U128(current.saturating_sub(amount.0)));
+
+            #[derive(Serialize)]
+            struct EscrowRefundFailedEvent {
+                order_id: u64,
+                attempted_amount: U128,
+            }
+            emit_event(
+                "escrow_refund_failed",
+                &EscrowRefundFailedEvent {
+                    order_id: id,
+                    attempted_amount: amount,
+                },
+            );
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -1044,6 +1282,25 @@ impl FxBudget {
         self.settlement_token.clone()
     }
 
+    pub fn get_input_token(&self) -> Option<AccountId> {
+        self.input_token.clone()
+    }
+
+    pub fn get_order_escrow(&self, id: u64) -> Option<EscrowStatusView> {
+        self.orders.get(&id).map(|o| {
+            let escrowed = self.escrowed_in_balances.get(&id).copied().unwrap_or(U128(0)).0;
+            let refunded = self.refunded_in_balances.get(&id).copied().unwrap_or(U128(0)).0;
+            let remaining = escrowed.saturating_sub(o.executed_in.0).saturating_sub(refunded);
+            EscrowStatusView {
+                order_id: id,
+                escrowed_in: U128(escrowed),
+                executed_in: o.executed_in,
+                refunded_in: U128(refunded),
+                remaining_escrow_in: U128(remaining),
+            }
+        })
+    }
+
     pub fn is_requester(&self, account: AccountId) -> bool {
         self.requesters.contains(&account)
     }
@@ -1081,6 +1338,37 @@ impl FxBudget {
         if count > 0 {
             self.open_orders_count.insert(requester.clone(), count - 1);
         }
+    }
+
+    fn dispatch_escrow_refund(
+        &mut self,
+        id: u64,
+        requester: AccountId,
+        executed_in: u128,
+        memo: String,
+    ) -> PromiseOrValue<()> {
+        let escrowed = self.escrowed_in_balances.get(&id).copied().unwrap_or(U128(0)).0;
+        let refunded = self.refunded_in_balances.get(&id).copied().unwrap_or(U128(0)).0;
+        let unspent = escrowed.saturating_sub(executed_in).saturating_sub(refunded);
+        let Some(token) = self.input_token.clone() else {
+            return PromiseOrValue::Value(());
+        };
+        if unspent == 0 {
+            return PromiseOrValue::Value(());
+        }
+
+        self.refunded_in_balances.insert(id, U128(refunded + unspent));
+        PromiseOrValue::Promise(
+            ext_ft::ext(token)
+                .with_attached_deposit(NearToken::from_yoctonear(1))
+                .with_static_gas(FT_TRANSFER_GAS)
+                .ft_transfer(requester, U128(unspent), Some(memo))
+                .then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(REFUND_CALLBACK_GAS)
+                        .on_escrow_refunded(id, U128(unspent)),
+                ),
+        )
     }
 }
 

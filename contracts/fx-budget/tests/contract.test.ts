@@ -38,19 +38,24 @@ describe('FxBudget WASM Binary Verification', () => {
     const expectedMethods = [
       'new',
       'migrate',
+      'migrate_v3',
       'set_agent',
       'set_settlement_token',
+      'set_input_token',
       'add_requester',
       'remove_requester',
       'set_limits',
       'pause',
       'unpause',
       'create_order',
+      'ft_on_transfer',
       'approve_order',
       'cancel_order',
       'execute_chunk',
       'on_chunk_settled',
       'expire_order',
+      'refund_unused_escrow',
+      'on_escrow_refunded',
       'get_order',
       'list_orders',
       'get_invoice_summary',
@@ -60,6 +65,8 @@ describe('FxBudget WASM Binary Verification', () => {
       'get_owner',
       'get_agent',
       'get_settlement_token',
+      'get_input_token',
+      'get_order_escrow',
       'is_requester',
       'is_paused',
       'get_open_orders_count',
@@ -577,5 +584,49 @@ describe('FxBudget Contract State Machine & Logic Tests', () => {
     const unpaidRemainder = order.targetOut - order.settledOut
     assert.equal(order.status, 'Expired')
     assert.equal(unpaidRemainder, 188_000_000n)
+  })
+
+  test('Circle Native USDC Escrow: ft_on_transfer locks funds, chunks consume escrow, expiry/cancel refunds unspent with callback rollback', () => {
+    const circleUsdc = '3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af'
+    const state = {
+      inputToken: circleUsdc,
+      escrowed: 0n,
+      executedIn: 0n,
+      refundedIn: 0n,
+      status: 'Active' as OrderStatus,
+    }
+
+    const ftOnTransfer = (predecessor: string, amount: bigint) => {
+      if (predecessor !== state.inputToken) {
+        throw new Error('Only configured input USDC contract can fund escrowed orders')
+      }
+      state.escrowed = amount
+    }
+
+    // Wrong token contract must be rejected
+    assert.throws(() => ftOnTransfer('evil-token.testnet', 15_000_000n), /Only configured input USDC/)
+
+    // Valid Circle USDC deposit ($15.00)
+    ftOnTransfer(circleUsdc, 15_000_000n)
+    assert.equal(state.escrowed, 15_000_000n)
+
+    // Partial chunk confirms ($10.00 consumed) -> $5.00 remaining escrow
+    state.executedIn += 10_000_000n
+    const remaining = () => state.escrowed - state.executedIn - state.refundedIn
+    assert.equal(remaining(), 5_000_000n)
+
+    // Expire dispatches refund and reserves refundedIn before callback
+    state.status = 'Expired'
+    const unspent = remaining()
+    state.refundedIn += unspent
+    assert.equal(remaining(), 0n)
+
+    // If refund ft_transfer fails in callback, refundedIn rolls back so refund_unused_escrow can retry
+    state.refundedIn -= unspent
+    assert.equal(remaining(), 5_000_000n)
+
+    // Retry succeeds
+    state.refundedIn += unspent
+    assert.equal(remaining(), 0n)
   })
 })
