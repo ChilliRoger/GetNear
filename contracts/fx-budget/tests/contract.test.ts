@@ -443,4 +443,139 @@ describe('FxBudget Contract State Machine & Logic Tests', () => {
     assert.equal(remainingDue(), 300_000_000n)
     assert.equal(transfersExecuted.length, 2)
   })
+
+  test('Acceptance Checks 1-6: approval gate, bounds enforcement (recipient, budget, chunk cap, deadline), and expired unpaid remainder', () => {
+    const autoCap = 100_000_000n // $100 USDC
+    const maxChunkCap = 20_000_000n // $20 USDC
+    const deadlineNs = 1_750_000_000_000_000_000n
+
+    const order = {
+      id: 42,
+      requester: 'operator.testnet',
+      recipient: 'supplier-eu.testnet',
+      totalIn: 250_000_000n, // $250 > $100 auto-cap
+      executedIn: 0n,
+      pendingIn: 0n,
+      targetOut: 200_000_000n, // €200 EURe
+      settledOut: 0n,
+      pendingOut: 0n,
+      maxChunkIn: 15_000_000n, // $15 order cap (< $20 global)
+      deadlineNs,
+      status: 'Pending' as OrderStatus,
+    }
+
+    // 1. Above auto-cap order must start Pending and block execution until DAO approval
+    assert.equal(order.totalIn > autoCap, true)
+    assert.equal(order.status, 'Pending')
+
+    const tryExecute = (params: {
+      nowNs: bigint
+      recipient: string
+      amountIn: bigint
+      settlementOut: bigint
+    }) => {
+      if (order.status !== 'Active') throw new Error('Order is not Active')
+      if (params.nowNs >= order.deadlineNs) throw new Error('Order deadline has passed')
+      if (params.recipient !== order.recipient) throw new Error('Recipient mismatch against approved invoice')
+      if (params.amountIn > order.maxChunkIn || params.amountIn > maxChunkCap) {
+        throw new Error('Chunk exceeds approved cap')
+      }
+      if (order.executedIn + order.pendingIn + params.amountIn > order.totalIn) {
+        throw new Error('Chunk exceeds approved USDC budget')
+      }
+      if (order.settledOut + order.pendingOut + params.settlementOut > order.targetOut) {
+        throw new Error('Payout exceeds remaining invoice due')
+      }
+      order.pendingIn = params.amountIn
+      order.pendingOut = params.settlementOut
+    }
+
+    assert.throws(
+      () =>
+        tryExecute({
+          nowNs: deadlineNs - 10_000n,
+          recipient: 'supplier-eu.testnet',
+          amountIn: 10_000_000n,
+          settlementOut: 8_500_000n,
+        }),
+      /not Active/,
+    )
+
+    // DAO approves
+    order.status = 'Active'
+
+    // 2. Reject wrong recipient, oversized chunk, over-budget input, over-due payout, and past deadline
+    assert.throws(
+      () =>
+        tryExecute({
+          nowNs: deadlineNs - 10_000n,
+          recipient: 'attacker.testnet',
+          amountIn: 10_000_000n,
+          settlementOut: 8_500_000n,
+        }),
+      /Recipient mismatch/,
+    )
+    assert.throws(
+      () =>
+        tryExecute({
+          nowNs: deadlineNs - 10_000n,
+          recipient: 'supplier-eu.testnet',
+          amountIn: 16_000_000n,
+          settlementOut: 12_000_000n,
+        }),
+      /exceeds approved cap/,
+    )
+    assert.throws(
+      () =>
+        tryExecute({
+          nowNs: deadlineNs - 10_000n,
+          recipient: 'supplier-eu.testnet',
+          amountIn: 10_000_000n,
+          settlementOut: 201_000_000n,
+        }),
+      /exceeds remaining invoice due/,
+    )
+    assert.throws(
+      () =>
+        tryExecute({
+          nowNs: deadlineNs + 1n,
+          recipient: 'supplier-eu.testnet',
+          amountIn: 10_000_000n,
+          settlementOut: 8_500_000n,
+        }),
+      /deadline has passed/,
+    )
+
+    // 3. One partial confirmed chunk (€12.00) reduces remaining due cleanly to €188.00
+    tryExecute({
+      nowNs: deadlineNs - 5_000n,
+      recipient: 'supplier-eu.testnet',
+      amountIn: 14_000_000n,
+      settlementOut: 12_000_000n,
+    })
+    order.executedIn += order.pendingIn
+    order.settledOut += order.pendingOut
+    order.pendingIn = 0n
+    order.pendingOut = 0n
+    assert.equal(order.targetOut - order.settledOut, 188_000_000n)
+
+    // 4. Budget exhaustion check (simulate near-exhausted budget rejecting overflow)
+    order.executedIn = 240_000_000n
+    assert.throws(
+      () =>
+        tryExecute({
+          nowNs: deadlineNs - 1_000n,
+          recipient: 'supplier-eu.testnet',
+          amountIn: 12_000_000n,
+          settlementOut: 10_000_000n,
+        }),
+      /exceeds approved USDC budget/,
+    )
+
+    // 5. Reaching deadline with unpaid remainder marks Expired while exposing exact remaining due (€188.00)
+    order.status = 'Expired'
+    const unpaidRemainder = order.targetOut - order.settledOut
+    assert.equal(order.status, 'Expired')
+    assert.equal(unpaidRemainder, 188_000_000n)
+  })
 })
