@@ -110,10 +110,15 @@ export function computeSimulatedOutput(
   return (amountIn * quoteOut) / quoteIn
 }
 
+type QuoteProvider = Pick<OneClickQuoteSource, 'getQuote'>
+type RefRateProvider = Pick<FrankfurterReferenceSource, 'getReferenceRate'>
+
 export class AgentRunner {
   private client: NearClient
-  private quoteSource: OneClickQuoteSource
-  private refRateSource: FrankfurterReferenceSource
+  private quoteSource: QuoteProvider
+  private refRateSource: RefRateProvider
+  private executeChunkCall: typeof runCallFunction
+  private resolveCredentialOverride?: () => Promise<string | undefined>
   private contractId: string
   private agentId: string
   private operatorId: string
@@ -132,6 +137,10 @@ export class AgentRunner {
     contractId?: string
     agentId?: string
     rpcUrls?: string[]
+    quoteSource?: QuoteProvider
+    refRateSource?: RefRateProvider
+    executeChunkCall?: typeof runCallFunction
+    resolveCredentialPath?: () => Promise<string | undefined>
   }) {
     this.pollIntervalMs = options?.pollIntervalMs || Number(process.env.AGENT_POLL_INTERVAL_MS || 10_000)
     this.operatorId = process.env.OPERATOR_ACCOUNT_ID || 'chilliroger-operator.testnet'
@@ -144,8 +153,10 @@ export class AgentRunner {
       rpcUrls: options?.rpcUrls || ['https://rpc.testnet.near.org', 'https://test.rpc.fastnear.com'],
     })
 
-    this.quoteSource = new OneClickQuoteSource()
-    this.refRateSource = new FrankfurterReferenceSource()
+    this.quoteSource = options?.quoteSource || new OneClickQuoteSource()
+    this.refRateSource = options?.refRateSource || new FrankfurterReferenceSource()
+    this.executeChunkCall = options?.executeChunkCall || runCallFunction
+    this.resolveCredentialOverride = options?.resolveCredentialPath
   }
 
   public getStatus() {
@@ -169,6 +180,13 @@ export class AgentRunner {
    */
   public async resolveAgentCredentialPath(): Promise<string | undefined> {
     if (this.cachedAgentCredPath) return this.cachedAgentCredPath
+    if (this.resolveCredentialOverride) {
+      const resolved = await this.resolveCredentialOverride()
+      if (resolved) {
+        this.cachedAgentCredPath = resolved
+        return resolved
+      }
+    }
     const envPath = process.env.AGENT_CREDENTIAL_PATH?.trim()
     if (envPath) {
       this.cachedAgentCredPath = envPath
@@ -223,6 +241,128 @@ export class AgentRunner {
       await new Promise((r) => setTimeout(r, delayMs))
     }
     return null
+  }
+
+  private parseChunkIndex(key: string, fallbackIndex: number): number {
+    const match = /-seq-(\d+)$/.exec(key)
+    return match ? Number(match[1]) : fallbackIndex
+  }
+
+  private persistChunkRecord(
+    chunkRecord: ContractChunkRecord,
+    meta: {
+      orderId: number
+      chunkIndex: number
+      nowMs: number
+      txHash?: string
+      explorerUrl?: string
+    },
+  ): boolean {
+    const isConfirmed = chunkRecord.status === 'Settled'
+    if (isConfirmed) {
+      this.totalChunksExecuted++
+      const fill: AgentFill = {
+        order_id: meta.orderId,
+        chunk_index: meta.chunkIndex,
+        idempotency_key: chunkRecord.key,
+        amount_in: chunkRecord.amount_in,
+        settlement_out: chunkRecord.settlement_out,
+        simulated_out: chunkRecord.simulated_out,
+        recipient: chunkRecord.recipient,
+        quote_ref: chunkRecord.quote_ref,
+        deviation_bps: chunkRecord.deviation_bps,
+        tx_hash: meta.txHash,
+        explorer_url: meta.explorerUrl,
+        ft_transfer_tx_hash: meta.txHash,
+        ft_transfer_url: meta.explorerUrl,
+        settlement_status: 'CONFIRMED',
+        is_simulated: false,
+        timestamp: meta.nowMs,
+      }
+      recordFill(fill)
+
+      recordDecision({
+        order_id: meta.orderId,
+        timestamp: meta.nowMs,
+        score: 88,
+        decision: 'EXECUTE',
+        reason: `CHUNK_SETTLED_ONCHAIN: ${Number(chunkRecord.amount_in) / 1e6} USDC -> ${(Number(chunkRecord.settlement_out) / 1e6).toFixed(2)} EURe (${chunkRecord.deviation_bps} bps)`,
+        chunk_size: chunkRecord.amount_in,
+        quote_ref: chunkRecord.quote_ref,
+        deviation_bps: chunkRecord.deviation_bps,
+      })
+      return true
+    }
+
+    const status = chunkRecord.status === 'InFlight' ? 'IN_FLIGHT' : 'FAILED'
+    const failureReason =
+      chunkRecord.failure_reason ||
+      `On-chain chunk status is ${chunkRecord.status} — invoice balance unchanged`
+
+    recordFill({
+      order_id: meta.orderId,
+      chunk_index: meta.chunkIndex,
+      idempotency_key: chunkRecord.key,
+      amount_in: chunkRecord.amount_in,
+      settlement_out: chunkRecord.settlement_out,
+      simulated_out: chunkRecord.simulated_out,
+      recipient: chunkRecord.recipient,
+      quote_ref: chunkRecord.quote_ref,
+      deviation_bps: chunkRecord.deviation_bps,
+      tx_hash: meta.txHash,
+      explorer_url: meta.explorerUrl,
+      settlement_status: status,
+      failure_reason: failureReason,
+      is_simulated: true, // CRITICAL: Never label an unconfirmed/failed transfer non-simulated
+      timestamp: meta.nowMs,
+    })
+
+    recordDecision({
+      order_id: meta.orderId,
+      timestamp: meta.nowMs,
+      score: 0,
+      decision: status === 'FAILED' ? 'SETTLEMENT_FAILED_BALANCE_UNCHANGED' : 'WAIT',
+      reason: failureReason,
+      chunk_size: chunkRecord.amount_in,
+      quote_ref: chunkRecord.quote_ref,
+      deviation_bps: chunkRecord.deviation_bps,
+    })
+    return false
+  }
+
+  /**
+   * Query on-chain chunk records for an order and reconcile any Settled / Failed / InFlight
+   * state into SQLite before deciding whether another broadcast is permitted.
+   */
+  public async reconcileOrderChunks(
+    orderId: number,
+    fallbackChunkIndex = 1,
+    nowMs = Date.now(),
+  ): Promise<ContractChunkRecord[]> {
+    const records = await this.client.callView<ContractChunkRecord[]>(
+      this.contractId,
+      'list_order_chunks',
+      { order_id: orderId },
+    )
+    const pendingKey = `order-${orderId}-seq-${fallbackChunkIndex}`
+    const reconciled: ContractChunkRecord[] = []
+    for (let i = 0; i < records.length; i++) {
+      let rec = records[i]
+      const shouldReconcile = rec.status === 'InFlight' || rec.key === pendingKey
+      if (rec.status === 'InFlight') {
+        const polled = await this.pollChunkRecord(rec.key, 3, 500)
+        if (polled) rec = polled
+      }
+      reconciled.push(rec)
+      if (shouldReconcile) {
+        this.persistChunkRecord(rec, {
+          orderId,
+          chunkIndex: this.parseChunkIndex(rec.key, fallbackChunkIndex + i),
+          nowMs,
+        })
+      }
+    }
+    return reconciled
   }
 
   public start() {
@@ -309,12 +449,19 @@ export class AgentRunner {
       const pendingOut = BigInt(order.pending_out || '0')
 
       if (pendingIn > 0n || pendingOut > 0n) {
+        let stillInFlight = true
+        try {
+          const reconciled = await this.reconcileOrderChunks(order.id, order.chunks_count + 1, nowMs)
+          stillInFlight = reconciled.some((r) => r.status === 'InFlight')
+        } catch (err) {
+          console.warn(`[Agent] Failed to reconcile pending chunks for Order #${order.id}:`, err)
+        }
         recordDecision({
           order_id: order.id,
           timestamp: nowMs,
           score: 0,
           decision: 'WAIT',
-          reason: 'IN_FLIGHT_SETTLEMENT_PENDING',
+          reason: stillInFlight ? 'IN_FLIGHT_SETTLEMENT_PENDING' : 'PENDING_CHUNK_RECONCILED_ONCHAIN',
           chunk_size: '0',
         })
         return
@@ -473,15 +620,51 @@ export class AgentRunner {
         return
       }
 
+      // Before broadcasting, inspect on-chain idempotency record to guarantee zero duplicate payouts
+      let existingRecord: ContractChunkRecord | null = null
+      try {
+        existingRecord = await this.client.callView<ContractChunkRecord | null>(
+          this.contractId,
+          'get_chunk_record',
+          { key: idempotencyKey },
+        )
+      } catch {
+        // Proceed carefully; post-error reconciliation will re-check on-chain state
+      }
+
+      if (existingRecord?.status === 'Settled') {
+        console.log(`[Agent] Chunk ${idempotencyKey} is already Settled on-chain — reconciling without replay`)
+        this.persistChunkRecord(existingRecord, {
+          orderId: order.id,
+          chunkIndex: order.chunks_count + 1,
+          nowMs,
+        })
+        return
+      }
+
+      if (existingRecord?.status === 'InFlight') {
+        console.log(`[Agent] Chunk ${idempotencyKey} is InFlight on-chain — polling callback instead of re-sending`)
+        const polled = (await this.pollChunkRecord(idempotencyKey)) ?? existingRecord
+        this.persistChunkRecord(polled, {
+          orderId: order.id,
+          chunkIndex: order.chunks_count + 1,
+          nowMs,
+        })
+        return
+      }
+
       // Execute transaction with bounded retries (using ONLY the restricted execute_chunk key)
+      // Whenever an RPC/CLI call returns an uncertain error, ALWAYS reconcile on-chain chunk status
+      // via get_chunk_record BEFORE attempting any retry so we never double-send.
       let txResult: any = null
+      let reconciledRecord: ContractChunkRecord | null = null
       let attempts = 0
       const maxAttempts = 3
 
       while (attempts < maxAttempts) {
         attempts++
         try {
-          txResult = runCallFunction({
+          txResult = this.executeChunkCall({
             contractId: this.contractId,
             methodName: 'execute_chunk',
             args: {
@@ -501,7 +684,29 @@ export class AgentRunner {
           break
         } catch (err: any) {
           const errMsg = err?.stderr || err?.message || String(err)
-          console.warn(`[Agent] Attempt ${attempts} failed: ${errMsg}`)
+          console.warn(`[Agent] Attempt ${attempts} failed (${idempotencyKey}): ${errMsg}`)
+
+          // Reconcile uncertain outcome dynamically against on-chain chunk state before retrying
+          try {
+            const observed = await this.client.callView<ContractChunkRecord | null>(
+              this.contractId,
+              'get_chunk_record',
+              { key: idempotencyKey },
+            )
+            if (observed?.status === 'Settled') {
+              console.log(`[Agent] Uncertain RPC error resolved: ${idempotencyKey} is Settled on-chain`)
+              reconciledRecord = observed
+              break
+            }
+            if (observed?.status === 'InFlight') {
+              console.log(`[Agent] Uncertain RPC error resolved: ${idempotencyKey} is InFlight on-chain — polling callback`)
+              reconciledRecord = (await this.pollChunkRecord(idempotencyKey)) ?? observed
+              break
+            }
+          } catch (viewErr) {
+            console.warn(`[Agent] On-chain reconciliation check failed for ${idempotencyKey}:`, viewErr)
+          }
+
           if (attempts >= maxAttempts) {
             recordDecision({
               order_id: order.id,
@@ -520,84 +725,40 @@ export class AgentRunner {
       }
 
       // Query on-chain callback-confirmed settlement status before persisting fill truth
-      const chunkRecord = await this.pollChunkRecord(idempotencyKey)
-      const isConfirmed = chunkRecord?.status === 'Settled'
+      const chunkRecord = reconciledRecord ?? (await this.pollChunkRecord(idempotencyKey))
+      const fallbackRecord: ContractChunkRecord = chunkRecord ?? {
+        key: idempotencyKey,
+        order_id: order.id,
+        amount_in: candidateChunk.toString(),
+        settlement_out: settlementOut.toString(),
+        simulated_out: simulatedOut.toString(),
+        recipient,
+        quote_ref: quoteRef,
+        deviation_bps: deviationBps,
+        status: 'Failed',
+        attempts,
+        initiated_ns: Number(nowNs),
+        failure_reason: 'On-chain chunk record unavailable after execution — invoice balance unchanged',
+      }
+
+      const isConfirmed = this.persistChunkRecord(fallbackRecord, {
+        orderId: order.id,
+        chunkIndex: order.chunks_count + 1,
+        nowMs,
+        txHash: txResult?.txHash,
+        explorerUrl: txResult?.explorerUrl,
+      })
 
       if (isConfirmed) {
-        this.totalChunksExecuted++
-        const fill: AgentFill = {
-          order_id: order.id,
-          chunk_index: order.chunks_count + 1,
-          idempotency_key: idempotencyKey,
-          amount_in: candidateChunk.toString(),
-          settlement_out: chunkRecord.settlement_out || settlementOut.toString(),
-          simulated_out: simulatedOut.toString(),
-          recipient: chunkRecord.recipient || recipient,
-          quote_ref: quoteRef,
-          deviation_bps: deviationBps,
-          tx_hash: txResult?.txHash,
-          explorer_url: txResult?.explorerUrl,
-          ft_transfer_tx_hash: txResult?.txHash,
-          ft_transfer_url: txResult?.explorerUrl,
-          settlement_status: 'CONFIRMED',
-          is_simulated: false,
-          timestamp: nowMs,
-        }
-        recordFill(fill)
-
-        recordDecision({
-          order_id: order.id,
-          timestamp: nowMs,
-          score: 88,
-          decision: 'EXECUTE',
-          reason: `CHUNK_SETTLED_ONCHAIN: ${Number(candidateChunk) / 1e6} USDC -> ${(Number(fill.settlement_out) / 1e6).toFixed(2)} EURe (${deviationBps} bps)`,
-          chunk_size: candidateChunk.toString(),
-          quote_ref: quoteRef,
-          deviation_bps: deviationBps,
-        })
-
         console.log(`✅ Chunk confirmed by on-chain ft_transfer callback!`)
         if (txResult?.txHash) {
           console.log(`  Tx Hash: ${txResult.txHash}`)
           console.log(`  Explorer: ${txResult.explorerUrl}`)
         }
       } else {
-        const status = chunkRecord?.status === 'InFlight' ? 'IN_FLIGHT' : 'FAILED'
-        const failureReason =
-          chunkRecord?.failure_reason ||
-          `On-chain chunk status is ${chunkRecord?.status || 'UNKNOWN'} — invoice balance unchanged`
-
-        const fill: AgentFill = {
-          order_id: order.id,
-          chunk_index: order.chunks_count + 1,
-          idempotency_key: idempotencyKey,
-          amount_in: candidateChunk.toString(),
-          settlement_out: chunkRecord?.settlement_out || settlementOut.toString(),
-          simulated_out: simulatedOut.toString(),
-          recipient,
-          quote_ref: quoteRef,
-          deviation_bps: deviationBps,
-          tx_hash: txResult?.txHash,
-          explorer_url: txResult?.explorerUrl,
-          settlement_status: status,
-          failure_reason: failureReason,
-          is_simulated: true, // CRITICAL: Never label an unconfirmed/failed transfer non-simulated
-          timestamp: nowMs,
-        }
-        recordFill(fill)
-
-        recordDecision({
-          order_id: order.id,
-          timestamp: nowMs,
-          score: 0,
-          decision: status === 'FAILED' ? 'SETTLEMENT_FAILED_BALANCE_UNCHANGED' : 'WAIT',
-          reason: failureReason,
-          chunk_size: candidateChunk.toString(),
-          quote_ref: quoteRef,
-          deviation_bps: deviationBps,
-        })
-
-        console.warn(`[Agent] ⚠ Chunk NOT settled (${status}): ${failureReason}`)
+        const label = fallbackRecord.status === 'InFlight' ? 'IN_FLIGHT' : 'FAILED'
+        const reason = fallbackRecord.failure_reason || `On-chain chunk status is ${fallbackRecord.status}`
+        console.warn(`[Agent] ⚠ Chunk NOT settled (${label}): ${reason}`)
       }
     } finally {
       this.activeLocks.delete(order.id)
