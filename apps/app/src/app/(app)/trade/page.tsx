@@ -19,6 +19,11 @@ export default function TradePage() {
   const [targetEure, setTargetEure] = useState("");
   const [invoiceRef, setInvoiceRef] = useState("");
   const [autoCapUsdc, setAutoCapUsdc] = useState(100);
+  const [usdcContractId, setUsdcContractId] = useState(
+    "3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af",
+  );
+  const [userCircleUsdc, setUserCircleUsdc] = useState(0);
+  const [fundWithCircleEscrow, setFundWithCircleEscrow] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   // Live quote estimates
@@ -30,15 +35,22 @@ export default function TradePage() {
   const isAboveCap = numAmount > autoCapUsdc;
 
   useEffect(() => {
-    fetch("/api/near")
+    const url = accountId ? `/api/near?account=${encodeURIComponent(accountId)}` : "/api/near";
+    fetch(url)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.contract?.limits?.auto_cap_in) {
           setAutoCapUsdc(Number(d.contract.limits.auto_cap_in) / 1e6);
         }
+        if (d?.tokens?.usdcId) {
+          setUsdcContractId(d.tokens.usdcId);
+        }
+        if (typeof d?.tokens?.userUsdc === "number") {
+          setUserCircleUsdc(d.tokens.userUsdc);
+        }
       })
       .catch(() => {});
-  }, []);
+  }, [accountId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -94,23 +106,54 @@ export default function TradePage() {
         targetEureNum > 0 ? BigInt(Math.round(targetEureNum * 1e6)).toString() : undefined;
       const trimmedInvoiceRef = invoiceRef.trim();
 
-      const res = await signAndSendTransaction({
-        receiverId: contractId,
-        methodName: "create_order",
-        args: {
-          pair_label: "USDC/EURe",
-          total_in: totalIn,
-          max_chunk_in: chunkIn,
-          deadline_ns: deadlineNs,
-          max_dev_bps: devBps,
-          ...(trimmedRecipient ? { recipient: trimmedRecipient } : {}),
-          ...(targetOutAtomic ? { target_out: targetOutAtomic } : {}),
-          ...(trimmedInvoiceRef ? { invoice_ref: trimmedInvoiceRef } : {}),
-        },
-      });
+      if (fundWithCircleEscrow && numAmount > userCircleUsdc) {
+        showToast(
+          `Connected wallet has ${userCircleUsdc.toFixed(2)} Circle USDC. Lower amount or uncheck Circle USDC Escrow.`,
+          "error",
+        );
+        return;
+      }
 
+      const res = fundWithCircleEscrow
+        ? await signAndSendTransaction({
+            receiverId: usdcContractId,
+            methodName: "ft_transfer_call",
+            args: {
+              receiver_id: contractId,
+              amount: totalIn,
+              memo: `Fund GetNear order (${numAmount} Circle USDC)`,
+              msg: JSON.stringify({
+                action: "create_escrowed_order",
+                pair_label: "USDC/EURe",
+                max_chunk_in: chunkIn,
+                deadline_ns: deadlineNs,
+                max_dev_bps: devBps,
+                ...(trimmedRecipient ? { recipient: trimmedRecipient } : {}),
+                ...(targetOutAtomic ? { target_out: targetOutAtomic } : {}),
+                ...(trimmedInvoiceRef ? { invoice_ref: trimmedInvoiceRef } : {}),
+              }),
+            },
+            depositYocto: "1",
+            gasUnits: "120.0 Tgas",
+          })
+        : await signAndSendTransaction({
+            receiverId: contractId,
+            methodName: "create_order",
+            args: {
+              pair_label: "USDC/EURe",
+              total_in: totalIn,
+              max_chunk_in: chunkIn,
+              deadline_ns: deadlineNs,
+              max_dev_bps: devBps,
+              ...(trimmedRecipient ? { recipient: trimmedRecipient } : {}),
+              ...(targetOutAtomic ? { target_out: targetOutAtomic } : {}),
+              ...(trimmedInvoiceRef ? { invoice_ref: trimmedInvoiceRef } : {}),
+            },
+          });
+
+      const modeTag = fundWithCircleEscrow ? "Circle USDC Escrowed" : "Budget-Only";
       const label = numAmount <= autoCapUsdc ? "Active (Auto-Approved)" : "Pending (Submitted to Sputnik DAO)";
-      showToast(`Order created successfully: ${numAmount} USDC [${label}]`, {
+      showToast(`Order created (${modeTag}): ${numAmount} USDC [${label}]`, {
         type: "success",
         explorerUrl: res.explorerUrl,
       });
@@ -290,6 +333,23 @@ export default function TradePage() {
                 />
               </div>
             </div>
+
+            <label className="flex items-start gap-2 rounded-lg border border-border bg-background/60 p-2.5 text-xs cursor-pointer">
+              <input
+                type="checkbox"
+                checked={fundWithCircleEscrow}
+                onChange={(e) => setFundWithCircleEscrow(e.target.checked)}
+                className="mt-0.5 rounded border-border accent-accent-blue"
+              />
+              <div>
+                <div className="font-medium text-foreground">
+                  Lock Real Circle Native USDC Escrow (ft_transfer_call)
+                </div>
+                <div className="text-[10px] font-mono text-muted">
+                  Connected balance: {userCircleUsdc.toFixed(2)} Circle USDC (auto-refunds unspent balance on cancel/expiry)
+                </div>
+              </div>
+            </label>
           </div>
         </Card>
 
@@ -297,7 +357,9 @@ export default function TradePage() {
         <Card title="Indicative Quote & Callback Settlement Preview">
           <div className="grid grid-cols-2 gap-3 text-xs pt-1">
             <div>
-              <div className="text-[11px] text-muted">FX Budget Input (Simulated Swap)</div>
+              <div className="text-[11px] text-muted">
+                {fundWithCircleEscrow ? "Circle USDC Escrow Input" : "FX Budget Input (Simulated Swap)"}
+              </div>
               <div className="font-mono text-sm font-semibold text-foreground">{numAmount} USDC</div>
             </div>
             <div>

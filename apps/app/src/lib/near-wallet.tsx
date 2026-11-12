@@ -245,7 +245,10 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
       depositYocto = nearToYocto(isNaN(numNear) ? 0 : numNear);
     } else if (params.depositYocto) {
       depositYocto = params.depositYocto;
-      depositStr = `${yoctoToNear(params.depositYocto)} NEAR`;
+      depositStr =
+        params.depositYocto === "1"
+          ? "1 yoctoNEAR"
+          : `${yoctoToNear(params.depositYocto)} NEAR`;
     }
 
     // Convert gas units to yoctoGas string

@@ -16,10 +16,12 @@ const nearClient = new NearClient({
   rpcUrls: RPC_URLS,
 })
 
+const CIRCLE_NEAR_TESTNET_USDC = '3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af'
 const OPERATOR = process.env.OPERATOR_ACCOUNT_ID || 'chilliroger-operator.testnet'
 const FX_BUDGET_ID = process.env.FX_BUDGET_CONTRACT_ID || `fx-budget.${OPERATOR}`
 const DAO_ID = process.env.SPUTNIK_DAO_ACCOUNT_ID || 'chilliroger-dao.sputnik-v2.testnet'
-const USDC_ID = process.env.USDC_CONTRACT_ID || `usdc.${OPERATOR}`
+const USDC_ID = process.env.USDC_CONTRACT_ID || CIRCLE_NEAR_TESTNET_USDC
+const FAUCET_USDC_ID = process.env.FAUCET_USDC_CONTRACT_ID || `usdc.${OPERATOR}`
 const EURE_ID = process.env.EURE_CONTRACT_ID || `eure.${OPERATOR}`
 
 // SQLite connection for agent fills and decisions
@@ -44,14 +46,17 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const userAccount = searchParams.get('account')?.trim()
 
-    const [ordersRes, limitsRes, isPausedRes, settlementTokenRes, proposalsRes, vaultEureRes, userUsdcRes, userEureRes] = await Promise.allSettled([
+    const [ordersRes, limitsRes, isPausedRes, settlementTokenRes, inputTokenRes, proposalsRes, vaultEureRes, vaultUsdcRes, userUsdcRes, userDemoUsdcRes, userEureRes] = await Promise.allSettled([
       nearClient.callView(FX_BUDGET_ID, 'list_orders', { from_index: 0, limit: 50 }),
       nearClient.callView(FX_BUDGET_ID, 'get_limits', {}),
       nearClient.callView(FX_BUDGET_ID, 'is_paused', {}),
       nearClient.callView<string>(FX_BUDGET_ID, 'get_settlement_token', {}),
+      nearClient.callView<string | null>(FX_BUDGET_ID, 'get_input_token', {}),
       nearClient.callView(DAO_ID, 'get_proposals', { from_index: 0, limit: 50 }),
       nearClient.callView<string>(EURE_ID, 'ft_balance_of', { account_id: FX_BUDGET_ID }),
+      nearClient.callView<string>(USDC_ID, 'ft_balance_of', { account_id: FX_BUDGET_ID }),
       userAccount ? nearClient.callView<string>(USDC_ID, 'ft_balance_of', { account_id: userAccount }) : Promise.resolve('0'),
+      userAccount ? nearClient.callView<string>(FAUCET_USDC_ID, 'ft_balance_of', { account_id: userAccount }) : Promise.resolve('0'),
       userAccount ? nearClient.callView<string>(EURE_ID, 'ft_balance_of', { account_id: userAccount }) : Promise.resolve('0'),
     ])
 
@@ -62,20 +67,37 @@ export async function GET(req: NextRequest) {
       pending_out?: string
     }>
 
-    // Dynamically fetch on-chain chunk records (Pending/Confirmed/Failed ledger) from NEAR RPC
-    const chunkEntries = await Promise.allSettled(
-      orders.slice(-15).map(async (o) => {
-        const list = await nearClient.callView<unknown[]>(FX_BUDGET_ID, 'list_order_chunks', {
-          order_id: o.id,
-        })
-        return [o.id, list] as const
-      }),
-    )
+    // Dynamically fetch on-chain chunk records and per-order Circle USDC escrow balances
+    const [chunkEntries, escrowEntries] = await Promise.all([
+      Promise.allSettled(
+        orders.slice(-15).map(async (o) => {
+          const list = await nearClient.callView<unknown[]>(FX_BUDGET_ID, 'list_order_chunks', {
+            order_id: o.id,
+          })
+          return [o.id, list] as const
+        }),
+      ),
+      Promise.allSettled(
+        orders.slice(-15).map(async (o) => {
+          const escrow = await nearClient.callView<unknown>(FX_BUDGET_ID, 'get_order_escrow', {
+            id: o.id,
+          })
+          return [o.id, escrow] as const
+        }),
+      ),
+    ])
     const chunksByOrder: Record<number, unknown[]> = {}
     for (const entry of chunkEntries) {
       if (entry.status === 'fulfilled') {
         const [orderId, list] = entry.value
         chunksByOrder[orderId] = list
+      }
+    }
+    const escrowByOrder: Record<number, unknown> = {}
+    for (const entry of escrowEntries) {
+      if (entry.status === 'fulfilled' && entry.value[1]) {
+        const [orderId, escrow] = entry.value
+        escrowByOrder[orderId] = escrow
       }
     }
     const limits = limitsRes.status === 'fulfilled' ? limitsRes.value : {
@@ -86,9 +108,12 @@ export async function GET(req: NextRequest) {
     }
     const isPaused = isPausedRes.status === 'fulfilled' ? isPausedRes.value : false
     const settlementToken = settlementTokenRes.status === 'fulfilled' ? settlementTokenRes.value : EURE_ID
+    const inputToken = inputTokenRes.status === 'fulfilled' ? inputTokenRes.value : USDC_ID
     const proposals = proposalsRes.status === 'fulfilled' ? proposalsRes.value : []
     const vaultEure = vaultEureRes.status === 'fulfilled' ? (Number(vaultEureRes.value || '0') / 1e6) : 0
+    const vaultUsdc = vaultUsdcRes.status === 'fulfilled' ? (Number(vaultUsdcRes.value || '0') / 1e6) : 0
     const userUsdc = userUsdcRes.status === 'fulfilled' ? (Number(userUsdcRes.value || '0') / 1e6) : 0
+    const userDemoUsdc = userDemoUsdcRes.status === 'fulfilled' ? (Number(userDemoUsdcRes.value || '0') / 1e6) : 0
     const userEure = userEureRes.status === 'fulfilled' ? (Number(userEureRes.value || '0') / 1e6) : 0
 
     // Read agent fills and decisions (normalize SQLite 0/1 integer to boolean)
@@ -125,18 +150,23 @@ export async function GET(req: NextRequest) {
       },
       tokens: {
         usdcId: USDC_ID,
+        faucetUsdcId: FAUCET_USDC_ID,
         eureId: EURE_ID,
         userUsdc,
+        userDemoUsdc,
         userEure,
+        vaultUsdc,
         vaultEure,
       },
       contract: {
         id: FX_BUDGET_ID,
         settlementToken,
+        inputToken,
         isPaused,
         limits,
         orders,
         chunksByOrder,
+        escrowByOrder,
       },
       dao: {
         id: DAO_ID,

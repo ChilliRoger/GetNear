@@ -104,6 +104,14 @@ interface AgentDecision {
   deviation_bps?: number;
 }
 
+interface OrderEscrowView {
+  order_id: number;
+  escrowed_in: string;
+  executed_in: string;
+  refunded_in: string;
+  remaining_escrow_in: string;
+}
+
 export default function DashboardPage() {
   const { accountId, connect, availableAccounts, signAndSendTransaction } = useNearWallet();
   const { showToast } = useToast();
@@ -118,16 +126,20 @@ export default function DashboardPage() {
   // NEAR state
   const [orders, setOrders] = useState<ContractOrder[]>([]);
   const [chunksByOrder, setChunksByOrder] = useState<Record<number, ContractChunkRecord[]>>({});
+  const [escrowByOrder, setEscrowByOrder] = useState<Record<number, OrderEscrowView>>({});
   const [proposals, setProposals] = useState<DaoProposal[]>([]);
   const [fills, setFills] = useState<AgentFill[]>([]);
   const [decisions, setDecisions] = useState<AgentDecision[]>([]);
   const [contractId, setContractId] = useState("fx-budget.chilliroger-operator.testnet");
   const [daoId, setDaoId] = useState("chilliroger-dao.sputnik-v2.testnet");
   const [tokens, setTokens] = useState({
-    usdcId: "usdc.chilliroger-operator.testnet",
+    usdcId: "3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af",
+    faucetUsdcId: "usdc.chilliroger-operator.testnet",
     eureId: "eure.chilliroger-operator.testnet",
     userUsdc: 0,
+    userDemoUsdc: 0,
     userEure: 0,
+    vaultUsdc: 0,
     vaultEure: 0,
   });
   const [limits, setLimits] = useState<ContractLimits>({
@@ -138,13 +150,15 @@ export default function DashboardPage() {
   });
 
   // Order intake & supplier invoice inputs
-  const [orderAmount, setOrderAmount] = useState("50");
-  const [maxChunk, setMaxChunk] = useState("20");
+  const [orderAmount, setOrderAmount] = useState("15");
+  const [maxChunk, setMaxChunk] = useState("10");
   const [maxDevBps, setMaxDevBps] = useState("120");
   const [deadlineHours, setDeadlineHours] = useState("4");
   const [recipientAccount, setRecipientAccount] = useState("");
   const [targetEure, setTargetEure] = useState("");
   const [invoiceRef, setInvoiceRef] = useState("");
+  const [fundWithCircleEscrow, setFundWithCircleEscrow] = useState(true);
+  const [refundingOrderId, setRefundingOrderId] = useState<number | null>(null);
 
   const autoCapUsdc = Number(limits.auto_cap_in || "100000000") / 1e6;
   const maxChunkLimitUsdc = Number(limits.max_chunk_in || "20000000") / 1e6;
@@ -165,6 +179,9 @@ export default function DashboardPage() {
         }
         if (data.contract?.chunksByOrder) {
           setChunksByOrder(data.contract.chunksByOrder);
+        }
+        if (data.contract?.escrowByOrder) {
+          setEscrowByOrder(data.contract.escrowByOrder);
         }
         if (data.contract?.limits) {
           setLimits(data.contract.limits);
@@ -224,23 +241,54 @@ export default function DashboardPage() {
         targetEureNum > 0 ? BigInt(Math.round(targetEureNum * 1e6)).toString() : undefined;
       const trimmedInvoiceRef = invoiceRef.trim();
 
-      const res = await signAndSendTransaction({
-        receiverId: contractId,
-        methodName: "create_order",
-        args: {
-          pair_label: "USDC/EURe",
-          total_in: totalIn,
-          max_chunk_in: chunkIn,
-          deadline_ns: deadlineNs,
-          max_dev_bps: devBps,
-          ...(trimmedRecipient ? { recipient: trimmedRecipient } : {}),
-          ...(targetOutAtomic ? { target_out: targetOutAtomic } : {}),
-          ...(trimmedInvoiceRef ? { invoice_ref: trimmedInvoiceRef } : {}),
-        },
-      });
+      if (fundWithCircleEscrow && amtNum > tokens.userUsdc) {
+        showToast(
+          `Connected wallet has ${tokens.userUsdc.toFixed(2)} Circle USDC. Lower amount or uncheck Circle USDC Escrow.`,
+          "error",
+        );
+        return;
+      }
 
+      const res = fundWithCircleEscrow
+        ? await signAndSendTransaction({
+            receiverId: tokens.usdcId,
+            methodName: "ft_transfer_call",
+            args: {
+              receiver_id: contractId,
+              amount: totalIn,
+              memo: `Fund GetNear order (${amtNum} Circle USDC)`,
+              msg: JSON.stringify({
+                action: "create_escrowed_order",
+                pair_label: "USDC/EURe",
+                max_chunk_in: chunkIn,
+                deadline_ns: deadlineNs,
+                max_dev_bps: devBps,
+                ...(trimmedRecipient ? { recipient: trimmedRecipient } : {}),
+                ...(targetOutAtomic ? { target_out: targetOutAtomic } : {}),
+                ...(trimmedInvoiceRef ? { invoice_ref: trimmedInvoiceRef } : {}),
+              }),
+            },
+            depositYocto: "1",
+            gasUnits: "120.0 Tgas",
+          })
+        : await signAndSendTransaction({
+            receiverId: contractId,
+            methodName: "create_order",
+            args: {
+              pair_label: "USDC/EURe",
+              total_in: totalIn,
+              max_chunk_in: chunkIn,
+              deadline_ns: deadlineNs,
+              max_dev_bps: devBps,
+              ...(trimmedRecipient ? { recipient: trimmedRecipient } : {}),
+              ...(targetOutAtomic ? { target_out: targetOutAtomic } : {}),
+              ...(trimmedInvoiceRef ? { invoice_ref: trimmedInvoiceRef } : {}),
+            },
+          });
+
+      const modeTag = fundWithCircleEscrow ? "Circle USDC Escrowed" : "Budget-Only";
       const label = amtNum <= autoCapUsdc ? "Active (Within Auto-Cap)" : "Pending (Needs Sputnik DAO Approval)";
-      showToast(`Order created successfully: ${amtNum} USDC [${label}]`, {
+      showToast(`Order created (${modeTag}): ${amtNum} USDC [${label}]`, {
         type: "success",
         explorerUrl: res.explorerUrl,
       });
@@ -251,6 +299,28 @@ export default function DashboardPage() {
       showToast(`Order creation failed: ${msg}`, "error");
     } finally {
       setSubmittingOrder(false);
+    }
+  };
+
+  const handleRefundEscrow = async (orderId: number) => {
+    setRefundingOrderId(orderId);
+    try {
+      const res = await signAndSendTransaction({
+        receiverId: contractId,
+        methodName: "refund_unused_escrow",
+        args: { id: orderId },
+        gasUnits: "80.0 Tgas",
+      });
+      showToast(`Claimed unspent Circle USDC refund for Order #${orderId}`, {
+        type: "success",
+        explorerUrl: res.explorerUrl,
+      });
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast(`Escrow refund failed: ${msg}`, "error");
+    } finally {
+      setRefundingOrderId(null);
     }
   };
 
@@ -422,7 +492,9 @@ export default function DashboardPage() {
       <TokenBalanceCard
         accountId={accountId}
         userUsdc={tokens.userUsdc}
+        userDemoUsdc={tokens.userDemoUsdc}
         userEure={tokens.userEure}
+        vaultUsdc={tokens.vaultUsdc}
         vaultEure={tokens.vaultEure}
         usdcId={tokens.usdcId}
         eureId={tokens.eureId}
@@ -436,20 +508,21 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={() => {
-                setOrderAmount("20");
-                setMaxChunk("5");
+                setOrderAmount("15");
+                setMaxChunk("10");
                 setMaxDevBps("120");
                 setDeadlineHours("4");
-                showToast("Preset loaded: $20 USDC (Auto-Active). Click Submit Order below when ready.", "info");
+                setFundWithCircleEscrow(true);
+                showToast("Preset loaded: $15 Circle USDC Escrow (Auto-Active). Click Submit Order below when ready.", "info");
               }}
               className={`flex-1 py-1.5 px-2.5 rounded-lg border text-xs font-medium transition-colors text-left ${
-                orderAmount === "20"
+                orderAmount === "15"
                   ? "border-accent-green bg-accent-green/10 text-foreground"
                   : "border-border bg-surface-hover text-foreground hover:border-accent-green"
               }`}
             >
-              <div className="font-semibold text-accent-green">Preset: $20 USDC</div>
-              <div className="text-[10px] text-muted">Auto-Active (Below $100 cap)</div>
+              <div className="font-semibold text-accent-green">Preset: $15 Circle USDC</div>
+              <div className="text-[10px] text-muted">Real ft_transfer_call Escrow</div>
             </button>
             <button
               type="button"
@@ -458,7 +531,8 @@ export default function DashboardPage() {
                 setMaxChunk("20");
                 setMaxDevBps("120");
                 setDeadlineHours("4");
-                showToast("Preset loaded: $250 USDC (Requires DAO Approval). Click Submit Order below when ready.", "info");
+                setFundWithCircleEscrow(false);
+                showToast("Preset loaded: $250 USDC Budget (Requires DAO Approval). Click Submit Order below when ready.", "info");
               }}
               className={`flex-1 py-1.5 px-2.5 rounded-lg border text-xs font-medium transition-colors text-left ${
                 orderAmount === "250"
@@ -552,6 +626,24 @@ export default function DashboardPage() {
               />
             </div>
           </div>
+
+          {/* Circle Native USDC Escrow Toggle */}
+          <label className="flex items-start gap-2 rounded-lg border border-border bg-background/60 p-2 text-xs cursor-pointer">
+            <input
+              type="checkbox"
+              checked={fundWithCircleEscrow}
+              onChange={(e) => setFundWithCircleEscrow(e.target.checked)}
+              className="mt-0.5 rounded border-border accent-accent-blue"
+            />
+            <div>
+              <div className="font-medium text-foreground">
+                Lock Real Circle Native USDC Escrow (ft_transfer_call)
+              </div>
+              <div className="text-[10px] font-mono text-muted">
+                Wallet Circle USDC balance: {tokens.userUsdc.toFixed(2)} USDC (refunds unspent USDC on cancel/expiry)
+              </div>
+            </div>
+          </label>
 
           {/* Dynamic Cap Badge */}
           <div
@@ -694,6 +786,35 @@ export default function DashboardPage() {
                     <span>Confirmed Chunks: {o.chunks_count}</span>
                     <span>Agent-Reported Dev Cap: {o.max_dev_bps} bps</span>
                   </div>
+
+                  {/* Circle Native USDC Escrow Status */}
+                  {(() => {
+                    const escrow = escrowByOrder[o.id];
+                    const escrowed = Number(escrow?.escrowed_in || "0") / 1e6;
+                    if (escrowed <= 0) return null;
+                    const refunded = Number(escrow?.refunded_in || "0") / 1e6;
+                    const remainingEscrow = Number(escrow?.remaining_escrow_in || "0") / 1e6;
+                    const canRefund =
+                      remainingEscrow > 0 &&
+                      (o.status === "Completed" || o.status === "Cancelled" || o.status === "Expired");
+                    return (
+                      <div className="mt-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-1.5 text-[10px] font-mono text-blue-300 flex items-center justify-between gap-2">
+                        <span>
+                          Circle USDC Escrow: {escrowed.toFixed(2)} funded | {remainingEscrow.toFixed(2)} locked | {refunded.toFixed(2)} refunded
+                        </span>
+                        {canRefund && (
+                          <button
+                            type="button"
+                            onClick={() => handleRefundEscrow(o.id)}
+                            disabled={refundingOrderId === o.id}
+                            className="rounded border border-blue-400/40 bg-blue-500/20 px-2 py-0.5 text-[10px] font-semibold text-blue-200 hover:bg-blue-500/30 disabled:opacity-50"
+                          >
+                            {refundingOrderId === o.id ? "Refunding..." : "Claim Refund"}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Expired Deadline Unpaid Remainder Notice */}
                   {o.status === "Expired" && (
@@ -1189,11 +1310,19 @@ export default function DashboardPage() {
                         <span className="text-zinc-300">{f.quote_ref}</span>
                         <span> ({f.deviation_bps} bps agent-reported)</span>
                       </div>
-                      <div>
-                        <span className="text-zinc-500">2. Simulated FX conversion: </span>
-                        <span className="text-amber-300">{inAmt} USDC input</span>
-                        <span> (indicative FX only, no on-chain USDC debit)</span>
-                      </div>
+                      {Number(escrowByOrder[f.order_id]?.escrowed_in || "0") > 0 ? (
+                        <div>
+                          <span className="text-zinc-500">2. Real Circle USDC escrow debit: </span>
+                          <span className="text-blue-300 font-semibold">{inAmt} USDC locked in FxBudget</span>
+                          <span> (Circle Native 3e2210e... on-chain transfer)</span>
+                        </div>
+                      ) : (
+                        <div>
+                          <span className="text-zinc-500">2. Simulated FX conversion: </span>
+                          <span className="text-amber-300">{inAmt} USDC input</span>
+                          <span> (indicative FX only, no on-chain USDC debit)</span>
+                        </div>
+                      )}
                       <div>
                         <span className="text-zinc-500">3. NEAR testnet token transfer: </span>
                         <span className={isConfirmed ? "text-emerald-400 font-semibold" : "text-zinc-300"}>

@@ -8,7 +8,9 @@ import { Coins, Copy, Check, Droplets, ExternalLink, ArrowRight, ShieldCheck } f
 interface TokenBalanceCardProps {
   accountId: string | null;
   userUsdc: number;
+  userDemoUsdc?: number;
   userEure: number;
+  vaultUsdc?: number;
   vaultEure: number;
   usdcId: string;
   eureId: string;
@@ -18,7 +20,9 @@ interface TokenBalanceCardProps {
 export function TokenBalanceCard({
   accountId,
   userUsdc,
+  userDemoUsdc = 0,
   userEure,
+  vaultUsdc = 0,
   vaultEure,
   usdcId,
   eureId,
@@ -79,34 +83,50 @@ export function TokenBalanceCard({
           </span>
         </div>
 
-        <button
-          onClick={handleClaimFaucet}
-          disabled={isClaiming || !accountId}
-          className="flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-semibold rounded bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors"
-        >
-          <Droplets className="w-3.5 h-3.5" />
-          {isClaiming ? "Dispensing 500 USDC..." : "Claim 500 Testnet USDC"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href="https://faucet.circle.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-semibold rounded border border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 transition-colors"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            <span>Circle NEAR Testnet USDC Faucet</span>
+          </a>
+          <button
+            onClick={handleClaimFaucet}
+            disabled={isClaiming || !accountId}
+            className="flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-semibold rounded bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors"
+          >
+            <Droplets className="w-3.5 h-3.5" />
+            {isClaiming ? "Dispensing Demo USDC..." : "Claim 500 Demo USDC"}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-4">
         <div className="p-3.5 bg-zinc-900 border border-zinc-800 rounded">
           <div className="flex items-center justify-between text-xs text-zinc-400 mb-1">
-            <span>Your USDC Balance</span>
-            <span className="text-blue-400 font-mono">6 decimals</span>
+            <span>Circle Testnet USDC</span>
+            <span className="text-blue-400 font-mono">Canonical</span>
           </div>
           <div className="text-xl font-bold font-mono text-zinc-100" suppressHydrationWarning>
             {userUsdc.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             <span className="text-xs ml-1.5 text-zinc-400 font-normal">USDC</span>
           </div>
+          {userDemoUsdc > 0 && (
+            <div className="text-[10px] font-mono text-zinc-500 mt-0.5" suppressHydrationWarning>
+              + {userDemoUsdc.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Demo Faucet USDC
+            </div>
+          )}
           <div className="mt-2 pt-2 border-t border-zinc-800/80 flex items-center justify-between text-xs">
-            <span className="text-zinc-500 font-mono text-[11px] truncate max-w-[140px]">{usdcId}</span>
+            <span className="text-zinc-500 font-mono text-[11px] truncate max-w-[140px]" title={usdcId}>{usdcId}</span>
             <button
-              onClick={() => handleCopy(usdcId, "USDC")}
+              onClick={() => handleCopy(usdcId, "Circle USDC")}
               className="text-zinc-400 hover:text-zinc-200 transition-colors p-1"
               title="Copy Contract ID"
             >
-              {copiedToken === "USDC" ? (
+              {copiedToken === "Circle USDC" ? (
                 <Check className="w-3 h-3 text-emerald-400" />
               ) : (
                 <Copy className="w-3 h-3" />
@@ -149,8 +169,8 @@ export function TokenBalanceCard({
             {vaultEure.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             <span className="text-xs ml-1.5 text-zinc-400 font-normal">EURe</span>
           </div>
-          <div className="mt-2 pt-2 border-t border-zinc-800/80 text-xs text-zinc-500">
-            Automated liquidity reserve for chunk settlements
+          <div className="mt-2 pt-2 border-t border-zinc-800/80 text-[11px] font-mono text-zinc-400" suppressHydrationWarning>
+            Circle USDC Escrowed: <span className="text-blue-300 font-semibold">{vaultUsdc.toFixed(2)} USDC</span>
           </div>
         </div>
       </div>
@@ -159,7 +179,7 @@ export function TokenBalanceCard({
         <div className="flex items-center gap-2">
           <ArrowRight className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
           <span>
-            To view balances in <strong className="text-zinc-200 font-semibold">Meteor Wallet</strong>: Assets &rarr; Add Custom Token &rarr; paste the contract IDs above.
+            <strong className="text-zinc-200 font-semibold">Circle Native USDC</strong> appears automatically in NEAR wallets without import. Import <code className="text-zinc-300 font-mono">{eureId}</code> only for custom testnet EURe.
           </span>
         </div>
         <div className="flex items-center gap-3 font-mono text-[11px]">
