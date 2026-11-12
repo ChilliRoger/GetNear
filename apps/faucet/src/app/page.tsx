@@ -666,6 +666,24 @@ export default function FaucetHome() {
                         </a>
                       </div>
                     </div>
+
+                    {/* Canonical Circle Native NEAR Testnet USDC reference */}
+                    <div className="sm:col-span-2 p-3 bg-[#0c0e13] border border-[#222634] rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px]">
+                      <div>
+                        <span className="font-semibold text-zinc-200">Canonical Circle NEAR Testnet USDC</span>
+                        <p className="text-zinc-500 font-mono text-[10px] mt-0.5 break-all">
+                          3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af (auto-indexed in wallets)
+                        </p>
+                      </div>
+                      <a
+                        href="https://faucet.circle.com/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#00ec97] hover:underline inline-flex items-center gap-1 font-mono shrink-0"
+                      >
+                        faucet.circle.com <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    </div>
                   </div>
                 )}
               </div>

@@ -18,7 +18,7 @@ export const OPERATOR_ID = process.env.OPERATOR_ACCOUNT_ID || 'chilliroger-opera
 export const USDC_CONTRACT_ID = process.env.USDC_CONTRACT_ID || `usdc.${OPERATOR_ID}`
 export const EURE_CONTRACT_ID = process.env.EURE_CONTRACT_ID || `eure.${OPERATOR_ID}`
 export const NETWORK_ID = process.env.NEAR_NETWORK_ID || 'testnet'
-export const RPC_URL = process.env.NEAR_RPC_URL || 'https://rpc.testnet.near.org'
+export const RPC_URL = process.env.NEAR_RPC_URL || 'https://test.rpc.fastnear.com'
 
 // Security Guardrails
 export const DISPENSE_AMOUNT_PER_TOKEN = 500
