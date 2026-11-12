@@ -229,3 +229,17 @@ Reproduced live on NEAR testnet (`fx-budget.chilliroger-operator.testnet`) via `
 
 
 
+
+
+---
+
+## 10. FxBudget V3 Hybrid Circle Native USDC Escrow & End-to-End Testnet Proof
+
+- **Canonical Input Token Configured (`FxBudget::migrate_v3`):**
+  - Token: Circle Native NEAR Testnet USDC (`3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af`, 6 decimals)
+  - Deploy & Migrate V3 Tx: [`AsvHD4dd3U9uALori1hVwd8ihBYunBjrqSRskgBwb7fo`](https://testnet.nearblocks.io/txns/AsvHD4dd3U9uALori1hVwd8ihBYunBjrqSRskgBwb7fo)
+  - NEP-145 Storage Registration (`0.00125 NEAR` on `3e2210e...` for `fx-budget.chilliroger-operator.testnet`): [`7pN4LKkQtZQftigvZ1edG2Pu7oZgvxPJyvGxS9QZehZ2`](https://testnet.nearblocks.io/txns/7pN4LKkQtZQftigvZ1edG2Pu7oZgvxPJyvGxS9QZehZ2)
+- **Live End-to-End Circle USDC Escrow Verification (`pnpm tsx scripts/near/verify-circle-usdc-escrow.ts` — Order #12 `INV-CIRCLE-15-1794481547`):**
+  - **Step 1 — Real Circle USDC Escrow Deposit (`ft_transfer_call`):** Sent `15.00` Circle USDC from `chilliroger-operator.testnet` (`20.00 -> 5.00 USDC`) into `fx-budget.chilliroger-operator.testnet` (`0.00 -> 15.00 USDC`), creating `Order #12` (`Active`, target `€8.00 EURe`, chunk cap `$10.00 USDC`): [`5NnWXU3krRhoezmRtWsbPm23zYmesuDSNwn91gqEvcdZ`](https://testnet.nearblocks.io/txns/5NnWXU3krRhoezmRtWsbPm23zYmesuDSNwn91gqEvcdZ)
+  - **Step 2 — Autonomous Chunk #1 Execution & EURe Delivery:** `AgentRunner.tick()` fetched live `1Click` (`0.8964`) & Frankfurter (`0.8987`, `-25 bps`), executed `order-12-seq-1` via restricted `FunctionCall` key, delivered `+€8.00 EURe` to `supplier-eu.chilliroger-operator.testnet` via `#[private] on_chunk_settled`, marked `Order #12` `Completed` with `5.00` Circle USDC remaining unspent in escrow, and saved SQLite fill (`CONFIRMED`, `is_simulated: false`): [`6QV6ZUsCEheaiYhYCXSG5RGEMugAupRift1psAthJphL`](https://testnet.nearblocks.io/txns/6QV6ZUsCEheaiYhYCXSG5RGEMugAupRift1psAthJphL)
+  - **Step 3 — Automatic Unspent Escrow Refund (`refund_unused_escrow`):** Returned the remaining `5.00` unspent Circle USDC back to `chilliroger-operator.testnet` via cross-contract `ft_transfer` + `#[private] on_escrow_refunded` (final operator balance: `10.00 USDC`; `fx-budget` vault: `10.00 USDC`): [`nyUHd7uwsfYBq9Nk7sivdHzCNHHatKfQRG9RryE4nU1`](https://testnet.nearblocks.io/txns/nyUHd7uwsfYBq9Nk7sivdHzCNHHatKfQRG9RryE4nU1)
