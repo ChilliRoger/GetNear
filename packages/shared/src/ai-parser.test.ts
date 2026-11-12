@@ -5,6 +5,7 @@ import {
   resolveAiProviderConfig,
   validateParsedOrderResponse,
   parseNaturalLanguageOrder,
+  parseOrderWithFailover,
   getAvailableProviders,
 } from './ai-parser'
 
@@ -189,6 +190,60 @@ describe('P11 Natural-Language Order Parser (@getnear/shared)', () => {
       }
     } finally {
       server.close()
+    }
+  })
+
+  test('falls back automatically across configured providers when primary fails', async () => {
+    let calls = 0
+    const mockFetch: typeof fetch = async (input) => {
+      calls += 1
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('cloud-api.near.ai')) {
+        return new Response(JSON.stringify({ error: { message: 'Invalid key' } }), { status: 401 })
+      }
+      return new Response(
+        JSON.stringify({
+          id: 'gemini-fallback-1',
+          model: 'gemini-2.5-flash',
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  status: 'ok',
+                  order: {
+                    pair: 'USDC/EURe',
+                    totalUsdc: 500,
+                    maxChunkUsdc: 100,
+                    deadlineHours: 24,
+                    deadlineIso: '2026-11-13T12:00:00.000Z',
+                    maxDevBps: null,
+                    recipient: null,
+                    targetEuRe: null,
+                    invoiceRef: null,
+                    fundingMode: null,
+                  },
+                }),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      )
+    }
+
+    const res = await parseOrderWithFailover({
+      prompt: 'Convert 500 USDC to EURe in 100 USDC chunks within 24 hours',
+      nowMs: Date.parse('2026-11-12T12:00:00Z'),
+      env: { NEAR_AI_API_KEY: 'sk-expired', GEMINI_API_KEY: 'AIza-valid' },
+      fetchImpl: mockFetch,
+    })
+
+    assert.equal(calls, 2)
+    assert.equal(res.ok, true)
+    if (res.ok) {
+      assert.equal(res.audit.provider, 'gemini')
+      assert.equal(res.audit.fallbackAttempts?.length, 1)
+      assert.equal(res.audit.fallbackAttempts?.[0].provider, 'nearai')
     }
   })
 })

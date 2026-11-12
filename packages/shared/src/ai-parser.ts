@@ -36,7 +36,7 @@ export const AI_PROVIDER_DEFAULTS: Record<
   groq: {
     label: 'GroqCloud (Free Tier)',
     baseUrl: 'https://api.groq.com/openai/v1',
-    defaultModel: 'llama-3.3-70b-versatile',
+    defaultModel: 'openai/gpt-oss-120b',
     supportsAttestation: false,
   },
 }
@@ -94,6 +94,7 @@ export interface ParseOrderAudit {
   model: string
   baseUrl: string
   latencyMs: number
+  fallbackAttempts?: Array<{ provider: AiProviderId; model: string; error: string }>
   usage?: {
     promptTokens?: number
     completionTokens?: number
@@ -234,10 +235,19 @@ export function buildOrderParserSystemPrompt(nowIso: string): string {
 }
 
 export function extractJsonFromModelText(rawText: string): unknown {
-  const trimmed = rawText.trim()
-  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  const candidate = fencedMatch ? fencedMatch[1].trim() : trimmed
-  return JSON.parse(candidate)
+  const withoutThink = rawText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+  const fencedMatch = withoutThink.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  const candidate = fencedMatch ? fencedMatch[1].trim() : withoutThink
+  try {
+    return JSON.parse(candidate)
+  } catch {
+    const firstBrace = candidate.indexOf('{')
+    const lastBrace = candidate.lastIndexOf('}')
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      return JSON.parse(candidate.slice(firstBrace, lastBrace + 1))
+    }
+    throw new Error('Invalid JSON in model output')
+  }
 }
 
 export function validateParsedOrderResponse(
@@ -375,7 +385,7 @@ export async function parseNaturalLanguageOrder(params: {
     body: JSON.stringify({
       model: config.model,
       temperature: 0,
-      max_tokens: 500,
+      max_tokens: 2048,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: buildOrderParserSystemPrompt(nowIso) },
@@ -464,5 +474,53 @@ export async function parseNaturalLanguageOrder(params: {
     order: validated.order,
     audit,
   }
+}
+
+export async function parseOrderWithFailover(params: {
+  prompt: string
+  env: Record<string, string | undefined>
+  requestedProvider?: AiProviderId
+  nowMs?: number
+  fetchImpl?: typeof fetch
+}): Promise<ParseOrderResult> {
+  const { prompt, env, requestedProvider, nowMs = Date.now(), fetchImpl = fetch } = params
+  const avail = getAvailableProviders(env)
+  const primary = resolveAiProviderConfig(env, requestedProvider)
+
+  const orderedProviders: AiProviderId[] = requestedProvider
+    ? [requestedProvider]
+    : ([primary.provider, 'nearai', 'gemini', 'groq'] as AiProviderId[]).filter(
+        (p, idx, arr) => arr.indexOf(p) === idx && avail[p],
+      )
+
+  if (orderedProviders.length === 0) {
+    throw new Error('No AI provider API key is configured.')
+  }
+
+  const fallbackAttempts: Array<{ provider: AiProviderId; model: string; error: string }> = []
+  let lastError: Error | null = null
+
+  for (const providerId of orderedProviders) {
+    const config = resolveAiProviderConfig(env, providerId)
+    if (!config.configured) continue
+    try {
+      const res = await parseNaturalLanguageOrder({
+        prompt,
+        config,
+        nowMs,
+        fetchImpl,
+      })
+      if (fallbackAttempts.length > 0 && res.audit) {
+        res.audit.fallbackAttempts = fallbackAttempts
+      }
+      return res
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      fallbackAttempts.push({ provider: providerId, model: config.model, error: msg })
+      lastError = err instanceof Error ? err : new Error(msg)
+    }
+  }
+
+  throw lastError || new Error('All configured AI providers failed.')
 }
 
