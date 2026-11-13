@@ -13,7 +13,7 @@
   "dependencies": {
     "@getnear/shared": "workspace:*",
     "@hono/node-server": "^1",
-    "better-sqlite3": "^11",
+    "better-sqlite3": "~12.9.0",
     "hono": "^4"
   },
   "devDependencies": {

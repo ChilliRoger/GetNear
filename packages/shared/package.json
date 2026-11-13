@@ -11,7 +11,7 @@
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/utils.test.ts && tsx src/config.test.ts && tsx src/quotes.test.ts && tsx src/ai-parser.test.ts"
+    "test": "tsx src/utils.test.ts && tsx src/config.test.ts && tsx src/quotes.test.ts && tsx src/ai-parser.test.ts && tsx src/chunk-sizing.test.ts && tsx src/invoice-status.test.ts"
   },
   "devDependencies": {
     "tsx": "^4.21.0",

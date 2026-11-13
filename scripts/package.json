@@ -1,0 +1,6 @@
+{
+  "name": "getnear-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Testnet helper scripts. Marked as an ES module scope so apps/agent (ESM) can import named exports from near-runner.ts on Node 22/24."
+}

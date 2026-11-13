@@ -19,9 +19,14 @@ async function main() {
   console.log('═'.repeat(60))
 
   const runner = new AgentRunner({ pollIntervalMs: POLL_INTERVAL })
-  const server = createAgentServer(runner, PORT)
+  const server = createAgentServer(runner, { port: PORT })
 
   server.start()
+  if (!process.env.AGENT_TRIGGER_TOKEN) {
+    console.warn('[Agent] AGENT_TRIGGER_TOKEN is not set: POST /trigger is disabled (read-only API on loopback).')
+  }
+  // The first tick re-verifies any unresolved submission attempts (including for closed orders)
+  // and reconciles on-chain history into SQLite before processing Active orders.
   runner.start()
 
   // Graceful shutdown

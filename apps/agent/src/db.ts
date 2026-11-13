@@ -1,7 +1,8 @@
 /**
  * GetNear Agent Runner — Local SQLite Persistence (P9+)
- * Stores fills, strategy decisions, and callback-verified settlement states.
- * Never marks unconfirmed or failed settlements as `is_simulated = false`.
+ * Stores fills, strategy decisions, durable submission attempts, and callback-verified settlement states.
+ * Never marks unconfirmed or failed settlements as `is_simulated = false`, and never lets a stale write
+ * downgrade a CONFIRMED fill.
  */
 
 import Database from 'better-sqlite3'
@@ -61,6 +62,27 @@ db.exec(`
     deviation_bps INTEGER
   );
   CREATE INDEX IF NOT EXISTS idx_decisions_order ON agent_decisions(order_id, timestamp);
+
+  -- Durable record of every execute_chunk submission, written BEFORE the transaction is broadcast.
+  CREATE TABLE IF NOT EXISTS agent_attempts (
+    idempotency_key TEXT PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    attempt_no INTEGER NOT NULL DEFAULT 1,
+    baseline_attempts INTEGER NOT NULL DEFAULT 0,
+    state TEXT NOT NULL,
+    amount_in TEXT NOT NULL,
+    settlement_out TEXT NOT NULL,
+    simulated_out TEXT NOT NULL,
+    quote_ref TEXT NOT NULL,
+    deviation_bps INTEGER NOT NULL,
+    recipient TEXT,
+    tx_hash TEXT,
+    explorer_url TEXT,
+    last_error TEXT,
+    created_ms INTEGER NOT NULL,
+    updated_ms INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_attempts_state ON agent_attempts(state);
 `)
 
 // Safe column migrations for existing SQLite databases
@@ -151,63 +173,33 @@ function resolveFillState(fill: AgentFill): {
   }
 }
 
+/**
+ * SQL fragments for the idempotency-key upsert. A CONFIRMED row is immutable: a stale or late write
+ * (e.g. a FAILED / IN_FLIGHT observation taken before the callback landed) can never downgrade the
+ * status or overwrite confirmed amounts. Receipt metadata can only be filled in where it is still NULL.
+ */
+const CONFIRMED = `agent_fills.settlement_status = 'CONFIRMED'`
+const keepConfirmed = (col: string) =>
+  `CASE WHEN ${CONFIRMED} THEN agent_fills.${col} ELSE excluded.${col} END`
+const fillMeta = (col: string) =>
+  `CASE WHEN ${CONFIRMED} THEN COALESCE(agent_fills.${col}, excluded.${col}) ELSE COALESCE(excluded.${col}, agent_fills.${col}) END`
+
+const INSERT_FILL_SQL = `
+  INSERT INTO agent_fills (
+    order_id, chunk_index, idempotency_key, amount_in, settlement_out, simulated_out,
+    recipient, quote_ref, deviation_bps, tx_hash, explorer_url,
+    ft_transfer_tx_hash, ft_transfer_url, settlement_status, failure_reason,
+    is_simulated, timestamp
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`
+
 export function recordFill(fill: AgentFill): void {
   const { status, isSimulatedInt } = resolveFillState(fill)
 
-  if (fill.idempotency_key) {
-    const stmt = db.prepare(`
-      INSERT INTO agent_fills (
-        order_id, chunk_index, idempotency_key, amount_in, settlement_out, simulated_out,
-        recipient, quote_ref, deviation_bps, tx_hash, explorer_url,
-        ft_transfer_tx_hash, ft_transfer_url, settlement_status, failure_reason,
-        is_simulated, timestamp
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(idempotency_key) DO UPDATE SET
-        settlement_out = excluded.settlement_out,
-        recipient = COALESCE(excluded.recipient, agent_fills.recipient),
-        tx_hash = COALESCE(excluded.tx_hash, agent_fills.tx_hash),
-        explorer_url = COALESCE(excluded.explorer_url, agent_fills.explorer_url),
-        ft_transfer_tx_hash = COALESCE(excluded.ft_transfer_tx_hash, agent_fills.ft_transfer_tx_hash),
-        ft_transfer_url = COALESCE(excluded.ft_transfer_url, agent_fills.ft_transfer_url),
-        settlement_status = excluded.settlement_status,
-        failure_reason = excluded.failure_reason,
-        is_simulated = excluded.is_simulated,
-        timestamp = excluded.timestamp
-    `)
-    stmt.run(
-      fill.order_id,
-      fill.chunk_index,
-      fill.idempotency_key,
-      fill.amount_in,
-      fill.settlement_out ?? null,
-      fill.simulated_out,
-      fill.recipient ?? null,
-      fill.quote_ref,
-      fill.deviation_bps,
-      fill.tx_hash || null,
-      fill.explorer_url || null,
-      fill.ft_transfer_tx_hash || null,
-      fill.ft_transfer_url || null,
-      status,
-      fill.failure_reason ?? null,
-      isSimulatedInt,
-      fill.timestamp,
-    )
-    return
-  }
-
-  const stmt = db.prepare(`
-    INSERT INTO agent_fills (
-      order_id, chunk_index, idempotency_key, amount_in, settlement_out, simulated_out,
-      recipient, quote_ref, deviation_bps, tx_hash, explorer_url,
-      ft_transfer_tx_hash, ft_transfer_url, settlement_status, failure_reason,
-      is_simulated, timestamp
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
-  stmt.run(
+  const params = [
     fill.order_id,
     fill.chunk_index,
-    null,
+    fill.idempotency_key ?? null,
     fill.amount_in,
     fill.settlement_out ?? null,
     fill.simulated_out,
@@ -222,7 +214,32 @@ export function recordFill(fill: AgentFill): void {
     fill.failure_reason ?? null,
     isSimulatedInt,
     fill.timestamp,
-  )
+  ]
+
+  if (fill.idempotency_key) {
+    db.prepare(`${INSERT_FILL_SQL}
+      ON CONFLICT(idempotency_key) DO UPDATE SET
+        order_id = ${keepConfirmed('order_id')},
+        chunk_index = ${keepConfirmed('chunk_index')},
+        amount_in = ${keepConfirmed('amount_in')},
+        settlement_out = ${keepConfirmed('settlement_out')},
+        simulated_out = ${keepConfirmed('simulated_out')},
+        quote_ref = ${keepConfirmed('quote_ref')},
+        deviation_bps = ${keepConfirmed('deviation_bps')},
+        recipient = ${fillMeta('recipient')},
+        tx_hash = ${fillMeta('tx_hash')},
+        explorer_url = ${fillMeta('explorer_url')},
+        ft_transfer_tx_hash = ${fillMeta('ft_transfer_tx_hash')},
+        ft_transfer_url = ${fillMeta('ft_transfer_url')},
+        settlement_status = ${keepConfirmed('settlement_status')},
+        failure_reason = ${keepConfirmed('failure_reason')},
+        is_simulated = ${keepConfirmed('is_simulated')},
+        timestamp = ${keepConfirmed('timestamp')}
+    `).run(...params)
+    return
+  }
+
+  db.prepare(INSERT_FILL_SQL).run(...params)
 }
 
 export function recordDecision(rec: AgentDecisionRecord): void {
@@ -251,6 +268,11 @@ export function getRecentFills(limit = 50): AgentFill[] {
   }))
 }
 
+export function getFillByKey(idempotencyKey: string): AgentFill | null {
+  const row = db.prepare(`SELECT * FROM agent_fills WHERE idempotency_key = ?`).get(idempotencyKey) as any
+  return row ? { ...row, is_simulated: Boolean(row.is_simulated) } : null
+}
+
 export function getRecentDecisions(limit = 100): AgentDecisionRecord[] {
   return db.prepare(`SELECT * FROM agent_decisions ORDER BY timestamp DESC, id DESC LIMIT ?`).all(limit) as AgentDecisionRecord[]
 }
@@ -264,3 +286,135 @@ export function getOrderFillsCount(orderId: number): number {
   return row?.cnt || 0
 }
 
+// ── Durable submission attempts ──────────────────────────────────────────────────────────────
+
+export type AttemptState =
+  | 'PREPARED' // written before broadcast; the transaction may or may not have been sent
+  | 'SUBMITTED' // near-cli returned a transaction identity; awaiting on-chain verification
+  | 'UNCERTAIN' // timeout / transport error: outcome unknown, the tx may still land
+  | 'CONFIRMED' // on-chain chunk record is Settled
+  | 'FAILED' // on-chain evidence the attempt failed (chunk Failed, or the tx was rejected); retry allowed
+  | 'NOT_SENT' // definitely never broadcast; retry allowed
+  | 'ABANDONED' // no chunk record and the landing window elapsed: can no longer land; retry allowed
+
+export const UNRESOLVED_ATTEMPT_STATES: readonly AttemptState[] = ['PREPARED', 'SUBMITTED', 'UNCERTAIN']
+
+export interface AgentAttempt {
+  idempotency_key: string
+  order_id: number
+  attempt_no: number
+  /** contract ChunkRecord.attempts observed before this submission (evidence baseline). */
+  baseline_attempts: number
+  state: AttemptState
+  amount_in: string
+  settlement_out: string
+  simulated_out: string
+  quote_ref: string
+  deviation_bps: number
+  recipient: string | null
+  tx_hash: string | null
+  explorer_url: string | null
+  last_error: string | null
+  created_ms: number
+  updated_ms: number
+}
+
+export type NewAttempt = Pick<
+  AgentAttempt,
+  'idempotency_key' | 'order_id' | 'amount_in' | 'settlement_out' | 'simulated_out' | 'quote_ref' | 'deviation_bps'
+> & { recipient?: string | null; baseline_attempts?: number }
+
+export function isUnresolved(state: AttemptState): boolean {
+  return UNRESOLVED_ATTEMPT_STATES.includes(state)
+}
+
+export function getAttempt(idempotencyKey: string): AgentAttempt | null {
+  return (
+    (db.prepare(`SELECT * FROM agent_attempts WHERE idempotency_key = ?`).get(idempotencyKey) as
+      | AgentAttempt
+      | undefined) ?? null
+  )
+}
+
+export function getUnresolvedAttempts(): AgentAttempt[] {
+  const placeholders = UNRESOLVED_ATTEMPT_STATES.map(() => '?').join(',')
+  return db
+    .prepare(`SELECT * FROM agent_attempts WHERE state IN (${placeholders}) ORDER BY created_ms ASC`)
+    .all(...UNRESOLVED_ATTEMPT_STATES) as AgentAttempt[]
+}
+
+/**
+ * Persist the attempt BEFORE broadcast. Refuses to start a new attempt for a key whose previous attempt
+ * is still unresolved: the caller must verify it on-chain (or wait) first.
+ */
+export function recordAttemptPrepared(a: NewAttempt, nowMs = Date.now()): AgentAttempt {
+  const existing = getAttempt(a.idempotency_key)
+  if (existing && isUnresolved(existing.state)) {
+    throw new Error(
+      `Attempt ${a.idempotency_key} is ${existing.state}; it must be verified on-chain before a new attempt is prepared`,
+    )
+  }
+  if (existing && existing.state === 'CONFIRMED') {
+    throw new Error(`Attempt ${a.idempotency_key} is already CONFIRMED; nothing to prepare`)
+  }
+  if (existing) {
+    db.prepare(
+      `UPDATE agent_attempts SET attempt_no = ?, baseline_attempts = ?, state = 'PREPARED', amount_in = ?, settlement_out = ?, simulated_out = ?,
+         quote_ref = ?, deviation_bps = ?, recipient = ?, tx_hash = NULL, explorer_url = NULL, last_error = NULL,
+         created_ms = ?, updated_ms = ? WHERE idempotency_key = ?`,
+    ).run(
+      existing.attempt_no + 1,
+      a.baseline_attempts ?? 0,
+      a.amount_in,
+      a.settlement_out,
+      a.simulated_out,
+      a.quote_ref,
+      a.deviation_bps,
+      a.recipient ?? null,
+      nowMs,
+      nowMs,
+      a.idempotency_key,
+    )
+  } else {
+    db.prepare(
+      `INSERT INTO agent_attempts (idempotency_key, order_id, attempt_no, baseline_attempts, state, amount_in, settlement_out,
+         simulated_out, quote_ref, deviation_bps, recipient, created_ms, updated_ms)
+       VALUES (?, ?, 1, ?, 'PREPARED', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      a.idempotency_key,
+      a.order_id,
+      a.baseline_attempts ?? 0,
+      a.amount_in,
+      a.settlement_out,
+      a.simulated_out,
+      a.quote_ref,
+      a.deviation_bps,
+      a.recipient ?? null,
+      nowMs,
+      nowMs,
+    )
+  }
+  return getAttempt(a.idempotency_key)!
+}
+
+export function updateAttempt(
+  idempotencyKey: string,
+  patch: { state?: AttemptState; tx_hash?: string | null; explorer_url?: string | null; last_error?: string | null },
+  nowMs = Date.now(),
+): void {
+  const cur = getAttempt(idempotencyKey)
+  if (!cur) return
+  // A CONFIRMED attempt is terminal and can never be reopened or downgraded by a stale observation.
+  if (cur.state === 'CONFIRMED' && patch.state && patch.state !== 'CONFIRMED') return
+  db.prepare(
+    `UPDATE agent_attempts SET state = ?, tx_hash = COALESCE(?, tx_hash), explorer_url = COALESCE(?, explorer_url),
+       last_error = ?, updated_ms = ? WHERE idempotency_key = ?`,
+  ).run(
+    patch.state ?? cur.state,
+    patch.tx_hash ?? null,
+    patch.explorer_url ?? null,
+    patch.last_error === undefined ? cur.last_error : patch.last_error,
+    nowMs,
+    idempotencyKey,
+  )
+}

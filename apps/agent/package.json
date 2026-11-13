@@ -6,13 +6,15 @@
   "main": "src/index.ts",
   "scripts": {
     "start": "tsx src/index.ts",
-    "test": "tsx tests/agent.test.ts"
+    "test": "tsx tests/agent.test.ts && tsx tests/recovery.test.ts && tsx tests/server.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@getnear/near-client": "workspace:*",
     "@getnear/shared": "workspace:*",
     "@hono/node-server": "^1.13.7",
-    "better-sqlite3": "^11.7.0",
+    "better-sqlite3": "~12.9.0",
     "hono": "^4.6.14"
   },
   "devDependencies": {
@@ -22,4 +24,3 @@
     "typescript": "^5.7.0"
   }
 }
-

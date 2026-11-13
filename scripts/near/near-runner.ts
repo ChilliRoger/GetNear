@@ -1,14 +1,26 @@
 /**
  * GetNear — Testnet Automation Runner for near-cli-rs
  * Provides non-interactive, typed execution of transactions on NEAR testnet.
+ *
+ * Every invocation is bounded by a timeout (NEAR_CLI_TIMEOUT_MS, default 120s) and failures are
+ * classified so callers can tell "definitely never broadcast" apart from "outcome unknown".
  */
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
-import { execFileSync, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
+
+const DEFAULT_TIMEOUT_MS = 120_000
+
+export function getCliTimeoutMs(): number {
+  const raw = Number(process.env.NEAR_CLI_TIMEOUT_MS)
+  return Number.isFinite(raw) && raw >= 1_000 ? raw : DEFAULT_TIMEOUT_MS
+}
 
 export function getNearBin(): string {
+  const custom = process.env.NEAR_CLI_PATH?.trim()
+  if (custom && fs.existsSync(custom)) return custom
   const binaryCandidates = [
     path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'node_modules', 'near-cli-rs', 'node_modules', '.bin_real', 'near.exe'),
     path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'node_modules', 'near-cli-rs', 'bin', 'near.exe'),
@@ -20,10 +32,21 @@ export function getNearBin(): string {
   return 'near'
 }
 
+/** NEAR account IDs only: blocks path traversal when an account ID is turned into a credential path. */
+const ACCOUNT_ID_RE = /^(?=.{2,64}$)(?:[a-z\d]+[-_])*[a-z\d]+(?:\.(?:[a-z\d]+[-_])*[a-z\d]+)*$/
+
+export function assertValidAccountId(accountId: string): string {
+  if (typeof accountId !== 'string' || !ACCOUNT_ID_RE.test(accountId)) {
+    throw new Error(`Invalid NEAR account ID: ${JSON.stringify(accountId)}`)
+  }
+  return accountId
+}
+
 export function getCredentialPath(accountId: string, overridePath?: string): string {
   if (overridePath && fs.existsSync(overridePath)) {
     return overridePath
   }
+  assertValidAccountId(accountId)
   const p = path.join(os.homedir(), '.near-credentials', 'testnet', `${accountId}.json`)
   if (!fs.existsSync(p)) {
     throw new Error(`Credentials file not found for ${accountId} at ${p}`)
@@ -32,6 +55,7 @@ export function getCredentialPath(accountId: string, overridePath?: string): str
 }
 
 export function findKeyCredentialPath(accountId: string, publicKey: string): string | undefined {
+  assertValidAccountId(accountId)
   const normalized = publicKey.replace(':', '_')
   const subPath = path.join(os.homedir(), '.near-credentials', 'testnet', accountId, `${normalized}.json`)
   if (fs.existsSync(subPath)) {
@@ -44,6 +68,36 @@ export interface TxResult {
   stdout: string
   txHash?: string
   explorerUrl?: string
+}
+
+/**
+ * How a failed CLI invocation should be interpreted by a caller that must not double-pay.
+ *  - not_sent:      the transaction was definitely never broadcast (spawn failure, missing credentials).
+ *  - landed_failed: the transaction executed and the contract/runtime rejected it (a chunk record may not exist).
+ *  - uncertain:     timeout, transport error or unknown output: the transaction MAY still land.
+ */
+export type NearCliFailureKind = 'not_sent' | 'landed_failed' | 'uncertain'
+
+export class NearCliError extends Error {
+  constructor(
+    message: string,
+    public readonly kind: NearCliFailureKind,
+    public readonly output: string,
+    public readonly txHash?: string,
+  ) {
+    super(message)
+    this.name = 'NearCliError'
+  }
+}
+
+export function classifyCliFailure(output: string, opts?: { timedOut?: boolean; spawnError?: string }): NearCliFailureKind {
+  if (opts?.timedOut) return 'uncertain'
+  if (opts?.spawnError) return 'not_sent'
+  if (/Credentials file not found|Invalid NEAR account ID/i.test(output)) return 'not_sent'
+  if (/Smart contract panicked|FunctionCallError|ExecutionError|ActionError|Execution error/i.test(output)) {
+    return 'landed_failed'
+  }
+  return 'uncertain'
 }
 
 export function extractTxInfo(output: string): { txHash?: string; explorerUrl?: string } {
@@ -73,6 +127,43 @@ export function extractTxInfo(output: string): { txHash?: string; explorerUrl?: 
   return {}
 }
 
+/** Run near-cli-rs with a bounded timeout and classified failures. */
+function runNear(argsList: string[], timeoutMs: number = getCliTimeoutMs()): TxResult {
+  const bin = getNearBin()
+  const res = spawnSync(bin, argsList, {
+    encoding: 'utf-8',
+    shell: false,
+    maxBuffer: 10 * 1024 * 1024,
+    timeout: timeoutMs,
+    killSignal: 'SIGKILL',
+  })
+
+  const output = `${res.stdout || ''}\n${res.stderr || ''}`
+  const { txHash, explorerUrl } = extractTxInfo(output)
+
+  const errCode = (res.error as NodeJS.ErrnoException | undefined)?.code
+  if (errCode === 'ETIMEDOUT' || (res.error && res.signal)) {
+    throw new NearCliError(
+      `ETIMEDOUT: near-cli did not finish within ${timeoutMs}ms; transaction outcome unknown`,
+      'uncertain',
+      output,
+      txHash,
+    )
+  }
+  if (res.error) {
+    throw new NearCliError(`Failed to spawn near-cli (${errCode ?? res.error.message})`, 'not_sent', output)
+  }
+  if (res.status !== 0) {
+    throw new NearCliError(
+      `Command failed with status ${res.status}:\n${output}`,
+      classifyCliFailure(output),
+      output,
+      txHash,
+    )
+  }
+  return { stdout: output, txHash, explorerUrl }
+}
+
 export function runCallFunction(params: {
   contractId: string
   methodName: string
@@ -81,44 +172,38 @@ export function runCallFunction(params: {
   gas: string
   signerId: string
   credentialPath?: string
+  timeoutMs?: number
 }): TxResult {
-  const bin = getNearBin()
-  const credPath = getCredentialPath(params.signerId, params.credentialPath)
-
-  const argsList = [
-    'contract',
-    'call-function',
-    'as-transaction',
-    params.contractId,
-    params.methodName,
-    'json-args',
-    JSON.stringify(params.args),
-    'prepaid-gas',
-    params.gas,
-    'attached-deposit',
-    params.deposit,
-    'sign-as',
-    params.signerId,
-    'network-config',
-    'testnet',
-    'sign-with-access-key-file',
-    credPath,
-    'send',
-  ]
-
-  const res = spawnSync(bin, argsList, {
-    encoding: 'utf-8',
-    shell: false,
-    maxBuffer: 10 * 1024 * 1024,
-  })
-
-  const output = `${res.stdout || ''}\n${res.stderr || ''}`
-  if (res.status !== 0) {
-    throw new Error(`Command failed with status ${res.status}:\n${output}`)
+  let credPath: string
+  try {
+    credPath = getCredentialPath(params.signerId, params.credentialPath)
+  } catch (err) {
+    throw new NearCliError(err instanceof Error ? err.message : String(err), 'not_sent', '')
   }
 
-  const { txHash, explorerUrl } = extractTxInfo(output)
-  return { stdout: output, txHash, explorerUrl }
+  return runNear(
+    [
+      'contract',
+      'call-function',
+      'as-transaction',
+      params.contractId,
+      params.methodName,
+      'json-args',
+      JSON.stringify(params.args),
+      'prepaid-gas',
+      params.gas,
+      'attached-deposit',
+      params.deposit,
+      'sign-as',
+      params.signerId,
+      'network-config',
+      'testnet',
+      'sign-with-access-key-file',
+      credPath,
+      'send',
+    ],
+    params.timeoutMs,
+  )
 }
 
 export function runDeployContract(params: {
@@ -130,7 +215,6 @@ export function runDeployContract(params: {
   initGas?: string
   signerId: string
 }): TxResult {
-  const bin = getNearBin()
   const credPath = getCredentialPath(params.signerId)
 
   const argsList: string[] = [
@@ -164,19 +248,7 @@ export function runDeployContract(params: {
     'send',
   )
 
-  const res = spawnSync(bin, argsList, {
-    encoding: 'utf-8',
-    shell: false,
-    maxBuffer: 10 * 1024 * 1024,
-  })
-
-  const output = `${res.stdout || ''}\n${res.stderr || ''}`
-  if (res.status !== 0) {
-    throw new Error(`Command failed with status ${res.status}:\n${output}`)
-  }
-
-  const { txHash, explorerUrl } = extractTxInfo(output)
-  return { stdout: output, txHash, explorerUrl }
+  return runNear(argsList)
 }
 
 export function runCreateSubaccount(params: {
@@ -184,10 +256,9 @@ export function runCreateSubaccount(params: {
   initialBalance: string
   signerId: string
 }): TxResult {
-  const bin = getNearBin()
   const credPath = getCredentialPath(params.signerId)
 
-  const argsList = [
+  return runNear([
     'account',
     'create-account',
     'fund-myself',
@@ -202,21 +273,7 @@ export function runCreateSubaccount(params: {
     'sign-with-access-key-file',
     credPath,
     'send',
-  ]
-
-  const res = spawnSync(bin, argsList, {
-    encoding: 'utf-8',
-    shell: false,
-    maxBuffer: 10 * 1024 * 1024,
-  })
-
-  const output = `${res.stdout || ''}\n${res.stderr || ''}`
-  if (res.status !== 0) {
-    throw new Error(`Command failed with status ${res.status}:\n${output}`)
-  }
-
-  const { txHash, explorerUrl } = extractTxInfo(output)
-  return { stdout: output, txHash, explorerUrl }
+  ])
 }
 
 export function runAddRestrictedKey(params: {
@@ -225,10 +282,9 @@ export function runAddRestrictedKey(params: {
   functionNames: string[]
   allowance: string
 }): TxResult {
-  const bin = getNearBin()
   const credPath = getCredentialPath(params.accountId)
 
-  const argsList = [
+  return runNear([
     'account',
     'add-key',
     params.accountId,
@@ -246,21 +302,7 @@ export function runAddRestrictedKey(params: {
     'sign-with-access-key-file',
     credPath,
     'send',
-  ]
-
-  const res = spawnSync(bin, argsList, {
-    encoding: 'utf-8',
-    shell: false,
-    maxBuffer: 10 * 1024 * 1024,
-  })
-
-  const output = `${res.stdout || ''}\n${res.stderr || ''}`
-  if (res.status !== 0) {
-    throw new Error(`Command failed with status ${res.status}:\n${output}`)
-  }
-
-  const { txHash, explorerUrl } = extractTxInfo(output)
-  return { stdout: output, txHash, explorerUrl }
+  ])
 }
 
 export function runTransferNear(params: {
@@ -268,10 +310,9 @@ export function runTransferNear(params: {
   amount: string
   signerId: string
 }): TxResult {
-  const bin = getNearBin()
   const credPath = getCredentialPath(params.signerId)
 
-  const argsList = [
+  return runNear([
     'tokens',
     params.signerId,
     'send-near',
@@ -282,19 +323,5 @@ export function runTransferNear(params: {
     'sign-with-access-key-file',
     credPath,
     'send',
-  ]
-
-  const res = spawnSync(bin, argsList, {
-    encoding: 'utf-8',
-    shell: false,
-    maxBuffer: 10 * 1024 * 1024,
-  })
-
-  const output = `${res.stdout || ''}\n${res.stderr || ''}`
-  if (res.status !== 0) {
-    throw new Error(`Command failed with status ${res.status}:\n${output}`)
-  }
-
-  const { txHash, explorerUrl } = extractTxInfo(output)
-  return { stdout: output, txHash, explorerUrl }
+  ])
 }
