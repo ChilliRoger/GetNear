@@ -1,5 +1,12 @@
 # GetNear — FxBudget Smart Contract Specification
 
+> **Build status.** This document describes the contract source in this checkout (`contracts/fx-budget/src/lib.rs`).
+> The contract currently deployed on testnet (`fx-budget.chilliroger-operator.testnet`) is the **previous build**.
+> The payout-bound change below (mandatory `target_out`, `set_order_payout_cap`) is a **code-only upgrade**: the
+> borsh state layout is unchanged, so **no state migration is required**, but it must be **redeployed** to take effect.
+> Until then, Orders #8, #11 and #12 are historical evidence of the previous build only
+> (`pnpm verify:readonly` reports whether the newer build is deployed).
+
 The `FxBudget` smart contract (`contracts/fx-budget`) is an on-chain governance, budget-limit, and callback-verified settlement contract for corporate treasury FX payables on NEAR Testnet. It is implemented in Rust using `near-sdk` v5.7.0.
 
 > [!IMPORTANT]
@@ -98,6 +105,7 @@ pub struct ChunkRecord {
   Authorizes the agent account ID and sets the NEP-141 token contract (`eure.chilliroger-operator.testnet`).
 - **`add_requester(account: AccountId)`** / **`remove_requester(account: AccountId)`**:
   Authorizes or revokes corporate treasury accounts allowed to create orders.
+- **`set_order_payout_cap(id, cap_out)`** *(owner only; new build)*: gives a **legacy** order (created with `target_out == 0`) an explicit cumulative payout ceiling. Requires: order exists, `target_out == 0`, status `Pending`/`Active`, `cap_out > 0`, `cap_out >= settled_out + pending_out`. Stored in raw storage under key `"P" + id` (outside the borsh state, so no migration). Until a cap is set, a legacy order **cannot make any payout**. Emits `order_payout_cap_set`.
 - **`set_limits(auto_cap_in, max_chunk_in, min_interval_ns, max_horizon_ns)`**:
   Updates governance execution parameters.
 - **`pause()`** / **`unpause()`**:
@@ -109,7 +117,7 @@ pub struct ChunkRecord {
   - **Caller**: Authorized requester (or owner).
   - **Pre-conditions**:
     - Contract is not paused, `total_in > 0`, `now < deadline_ns`, `deadline_ns - now <= max_horizon_ns`, `max_chunk_in <= global max_chunk_in`, open orders $< 16$.
-  - **Invoice Fields**: `recipient` defaults to requester if omitted; `target_out` (`0` = budget-only order) sets the EURe supplier amount owed; `invoice_ref` tags the payable.
+  - **Invoice Fields**: `recipient` defaults to requester if omitted; `target_out` is **required and must be > 0** (it is the order's on-chain payout bound; orders without one are rejected, and an escrow funding call without one is refunded by the token); `invoice_ref` tags the payable. Orders created by earlier builds with `target_out == 0` are *legacy* orders (see `set_order_payout_cap`).
   - **Status Assignment**: `total_in <= auto_cap_in` &rarr; `Active`; `total_in > auto_cap_in` &rarr; `Pending` (awaits Sputnik DAO 2-of-3 approval).
   - **Emits**: NEP-297 `order_created`.
 
@@ -136,6 +144,7 @@ pub struct ChunkRecord {
     - `amount_in <= order.max_chunk_in`, `order.executed_in + amount_in <= order.total_in`.
     - If `chunks_count > 0`, $\text{now} - \text{last\_chunk\_ns} \ge \text{min\_interval\_ns}$.
     - `deviation_bps >= -(order.max_dev_bps as i32)` (policy check on agent-reported deviation).
+    - **Payout bound**: `settled_out + settlement_out <= target_out` for invoice orders; for legacy orders (`target_out == 0`) `<= payout cap`, and a missing cap rejects the call. `settlement_out` is otherwise chosen by the agent: the contract does **not** relate it to `amount_in` or `simulated_out` (the agent sizes `amount_in`; see `packages/shared/src/chunk-sizing.ts`).
   - **Cross-Contract Effect**:
     - Locks `pending_in` / `pending_out` and records `ChunkRecord` as `InFlight`.
     - Calls `ext_ft::ft_transfer(recipient, settlement_out, memo)` on `settlement_token` (1 yoctoNEAR from contract balance), chained to `#[private] on_chunk_settled(id, key, amount_in, settlement_out)`.
@@ -152,6 +161,7 @@ pub struct ChunkRecord {
 
 - `get_order(id: u64) -> Option<Order>`
 - `list_orders(from_index: Option<u64>, limit: Option<u64>) -> Vec<Order>`
+- `get_order_payout_cap(id: u64) -> Option<U128>` *(new build)*
 - `get_invoice_summary(id: u64) -> Option<InvoiceSummaryView>` (exposes `target_out`, `settled_out`, `pending_out`, `remaining_due_out`)
 - `get_chunk_record(key: String) -> Option<ChunkRecord>`
 - `list_order_chunks(order_id: u64) -> Vec<ChunkRecord>`
@@ -189,7 +199,10 @@ EVENT_JSON:{"standard":"nep297","version":"1.0.0","event":"chunk_executed","data
    `pending_in` and `pending_out` plus `ChunkStatus::InFlight` prevent concurrent overlapping transfers on the same order or key, and balance due advances only inside `#[private] on_chunk_settled` on verified `PromiseResult` success.
 4. **Idempotent Retry Safety**:
    Deterministic `idempotency_key` records prevent paying a settled chunk twice, while allowing failed chunks (`ChunkStatus::Failed`) to retry once the failure cause (e.g. recipient storage registration) is fixed.
-5. **Bounded Storage & Governed Upgrades**:
+5. **Every payout has an on-chain ceiling** *(new build)*:
+   New orders must carry a `target_out`; legacy orders need an owner-set cap. A compromised or buggy agent key can therefore not move more EURe than the order's invoice target / cap, and cannot lift its own bound (`set_order_payout_cap` is owner-only). It can still choose *how much USDC* a chunk consumes within `max_chunk_in` and the order budget.
+6. **What the DAO and the agent key do NOT control**: see `docs/SECURITY.md` (the `fx-budget` account has a separate full-access deployment key; the agent account holds a separate full-access key).
+7. **Bounded Storage & Governed Upgrades**:
    Capped open orders ($16$ per requester) bound state growth; contract upgrades via `migrate` are gated by the contract's key/owner governance.
 
 ---
@@ -197,13 +210,27 @@ EVENT_JSON:{"standard":"nep297","version":"1.0.0","event":"chunk_executed","data
 ## 6. Build & Test Commands
 
 ```bash
-# Build release WebAssembly artifact
-cd contracts/fx-budget
-cargo build --target wasm32-unknown-unknown --release
+# Build the release WebAssembly artifact (needs the Rust toolchain + wasm32-unknown-unknown target)
+pnpm build:contract
 
-# Run comprehensive test suite
+# Tests that EXECUTE the contract logic: Rust unit tests with near-sdk's mock blockchain.
+# Covers payout bounds, escrow accounting (final chunk, refund, failed callback, refund rollback), idempotency, migration.
+cd contracts/fx-budget && cargo test --lib
+
+# WASM artifact inspection + TypeScript models (does NOT execute contract code):
 pnpm test:contract
+
+# Wallet-free read-only verification of the deployed testnet evidence:
+pnpm verify:readonly
 ```
+
+| Check | What it actually proves |
+| :--- | :--- |
+| `cargo test --lib` | contract logic behaves as specified in the mocked VM. **Written but not yet executed**: the `.github/workflows/ci.yml` job is the intended runner |
+| `pnpm test:contract` — WASM inspection | the `.wasm` file exports the expected method names; **not** that it was built from `lib.rs` |
+| `pnpm test:contract` — TypeScript models | documents intent only; never calls the contract |
+| `pnpm verify:readonly` — binary comparison | deployed bytes equal the bundled `res/fx_budget.wasm` |
+| `scripts/near/verify-*.ts` | live end-to-end drills (need local credentials; write-enabled) |
 
 ---
 

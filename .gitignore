@@ -22,7 +22,7 @@ contracts/broadcast/
 # Cargo / Rust build artifacts
 target/
 contracts/fx-budget/target/
-Cargo.lock
+# Cargo.lock is COMMITTED for contracts/fx-budget (reproducible, --locked builds)
 
 # Playwright
 test-results/

@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  node:
+    name: node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm install -g pnpm@12.18.0
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm --filter @getnear/app build
+
+  contract:
+    name: rust (unit tests + release wasm)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts/fx-budget
+    steps:
+      - uses: actions/checkout@v4
+      # Pinned to the same toolchain as contracts/fx-budget/rust-toolchain.toml.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
+          targets: wasm32-unknown-unknown
+      # Executes the contract logic: payout bounds, adjusted escrow debit, failed-callback accounting,
+      # refund rollback, idempotency, migration.
+      - run: cargo test --locked --lib
+      - run: cargo build --locked --target wasm32-unknown-unknown --release
+      - name: Report release wasm sha256
+        run: |
+          sha256sum target/wasm32-unknown-unknown/release/fx_budget.wasm | tee wasm.sha256
+          echo "Committed artifact hashes (res/artifacts.json):"
+          sha256sum res/*.wasm
+          echo "NOTE: rustc embeds registry/project paths, so a plain 'cargo build' hash can differ from the committed artifact."
+          echo "Use 'pnpm build:contract' (path-remapped) for a comparable hash."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fx_budget.wasm
+          path: |
+            contracts/fx-budget/target/wasm32-unknown-unknown/release/fx_budget.wasm
+            contracts/fx-budget/wasm.sha256

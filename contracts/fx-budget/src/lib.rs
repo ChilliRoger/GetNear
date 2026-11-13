@@ -17,6 +17,11 @@ pub const MAX_OPEN_ORDERS_PER_REQUESTER: u32 = 16; // Bound storage griefing
 pub const MAX_INVOICE_REF_LEN: usize = 64;
 pub const MAX_IDEMPOTENCY_KEY_LEN: usize = 128;
 
+/// Raw storage prefix for explicit per-order payout caps of LEGACY orders (target_out == 0).
+/// Kept outside the borsh contract state on purpose: adding it needs NO state migration.
+/// (SDK collections use prefixes r, O, c, k, l, e, f; "P" is unused.)
+pub const PAYOUT_CAP_KEY_PREFIX: &[u8] = b"P";
+
 pub const FT_TRANSFER_GAS: Gas = Gas::from_tgas(15);
 pub const CALLBACK_GAS: Gas = Gas::from_tgas(25);
 pub const REFUND_CALLBACK_GAS: Gas = Gas::from_tgas(15);
@@ -206,6 +211,27 @@ pub struct OldFxBudget {
     pub next_order_id: u64,
     pub orders: IterableMap<u64, OldOrder>,
     pub open_orders_count: LookupMap<AccountId, u32>,
+}
+
+// ---------------------------------------------------------------------------
+// Explicit payout caps for legacy orders (raw storage, no state-layout change)
+// ---------------------------------------------------------------------------
+
+fn payout_cap_key(id: u64) -> Vec<u8> {
+    let mut key = PAYOUT_CAP_KEY_PREFIX.to_vec();
+    key.extend_from_slice(&id.to_le_bytes());
+    key
+}
+
+fn read_payout_cap(id: u64) -> Option<u128> {
+    env::storage_read(&payout_cap_key(id)).map(|bytes| {
+        let arr: [u8; 16] = bytes.try_into().expect("Corrupt payout cap record");
+        u128::from_le_bytes(arr)
+    })
+}
+
+fn write_payout_cap(id: u64, cap: u128) {
+    env::storage_write(&payout_cap_key(id), &cap.to_le_bytes());
 }
 
 // ---------------------------------------------------------------------------
@@ -509,6 +535,34 @@ impl FxBudget {
         emit_event("unpaused", &UnpausedEvent { paused: false });
     }
 
+    /// Owner-only: give a LEGACY order (created before invoice targets were mandatory, target_out == 0)
+    /// an explicit cumulative payout ceiling. Until a cap is set such an order cannot make any payout.
+    pub fn set_order_payout_cap(&mut self, id: u64, cap_out: U128) {
+        self.assert_owner();
+        let order = self.orders.get(&id).expect("Order not found");
+        require!(
+            order.target_out.0 == 0,
+            "Order has an invoice target; a payout cap applies only to legacy orders with target_out == 0"
+        );
+        require!(
+            matches!(order.status, OrderStatus::Pending | OrderStatus::Active),
+            "Only Pending or Active orders can receive a payout cap"
+        );
+        require!(cap_out.0 > 0, "cap_out must be positive");
+        require!(
+            cap_out.0 >= order.settled_out.0.saturating_add(order.pending_out.0),
+            "cap_out is below the payout already committed"
+        );
+        write_payout_cap(id, cap_out.0);
+
+        #[derive(Serialize)]
+        struct PayoutCapSetEvent {
+            id: u64,
+            cap_out: U128,
+        }
+        emit_event("order_payout_cap_set", &PayoutCapSetEvent { id, cap_out });
+    }
+
     // -----------------------------------------------------------------------
     // Order Lifecycle Methods
     // -----------------------------------------------------------------------
@@ -538,6 +592,11 @@ impl FxBudget {
         let recipient_id = recipient.unwrap_or_else(|| requester.clone());
 
         require!(total_in.0 > 0, "total_in must be positive");
+        // Every payout must be bounded on-chain. New orders are bounded by their invoice target.
+        require!(
+            target_out_val > 0,
+            "target_out (invoice amount due) is required: payouts must be bounded on-chain"
+        );
         require!(deadline_ns > now, "deadline must be in the future");
         require!(
             deadline_ns - now <= self.max_horizon_ns,
@@ -898,15 +957,25 @@ impl FxBudget {
             .0;
         require!(out_amount > 0, "settlement_out must be positive");
 
+        // Every payout is bounded on-chain: by the invoice target, or - for legacy orders with
+        // target_out == 0 - by an explicit owner-set payout cap. Without either, no payout is possible.
+        let committed_out = order_snapshot
+            .settled_out
+            .0
+            .checked_add(out_amount)
+            .expect("settled_out overflow");
         if order_snapshot.target_out.0 > 0 {
-            let committed_out = order_snapshot
-                .settled_out
-                .0
-                .checked_add(out_amount)
-                .expect("settled_out overflow");
             require!(
                 committed_out <= order_snapshot.target_out.0,
                 "settlement_out exceeds remaining invoice balance due"
+            );
+        } else {
+            let cap = read_payout_cap(id).expect(
+                "Order has no invoice target and no explicit payout cap; owner must call set_order_payout_cap",
+            );
+            require!(
+                committed_out <= cap,
+                "settlement_out exceeds the order payout cap"
             );
         }
 
@@ -1286,6 +1355,10 @@ impl FxBudget {
         self.input_token.clone()
     }
 
+    pub fn get_order_payout_cap(&self, id: u64) -> Option<U128> {
+        read_payout_cap(id).map(U128)
+    }
+
     pub fn get_order_escrow(&self, id: u64) -> Option<EscrowStatusView> {
         self.orders.get(&id).map(|o| {
             let escrowed = self.escrowed_in_balances.get(&id).copied().unwrap_or(U128(0)).0;
@@ -1457,6 +1530,8 @@ mod tests {
             Some("inv1-chunk-1".to_string()),
         );
         assert!(matches!(res1, PromiseOrValue::Promise(_)));
+        // near-sdk 5 schedules a returned Promise when it is dropped (the host does this for a real call).
+        drop(res1);
         assert_eq!(get_created_receipts().len(), 2); // ft_transfer + on_chunk_settled callback
         // Before callback completes, settled_out must still be 0 and pending_out == 400!
         let pre_cb = contract.get_invoice_summary(order_id).unwrap();
@@ -1469,9 +1544,7 @@ mod tests {
             .block_timestamp(1_101_000_000_000);
         testing_env!(
             ctx.build(),
-            test_vm_config(),
-            Default::default(),
-            Default::default(),
+            test_vm_config(), near_sdk::RuntimeFeesConfig::test(), Default::default(),
             vec![PromiseResult::Successful(vec![])],
         );
         let settled_1 = contract.on_chunk_settled(
@@ -1520,9 +1593,7 @@ mod tests {
             .block_timestamp(1_121_000_000_000);
         testing_env!(
             ctx.build(),
-            test_vm_config(),
-            Default::default(),
-            Default::default(),
+            test_vm_config(), near_sdk::RuntimeFeesConfig::test(), Default::default(),
             vec![PromiseResult::Failed],
         );
         let failed_2 = contract.on_chunk_settled(
@@ -1560,9 +1631,7 @@ mod tests {
             .block_timestamp(1_141_000_000_000);
         testing_env!(
             ctx.build(),
-            test_vm_config(),
-            Default::default(),
-            Default::default(),
+            test_vm_config(), near_sdk::RuntimeFeesConfig::test(), Default::default(),
             vec![PromiseResult::Successful(vec![])],
         );
         let settled_2 = contract.on_chunk_settled(
@@ -1592,9 +1661,7 @@ mod tests {
             .block_timestamp(1_161_000_000_000);
         testing_env!(
             ctx.build(),
-            test_vm_config(),
-            Default::default(),
-            Default::default(),
+            test_vm_config(), near_sdk::RuntimeFeesConfig::test(), Default::default(),
             vec![PromiseResult::Successful(vec![])],
         );
         let settled_3 = contract.on_chunk_settled(
@@ -1671,5 +1738,381 @@ mod tests {
         let ord = migrated.get_order(7).expect("Legacy Order #7 must survive migration");
         assert_eq!(ord.executed_in.0, 40_000_000);
         assert_eq!(ord.recipient, requester);
+    }
+
+    // -----------------------------------------------------------------------
+    // Payout bounds, escrow accounting and migration (execute contract logic)
+    // -----------------------------------------------------------------------
+
+    fn ctx_for(predecessor: &AccountId, ts: u64) -> VMContextBuilder {
+        let mut ctx = VMContextBuilder::new();
+        ctx.predecessor_account_id(predecessor.clone())
+            .current_account_id(acct("fx-budget.testnet"))
+            .block_timestamp(ts);
+        ctx
+    }
+
+    /// Context for a private callback (predecessor == the contract itself).
+    fn callback_ctx() -> VMContextBuilder {
+        ctx_for(&acct("fx-budget.testnet"), 1_101_000_000_000)
+    }
+
+    /// Insert an Active legacy order (target_out == 0) directly, as migrated Orders #1-#7 look on testnet.
+    fn insert_legacy_order(contract: &mut FxBudget, id: u64, requester: &AccountId, recipient: &AccountId) {
+        contract.orders.insert(
+            id,
+            Order {
+                id,
+                requester: requester.clone(),
+                recipient: recipient.clone(),
+                invoice_ref: format!("ORDER-{}", id),
+                pair_label: "USDC/EURe".to_string(),
+                total_in: U128(100_000_000),
+                executed_in: U128(0),
+                pending_in: U128(0),
+                target_out: U128(0),
+                settled_out: U128(0),
+                pending_out: U128(0),
+                max_chunk_in: U128(50_000_000),
+                deadline_ns: 2_000_000_000_000,
+                max_dev_bps: 120,
+                status: OrderStatus::Active,
+                last_chunk_ns: 0,
+                chunks_count: 0,
+            },
+        );
+    }
+
+    fn escrow_msg(target_out: Option<&str>) -> String {
+        let target = target_out
+            .map(|t| format!(r#","target_out":"{}""#, t))
+            .unwrap_or_default();
+        format!(
+            r#"{{"pair_label":"USDC/EURe","deadline_ns":2000000000000,"max_chunk_in":"10000000","max_dev_bps":120,"recipient":"supplier.testnet","invoice_ref":"INV-12"{}}}"#,
+            target
+        )
+    }
+
+    #[test]
+    #[should_panic(expected = "target_out")]
+    fn new_orders_require_an_invoice_target() {
+        let (mut contract, _owner, _agent, requester, _supplier, _token) = init_invoice_contract();
+        testing_env!(ctx_for(&requester, 1_000_000_000_000).build());
+        contract.create_order(
+            "USDC/EURe".to_string(),
+            U128(50_000_000),
+            2_000_000_000_000,
+            U128(10_000_000),
+            120,
+            None,
+            None, // no invoice target -> no on-chain payout bound
+            None,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "payout cap")]
+    fn legacy_order_without_a_cap_cannot_pay_out() {
+        let (mut contract, _owner, agent, requester, supplier, _token) = init_invoice_contract();
+        insert_legacy_order(&mut contract, 7, &requester, &supplier);
+        testing_env!(ctx_for(&agent, 1_100_000_000_000).build());
+        contract.execute_chunk(
+            7,
+            U128(10_000_000),
+            "sha256:q".to_string(),
+            -10,
+            U128(8_000_000),
+            Some(U128(8_000_000)),
+            Some("legacy-1".to_string()),
+        );
+    }
+
+    #[test]
+    fn owner_cap_bounds_cumulative_legacy_payouts_and_the_agent_stays_restricted() {
+        let (mut contract, owner, agent, requester, supplier, _token) = init_invoice_contract();
+        insert_legacy_order(&mut contract, 7, &requester, &supplier);
+
+        // Only the owner (DAO) can set the cap.
+        testing_env!(ctx_for(&owner, 1_050_000_000_000).build());
+        contract.set_order_payout_cap(7, U128(10_000_000));
+        assert_eq!(contract.get_order_payout_cap(7), Some(U128(10_000_000)));
+
+        // Chunk 1: 8 EURe, within the cap -> settles.
+        testing_env!(ctx_for(&agent, 1_100_000_000_000).build());
+        let r1 = contract.execute_chunk(
+            7, U128(9_000_000), "sha256:q1".to_string(), -10, U128(8_000_000), Some(U128(8_000_000)), Some("legacy-1".to_string()),
+        );
+        assert!(matches!(r1, PromiseOrValue::Promise(_)));
+        testing_env!(callback_ctx().build(), test_vm_config(), near_sdk::RuntimeFeesConfig::test(), Default::default(), vec![PromiseResult::Successful(vec![])]);
+        let s1 = contract.on_chunk_settled(7, "legacy-1".to_string(), U128(9_000_000), U128(8_000_000));
+        assert_eq!(s1.settled_out_total.0, 8_000_000);
+
+        // Chunk 2: exactly the remaining 2 EURe of the cap -> allowed.
+        testing_env!(ctx_for(&agent, 1_120_000_000_000).build());
+        let r2 = contract.execute_chunk(
+            7, U128(2_000_000), "sha256:q2".to_string(), -10, U128(2_000_000), Some(U128(2_000_000)), Some("legacy-2".to_string()),
+        );
+        assert!(matches!(r2, PromiseOrValue::Promise(_)));
+        assert_eq!(contract.get_invoice_summary(7).unwrap().pending_out.0, 2_000_000);
+    }
+
+    #[test]
+    #[should_panic(expected = "payout cap")]
+    fn legacy_payout_above_the_cap_is_rejected() {
+        let (mut contract, owner, agent, requester, supplier, _token) = init_invoice_contract();
+        insert_legacy_order(&mut contract, 7, &requester, &supplier);
+        testing_env!(ctx_for(&owner, 1_050_000_000_000).build());
+        contract.set_order_payout_cap(7, U128(10_000_000));
+
+        testing_env!(ctx_for(&agent, 1_100_000_000_000).build());
+        contract.execute_chunk(
+            7, U128(9_000_000), "sha256:q1".to_string(), -10, U128(8_000_000), Some(U128(8_000_000)), Some("legacy-1".to_string()),
+        );
+        testing_env!(callback_ctx().build(), test_vm_config(), near_sdk::RuntimeFeesConfig::test(), Default::default(), vec![PromiseResult::Successful(vec![])]);
+        contract.on_chunk_settled(7, "legacy-1".to_string(), U128(9_000_000), U128(8_000_000));
+
+        // 8 + 3 = 11 EURe > cap of 10 EURe
+        testing_env!(ctx_for(&agent, 1_120_000_000_000).build());
+        contract.execute_chunk(
+            7, U128(3_000_000), "sha256:q2".to_string(), -10, U128(3_000_000), Some(U128(3_000_000)), Some("legacy-2".to_string()),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "owner")]
+    fn only_the_owner_can_set_a_payout_cap() {
+        let (mut contract, _owner, agent, requester, supplier, _token) = init_invoice_contract();
+        insert_legacy_order(&mut contract, 7, &requester, &supplier);
+        testing_env!(ctx_for(&agent, 1_050_000_000_000).build());
+        contract.set_order_payout_cap(7, U128(1_000_000_000)); // the agent must not be able to lift its own bound
+    }
+
+    #[test]
+    #[should_panic(expected = "invoice target")]
+    fn payout_caps_do_not_apply_to_orders_with_an_invoice_target() {
+        let (mut contract, owner, _agent, requester, supplier, _token) = init_invoice_contract();
+        testing_env!(ctx_for(&requester, 1_000_000_000_000).build());
+        let id = contract.create_order(
+            "USDC/EURe".to_string(), U128(50_000_000), 2_000_000_000_000, U128(10_000_000), 120,
+            Some(supplier), Some(U128(40_000_000)), Some("INV-1".to_string()),
+        );
+        testing_env!(ctx_for(&owner, 1_000_000_000_000).build());
+        contract.set_order_payout_cap(id, U128(1));
+    }
+
+    #[test]
+    #[should_panic(expected = "settlement_out exceeds remaining invoice balance due")]
+    fn invoice_target_still_bounds_payouts() {
+        let (mut contract, _owner, agent, requester, supplier, _token) = init_invoice_contract();
+        testing_env!(ctx_for(&requester, 1_000_000_000_000).build());
+        let id = contract.create_order(
+            "USDC/EURe".to_string(), U128(50_000_000), 2_000_000_000_000, U128(10_000_000), 120,
+            Some(supplier), Some(U128(8_000_000)), Some("INV-8".to_string()),
+        );
+        testing_env!(ctx_for(&agent, 1_100_000_000_000).build());
+        contract.execute_chunk(
+            id, U128(10_000_000), "sha256:q".to_string(), -10, U128(9_000_000), Some(U128(8_000_001)), Some("k1".to_string()),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "target_out")]
+    fn escrow_funding_without_a_target_is_rejected_so_the_token_refunds_the_sender() {
+        let (mut contract, owner, _agent, requester, _supplier, _token) = init_invoice_contract();
+        let circle = acct("usdc-circle.testnet");
+        testing_env!(ctx_for(&owner, 1_000_000_000_000).build());
+        contract.set_input_token(circle.clone());
+        testing_env!(ctx_for(&circle, 1_000_000_000_000).build());
+        contract.ft_on_transfer(requester, U128(15_000_000), escrow_msg(None));
+    }
+
+    #[test]
+    #[should_panic(expected = "Only configured input USDC")]
+    fn escrow_funding_from_another_token_is_rejected() {
+        let (mut contract, owner, _agent, requester, _supplier, _token) = init_invoice_contract();
+        testing_env!(ctx_for(&owner, 1_000_000_000_000).build());
+        contract.set_input_token(acct("usdc-circle.testnet"));
+        testing_env!(ctx_for(&acct("evil-token.testnet"), 1_000_000_000_000).build());
+        contract.ft_on_transfer(requester, U128(15_000_000), escrow_msg(Some("8000000")));
+    }
+
+    /// Fund an escrowed order exactly like Order #12: $15 escrow, EUR 8.00 invoice, $10 max chunk.
+    fn fund_order12_escrow(contract: &mut FxBudget, owner: &AccountId, requester: &AccountId) -> u64 {
+        let circle = acct("usdc-circle.testnet");
+        testing_env!(ctx_for(owner, 1_000_000_000_000).build());
+        contract.set_input_token(circle.clone());
+        testing_env!(ctx_for(&circle, 1_000_000_000_000).build());
+        let res = contract.ft_on_transfer(requester.clone(), U128(15_000_000), escrow_msg(Some("8000000")));
+        match res {
+            PromiseOrValue::Value(unused) => assert_eq!(unused.0, 0, "all funds are accepted as escrow"),
+            _ => panic!("ft_on_transfer must resolve immediately"),
+        }
+        let esc = contract.get_order_escrow(1).unwrap();
+        assert_eq!(esc.escrowed_in.0, 15_000_000);
+        assert_eq!(contract.get_invoice_summary(1).unwrap().status, OrderStatus::Active);
+        1
+    }
+
+    #[test]
+    fn final_chunk_consumes_only_the_adjusted_input_and_the_rest_is_refundable() {
+        let (mut contract, owner, agent, requester, _supplier, _token) = init_invoice_contract();
+        let id = fund_order12_escrow(&mut contract, &owner, &requester);
+
+        // Final chunk sized by the agent: ceil(8e6 x 10e6 / 8.9645e6) = 8,924,090 USDC for the EUR 8.00 still due.
+        testing_env!(ctx_for(&agent, 1_100_000_000_000).build());
+        let r = contract.execute_chunk(
+            id, U128(8_924_090), "sha256:order12".to_string(), -25, U128(8_000_000), Some(U128(8_000_000)), Some("order-1-seq-1".to_string()),
+        );
+        assert!(matches!(r, PromiseOrValue::Promise(_)));
+
+        testing_env!(callback_ctx().build(), test_vm_config(), near_sdk::RuntimeFeesConfig::test(), Default::default(), vec![PromiseResult::Successful(vec![])]);
+        let settled = contract.on_chunk_settled(id, "order-1-seq-1".to_string(), U128(8_924_090), U128(8_000_000));
+        assert_eq!(settled.status, ChunkStatus::Settled);
+        assert_eq!(settled.remaining_due_out.0, 0);
+        assert_eq!(settled.order_status, OrderStatus::Completed);
+
+        // Only the adjusted input is consumed; the remainder of the $15 escrow is refundable.
+        let esc = contract.get_order_escrow(id).unwrap();
+        assert_eq!(esc.executed_in.0, 8_924_090);
+        assert_eq!(esc.remaining_escrow_in.0, 15_000_000 - 8_924_090); // 6,075,910
+
+        testing_env!(ctx_for(&requester, 1_200_000_000_000).build());
+        let refund = contract.refund_unused_escrow(id);
+        assert!(matches!(refund, PromiseOrValue::Promise(_)));
+        drop(refund); // schedule the promise (see note above)
+        assert_eq!(get_created_receipts().len(), 2); // ft_transfer + on_escrow_refunded
+        let esc = contract.get_order_escrow(id).unwrap();
+        assert_eq!(esc.refunded_in.0, 6_075_910);
+        assert_eq!(esc.remaining_escrow_in.0, 0);
+
+        // A second claim cannot pay twice (fresh mocked environment so only NEW receipts are counted).
+        testing_env!(ctx_for(&requester, 1_210_000_000_000).build());
+        let again = contract.refund_unused_escrow(id);
+        assert!(matches!(again, PromiseOrValue::Value(_)));
+        assert_eq!(get_created_receipts().len(), 0);
+
+        // If the refund transfer FAILS, the reservation rolls back so the refund can be retried.
+        testing_env!(callback_ctx().build(), test_vm_config(), near_sdk::RuntimeFeesConfig::test(), Default::default(), vec![PromiseResult::Failed]);
+        contract.on_escrow_refunded(id, U128(6_075_910));
+        let esc = contract.get_order_escrow(id).unwrap();
+        assert_eq!(esc.refunded_in.0, 0);
+        assert_eq!(esc.remaining_escrow_in.0, 6_075_910);
+    }
+
+    #[test]
+    fn failed_callback_leaves_invoice_due_and_consumed_escrow_unchanged() {
+        let (mut contract, owner, agent, requester, _supplier, _token) = init_invoice_contract();
+        let id = fund_order12_escrow(&mut contract, &owner, &requester);
+
+        testing_env!(ctx_for(&agent, 1_100_000_000_000).build());
+        contract.execute_chunk(
+            id, U128(8_924_090), "sha256:order12".to_string(), -25, U128(8_000_000), Some(U128(8_000_000)), Some("order-1-seq-1".to_string()),
+        );
+        // While in flight nothing is consumed yet.
+        let inflight = contract.get_invoice_summary(id).unwrap();
+        assert_eq!(inflight.pending_in.0, 8_924_090);
+        assert_eq!(inflight.executed_in.0, 0);
+        assert_eq!(inflight.remaining_due_out.0, 8_000_000);
+
+        testing_env!(callback_ctx().build(), test_vm_config(), near_sdk::RuntimeFeesConfig::test(), Default::default(), vec![PromiseResult::Failed]);
+        let failed = contract.on_chunk_settled(id, "order-1-seq-1".to_string(), U128(8_924_090), U128(8_000_000));
+        assert_eq!(failed.status, ChunkStatus::Failed);
+
+        let after = contract.get_invoice_summary(id).unwrap();
+        assert_eq!(after.settled_out.0, 0, "invoice due unchanged");
+        assert_eq!(after.remaining_due_out.0, 8_000_000);
+        assert_eq!(after.executed_in.0, 0, "no escrow consumed");
+        assert_eq!(after.pending_in.0, 0);
+        assert_eq!(after.pending_out.0, 0);
+        assert_eq!(after.status, OrderStatus::Active);
+        assert_eq!(contract.get_order_escrow(id).unwrap().remaining_escrow_in.0, 15_000_000);
+        assert_eq!(contract.get_chunk_record("order-1-seq-1".to_string()).unwrap().status, ChunkStatus::Failed);
+    }
+
+    #[test]
+    #[should_panic(expected = "finalized")]
+    fn escrow_cannot_be_claimed_while_the_order_is_still_active() {
+        let (mut contract, owner, _agent, requester, _supplier, _token) = init_invoice_contract();
+        let id = fund_order12_escrow(&mut contract, &owner, &requester);
+        testing_env!(ctx_for(&requester, 1_100_000_000_000).build());
+        contract.refund_unused_escrow(id);
+    }
+
+    #[test]
+    fn migrate_v3_preserves_orders_and_sets_the_input_token() {
+        let owner = acct("dao.testnet");
+        let requester = acct("operator.testnet");
+        let agent = acct("agent.testnet");
+        let token = acct("eure.testnet");
+        let circle = acct("usdc-circle.testnet");
+
+        testing_env!(ctx_for(&acct("fx-budget.testnet"), 1_000_000_000_000).build());
+
+        let mut orders: IterableMap<u64, Order> = IterableMap::new(b"O");
+        insert_legacy_order_into(&mut orders, 8, &requester);
+        orders.flush();
+        let mut requesters = IterableSet::new(b"r");
+        requesters.insert(requester.clone());
+        requesters.flush();
+        let mut open_counts = LookupMap::new(b"c");
+        open_counts.insert(requester.clone(), 1u32);
+        open_counts.flush();
+        let mut chunk_records: LookupMap<String, ChunkRecord> = LookupMap::new(b"k");
+        chunk_records.flush();
+        let mut chunk_keys: LookupMap<u64, Vec<String>> = LookupMap::new(b"l");
+        chunk_keys.flush();
+
+        let v2 = V2FxBudget {
+            owner: owner.clone(),
+            agent: Some(agent.clone()),
+            settlement_token: Some(token.clone()),
+            requesters,
+            auto_cap_in: DEFAULT_AUTO_CAP_IN,
+            max_chunk_in: DEFAULT_MAX_CHUNK_IN,
+            min_interval_ns: DEFAULT_MIN_INTERVAL_NS,
+            max_horizon_ns: DEFAULT_MAX_HORIZON_NS,
+            paused: false,
+            next_order_id: 9,
+            orders,
+            open_orders_count: open_counts,
+            chunk_records,
+            order_chunk_keys: chunk_keys,
+        };
+        env::storage_write(b"STATE", &near_sdk::borsh::to_vec(&v2).unwrap());
+
+        let migrated = FxBudget::migrate_v3(circle.clone());
+        assert_eq!(migrated.get_owner(), owner);
+        assert_eq!(migrated.get_agent(), Some(agent));
+        assert_eq!(migrated.get_settlement_token(), Some(token));
+        assert_eq!(migrated.get_input_token(), Some(circle));
+        assert_eq!(migrated.get_order(8).expect("Order #8 must survive migrate_v3").id, 8);
+        assert!(migrated.is_requester(requester));
+        // Raw-storage payout caps live outside the borsh state, so no cap exists until the DAO sets one.
+        assert_eq!(migrated.get_order_payout_cap(8), None);
+    }
+
+    fn insert_legacy_order_into(orders: &mut IterableMap<u64, Order>, id: u64, requester: &AccountId) {
+        orders.insert(
+            id,
+            Order {
+                id,
+                requester: requester.clone(),
+                recipient: requester.clone(),
+                invoice_ref: format!("ORDER-{}", id),
+                pair_label: "USDC/EURe".to_string(),
+                total_in: U128(100_000_000),
+                executed_in: U128(0),
+                pending_in: U128(0),
+                target_out: U128(0),
+                settled_out: U128(0),
+                pending_out: U128(0),
+                max_chunk_in: U128(50_000_000),
+                deadline_ns: 2_000_000_000_000,
+                max_dev_bps: 120,
+                status: OrderStatus::Active,
+                last_chunk_ns: 0,
+                chunks_count: 0,
+            },
+        );
     }
 }

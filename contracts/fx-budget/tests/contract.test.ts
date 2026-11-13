@@ -1,8 +1,13 @@
 /**
- * Comprehensive Smart Contract & WASM Test Suite for FxBudget (P7)
+ * FxBudget WASM artifact inspection + TypeScript behaviour MODELS (P7).
  *
- * Verifies compiled WebAssembly exports and validates all state transitions,
- * access controls, limits, guards, and NEP-297 event shapes.
+ * WHAT THIS FILE IS (and is not):
+ *  - "WASM artifact inspection": reads a compiled .wasm and checks the exported method names. It does not
+ *    execute contract code and does not prove the binary was built from src/lib.rs.
+ *  - "TypeScript models": the later describe-blocks re-implement the intended rules in TypeScript and assert on
+ *    that re-implementation. They document intent; they NEVER call the contract. Do not cite them as proof.
+ *  - Tests that EXECUTE the contract logic are the Rust unit tests in src/lib.rs (`cargo test --lib`,
+ *    see docs/CONTRACT.md) and the live drills in scripts/near/verify-*.ts.
  */
 
 import * as fs from 'node:fs'
@@ -20,7 +25,10 @@ const TARGET_WASM = path.resolve(
 )
 const WASM_PATH = fs.existsSync(RES_WASM) ? RES_WASM : TARGET_WASM
 
-describe('FxBudget WASM Binary Verification', () => {
+/** Exports added by the payout-bound change. The bundled res/ artifact is the DEPLOYED (previous) build. */
+const NEW_BUILD_EXPORTS = ['set_order_payout_cap', 'get_order_payout_cap']
+
+describe('WASM artifact inspection (export names only; does not execute contract code)', () => {
   test('WASM artifact exists and is within NEAR size limits (< 4 MB)', () => {
     assert.ok(fs.existsSync(WASM_PATH), `WASM file not found at ${WASM_PATH}`)
     const stat = fs.statSync(WASM_PATH)
@@ -79,10 +87,22 @@ describe('FxBudget WASM Binary Verification', () => {
       )
     }
   })
+
+  test('freshly built WASM (pnpm build:contract) additionally exports the payout-cap methods', (t) => {
+    if (!fs.existsSync(TARGET_WASM)) {
+      t.skip('no local build at contracts/fx-budget/target/... (run `pnpm build:contract` to include this check)')
+      return
+    }
+    const mod = new WebAssembly.Module(fs.readFileSync(TARGET_WASM))
+    const exportNames = WebAssembly.Module.exports(mod).map((e) => e.name)
+    for (const method of NEW_BUILD_EXPORTS) {
+      assert.ok(exportNames.includes(method), `local build missing expected export: "${method}"`)
+    }
+  })
 })
 
-describe('FxBudget Contract State Machine & Logic Tests', () => {
-  // Types matching Rust contract
+describe('TypeScript MODEL of the intended rules (does NOT execute contract code)', () => {
+  // Local model types mirroring the Rust contract. These tests assert on this model only.
   type OrderStatus = 'Pending' | 'Active' | 'Completed' | 'Expired' | 'Cancelled'
 
   interface Order {

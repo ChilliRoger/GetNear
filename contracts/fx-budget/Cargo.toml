@@ -19,3 +19,7 @@ debug = false
 panic = "abort"
 overflow-checks = true
 strip = true
+
+[dev-dependencies]
+# Required for `cargo test` (mock blockchain). Not part of the deployed WASM.
+near-sdk = { version = "5.7.0", features = ["unit-testing"] }

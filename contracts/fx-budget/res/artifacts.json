@@ -1,0 +1,10 @@
+{
+  "artifacts": [
+    {
+      "file": "fx_budget.wasm",
+      "role": "PREVIOUS build, currently deployed on testnet (commit ca4eab1). Historical Orders #8, #11, #12 were produced by this build.",
+      "sha256": "41f7fed29a0e5906ab67669e2af8f4d81196ed3d54b9be2e6e3862b7055b55f5",
+      "bytes": 337585
+    }
+  ]
+}
