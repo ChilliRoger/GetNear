@@ -3,8 +3,17 @@ import { spawnSync } from 'node:child_process'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
+import { authorizeSignerRequest, checkDemoAccess, getDemoContext } from '../../../../lib/demo-guard'
 
 export const dynamic = 'force-dynamic'
+
+/**
+ * Optional server-side DEMO signer (team roles only). Disabled by default.
+ *
+ * Enable with GETNEAR_DEMO_SIGNER=1 + GETNEAR_DEMO_TOKEN. Requests must carry `Authorization: Bearer <token>`,
+ * come from the same origin, and match an exact allow-listed (signer, contract, method, deposit) combination.
+ * Ordinary users sign with their own wallet; this route is never reachable without explicit opt-in.
+ */
 
 function getNearBin(): string {
   const custom = process.env.NEAR_CLI_PATH
@@ -25,6 +34,7 @@ function getNearBin(): string {
 }
 
 function getCredentialPath(accountId: string): string {
+  // accountId has already been matched against the allow-listed demo roles (no path separators possible).
   const p = path.join(os.homedir(), '.near-credentials', 'testnet', `${accountId}.json`)
   if (!fs.existsSync(p)) {
     throw new Error(`Credentials file not found for ${accountId} at ${p}`)
@@ -59,47 +69,45 @@ function extractTxInfo(output: string): { txHash?: string; explorerUrl?: string 
 }
 
 export async function POST(req: NextRequest) {
+  // 1. Opt-in, content-type, same-origin and bearer-token checks happen BEFORE the body is parsed.
+  const access = checkDemoAccess(req)
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error, success: false }, { status: access.status })
+  }
+
   try {
-    const body = await req.json()
-    const { contractId, methodName, args, signerId, deposit, gas } = body
-
-    if (!contractId || !methodName || !signerId) {
-      return NextResponse.json(
-        { error: 'Missing required parameters: contractId, methodName, or signerId' },
-        { status: 400 },
-      )
+    let body: unknown
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body', success: false }, { status: 400 })
     }
 
-    // Pre-flight check for Sputnik DAO proposal voting permissions
-    if (contractId.includes('sputnik') && methodName === 'act_proposal' && !signerId.includes('council')) {
-      return NextResponse.json(
-        {
-          error: `Permission Denied: Account "${signerId}" is not a Council member. Only Council members (chilliroger-council1.testnet, chilliroger-council2.testnet, chilliroger-council3.testnet) have voting permissions on this DAO.`,
-          success: false,
-        },
-        { status: 403 },
-      )
+    // 2. Exact allow-list of (signer, contract, method, deposit) combinations.
+    const auth = authorizeSignerRequest((body ?? {}) as Record<string, unknown>, getDemoContext())
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error, success: false }, { status: auth.status })
     }
 
-    console.log(`[API /near/tx] Calling ${signerId} -> ${contractId}.${methodName}()`)
+    console.log(`[API /near/tx] Demo signer: ${auth.signerId} -> ${auth.contractId}.${auth.methodName}()`)
 
     const bin = getNearBin()
-    const credPath = getCredentialPath(signerId)
+    const credPath = getCredentialPath(auth.signerId)
 
     const argsList = [
       'contract',
       'call-function',
       'as-transaction',
-      contractId,
-      methodName,
+      auth.contractId,
+      auth.methodName,
       'json-args',
-      JSON.stringify(args || {}),
+      JSON.stringify(auth.args),
       'prepaid-gas',
-      gas || '100.0 Tgas',
+      auth.gas,
       'attached-deposit',
-      deposit || '0 NEAR',
+      auth.deposit,
       'sign-as',
-      signerId,
+      auth.signerId,
       'network-config',
       'testnet',
       'sign-with-access-key-file',
@@ -111,10 +119,11 @@ export async function POST(req: NextRequest) {
       encoding: 'utf-8',
       shell: false,
       maxBuffer: 10 * 1024 * 1024,
+      timeout: 120_000,
     })
 
     const combinedOutput = `${res.stdout || ''}\n${res.stderr || ''}`
-    if (res.status !== 0) {
+    if (res.error || res.status !== 0) {
       throw new Error(`NEAR CLI command failed (exit code ${res.status}):\n${combinedOutput}`)
     }
 
@@ -123,8 +132,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       txHash: txHash || 'tx_pending',
-      explorerUrl: explorerUrl || `https://testnet.nearblocks.io/address/${contractId}`,
-      stdout: combinedOutput,
+      explorerUrl: explorerUrl || `https://testnet.nearblocks.io/address/${auth.contractId}`,
     })
   } catch (err: unknown) {
     let errMsg = err instanceof Error ? err.message : String(err)

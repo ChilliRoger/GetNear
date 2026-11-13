@@ -21,6 +21,7 @@ export function WalletConnectButton() {
     connectionType,
     walletName,
     availableAccounts,
+    demoSignerEnabled,
     openWalletModal,
     connectRole,
     disconnect,
@@ -91,6 +92,7 @@ export function WalletConnectButton() {
                 <Wallet className="h-3 w-3" />
                 <span>Crypto Wallets</span>
               </button>
+              {demoSignerEnabled && (
               <button
                 type="button"
                 onClick={() => setActiveTab("roles")}
@@ -103,6 +105,7 @@ export function WalletConnectButton() {
                 <Shield className="h-3 w-3" />
                 <span>Testnet Roles</span>
               </button>
+              )}
             </div>
 
             {/* TAB 1: CRYPTO WALLETS (UNIVERSAL WALLET SELECTOR) */}
@@ -144,7 +147,7 @@ export function WalletConnectButton() {
             )}
 
             {/* TAB 2: PRE-FUNDED TESTNET ROLES */}
-            {activeTab === "roles" && (
+            {demoSignerEnabled && activeTab === "roles" && (
               <div className="space-y-2">
                 <div className="text-[11px] text-zinc-300 mb-1">
                   Connect as an authorized testnet account for multisig evaluation:

@@ -108,6 +108,11 @@ export default function TradePage() {
         targetEureNum > 0 ? BigInt(Math.round(targetEureNum * 1e6)).toString() : undefined;
       const trimmedInvoiceRef = invoiceRef.trim();
 
+      if (!targetOutAtomic) {
+        showToast("Invoice target required: enter the EURe amount due. On-chain payouts are bounded by it.", "error");
+        return;
+      }
+
       if (fundWithCircleEscrow && numAmount > userCircleUsdc) {
         showToast(
           `Connected wallet has ${userCircleUsdc.toFixed(2)} Circle USDC. Lower amount or uncheck Circle USDC Escrow.`,

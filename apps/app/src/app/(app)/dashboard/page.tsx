@@ -7,8 +7,8 @@ import { TokenBalanceCard } from "@/components/token-balance-card";
 import { AiOrderIntake } from "@/components/ai-order-intake";
 import { useToast } from "@/components/toast-provider";
 import type { ParsedOrderData } from "@getnear/shared";
-import { useNearWallet } from "@/lib/near-wallet";
-import { explorerAccountUrl } from "@getnear/shared";
+import { useNearWallet, demoAuthHeaders } from "@/lib/near-wallet";
+import { explorerAccountUrl, deriveInvoiceDisplay, formatEure } from "@getnear/shared";
 import {
   Shield,
   ExternalLink,
@@ -161,6 +161,7 @@ export default function DashboardPage() {
   const [invoiceRef, setInvoiceRef] = useState("");
   const [fundWithCircleEscrow, setFundWithCircleEscrow] = useState(true);
   const [refundingOrderId, setRefundingOrderId] = useState<number | null>(null);
+  const [requesterAuthorized, setRequesterAuthorized] = useState<boolean | null>(null);
 
   const autoCapUsdc = Number(limits.auto_cap_in || "100000000") / 1e6;
   const maxChunkLimitUsdc = Number(limits.max_chunk_in || "20000000") / 1e6;
@@ -175,6 +176,9 @@ export default function DashboardPage() {
         const data = await res.json();
         if (data.tokens) {
           setTokens(data.tokens);
+        }
+        if (data.requester) {
+          setRequesterAuthorized(data.requester.authorized);
         }
         if (data.contract?.orders) {
           setOrders(data.contract.orders);
@@ -242,6 +246,21 @@ export default function DashboardPage() {
       const targetOutAtomic =
         targetEureNum > 0 ? BigInt(Math.round(targetEureNum * 1e6)).toString() : undefined;
       const trimmedInvoiceRef = invoiceRef.trim();
+
+      if (!targetOutAtomic) {
+        showToast(
+          "Invoice target required: enter the EURe amount due. On-chain payouts are bounded by it.",
+          "error",
+        );
+        return;
+      }
+      if (requesterAuthorized === false) {
+        showToast(
+          `${accountId} is not an authorized requester on ${contractId}. The DAO must add_requester first, otherwise the escrow is refunded and no order is created.`,
+          "error",
+        );
+        return;
+      }
 
       if (fundWithCircleEscrow && amtNum > tokens.userUsdc) {
         showToast(
@@ -410,7 +429,10 @@ export default function DashboardPage() {
   const handleTriggerAgent = async () => {
     setTriggeringAgent(true);
     try {
-      const res = await fetch("/api/agent/trigger", { method: "POST" });
+      const res = await fetch("/api/agent/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...demoAuthHeaders() },
+      });
       const data = await res.json();
       if (res.ok && data.success) {
         showToast("Autonomous agent tick triggered successfully", "success");
@@ -528,6 +550,8 @@ export default function DashboardPage() {
                 setMaxChunk("10");
                 setMaxDevBps("120");
                 setDeadlineHours("4");
+                setTargetEure("8");
+                setInvoiceRef("INV-DEMO-8");
                 setFundWithCircleEscrow(true);
                 showToast("Preset loaded: $15 Circle USDC Escrow (Auto-Active). Click Submit Order below when ready.", "info");
               }}
@@ -538,7 +562,7 @@ export default function DashboardPage() {
               }`}
             >
               <div className="font-semibold text-accent-green">Preset: $15 Circle USDC</div>
-              <div className="text-[10px] text-muted">Real ft_transfer_call Escrow</div>
+              <div className="text-[10px] text-muted">Real Circle USDC escrow · €8.00 invoice</div>
             </button>
             <button
               type="button"
@@ -547,6 +571,8 @@ export default function DashboardPage() {
                 setMaxChunk("20");
                 setMaxDevBps("120");
                 setDeadlineHours("4");
+                setTargetEure("200");
+                setInvoiceRef("INV-DEMO-200");
                 setFundWithCircleEscrow(false);
                 showToast("Preset loaded: $250 USDC Budget (Requires DAO Approval). Click Submit Order below when ready.", "info");
               }}
@@ -607,7 +633,7 @@ export default function DashboardPage() {
           {/* Supplier Invoice Settlement Fields */}
           <div className="rounded-lg border border-border bg-background/60 p-2.5 space-y-2">
             <div className="text-[11px] font-medium text-muted">
-              Optional Supplier Invoice Payable (EURe settled via on-chain callback)
+              Supplier invoice (required): EURe is paid from the prefunded demo vault and confirmed by the on-chain callback
             </div>
             <div className="grid grid-cols-3 gap-2 text-xs">
               <div className="col-span-2">
@@ -722,6 +748,18 @@ export default function DashboardPage() {
               const invoicePct = targetOutEur > 0 ? Math.min(100, Math.round((settledOutEur / targetOutEur) * 100)) : 0;
               const isPending = o.status === "Pending";
               const isActive = o.status === "Active";
+              const display = deriveInvoiceDisplay(o);
+              const isEscrowed = Number(escrowByOrder[o.id]?.escrowed_in || "0") > 0;
+              const badgeTone =
+                display.kind === "paid"
+                  ? "bg-green-500/15 text-green-400"
+                  : display.kind === "budget_exhausted" || display.kind === "closed_unpaid" || display.kind === "pending_approval"
+                  ? "bg-amber-500/15 text-amber-400"
+                  : isActive
+                  ? "bg-green-500/15 text-green-400"
+                  : isPending
+                  ? "bg-amber-500/15 text-amber-400"
+                  : "bg-zinc-800 text-zinc-400";
 
               return (
                 <div key={o.id} className="rounded-xl border border-border bg-background p-3 text-xs">
@@ -736,15 +774,10 @@ export default function DashboardPage() {
                       )}
                     </div>
                     <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
-                        isPending
-                          ? "bg-amber-500/15 text-amber-400"
-                          : isActive
-                          ? "bg-green-500/15 text-green-400"
-                          : "bg-zinc-800 text-zinc-400"
-                      }`}
+                      data-testid={`order-${o.id}-status`}
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${badgeTone}`}
                     >
-                      {o.status}
+                      {display.label}
                     </span>
                   </div>
 
@@ -832,14 +865,18 @@ export default function DashboardPage() {
                     );
                   })()}
 
-                  {/* Expired Deadline Unpaid Remainder Notice */}
-                  {o.status === "Expired" && (
+                  {/* Closed-but-unpaid notice: the amount due stays visible until it reaches zero */}
+                  {(o.status === "Expired" || o.status === "Cancelled" || o.status === "Completed") && (
                     <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-mono text-amber-300">
-                      {targetOutEur > 0 && remainingDueEur > 0
-                        ? `Deadline Expired - Unpaid Remainder: ${remainingDueEur.toFixed(2)} EURe due to ${o.recipient || o.requester}`
-                        : total > executed
+                      {display.showDue
+                        ? o.status === "Completed"
+                          ? `Budget exhausted - ${formatEure(display.dueAtomic)} still due to ${o.recipient || o.requester}. The USDC budget is used up; this invoice is NOT paid in full.`
+                          : `${o.status} - Unpaid remainder: ${formatEure(display.dueAtomic)} due to ${o.recipient || o.requester}`
+                        : o.status === "Expired" && total > executed
                         ? `Deadline Expired - Unspent Budget Remainder: ${(total - executed).toFixed(2)} USDC`
-                        : "Deadline Expired - Balance Closed"}
+                        : display.kind === "paid"
+                        ? "Paid - invoice amount due is zero"
+                        : null}
                     </div>
                   )}
 
@@ -864,7 +901,7 @@ export default function DashboardPage() {
                               <span className="text-zinc-300 truncate">{c.key}</span>
                               <div className="flex items-center gap-1.5 shrink-0">
                                 <span className="text-zinc-400">
-                                  {(Number(c.amount_in) / 1e6).toFixed(2)} USDC (sim) -&gt; {(Number(c.settlement_out) / 1e6).toFixed(2)} EURe
+                                  {(Number(c.amount_in) / 1e6).toFixed(2)} USDC{isEscrowed ? " (Circle escrow)" : " (accounting only)"} -&gt; {(Number(c.settlement_out) / 1e6).toFixed(2)} demo EURe
                                 </span>
                                 <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${badgeClass}`}>
                                   {label}
@@ -1219,32 +1256,39 @@ export default function DashboardPage() {
 
         {/* Fills list — combines local SQLite fill receipts with live on-chain ChunkRecords */}
         {(() => {
-          const onChainFallback: AgentFill[] = Object.values(chunksByOrder)
+          // The contract is the source of truth for status/amounts. SQLite only decorates a chunk with the
+          // transaction link of the execute_chunk call (when this machine's agent submitted it).
+          const localByKey = new Map<string, AgentFill>();
+          for (const f of fills) if (f.idempotency_key) localByKey.set(f.idempotency_key, f);
+          const chainFills: AgentFill[] = Object.values(chunksByOrder)
             .flat()
             .sort((a, b) => (b.initiated_ns || 0) - (a.initiated_ns || 0))
-            .map((c, idx) => ({
-              id: -(idx + 1),
-              order_id: c.order_id,
-              chunk_index: idx + 1,
-              idempotency_key: c.key,
-              amount_in: c.amount_in,
-              settlement_out: c.settlement_out,
-              simulated_out: c.simulated_out,
-              recipient: c.recipient,
-              quote_ref: c.quote_ref,
-              deviation_bps: c.deviation_bps,
-              tx_hash: null,
-              explorer_url: null,
-              ft_transfer_tx_hash: null,
-              ft_transfer_url: null,
-              settlement_status:
-                c.status === "Settled" ? "CONFIRMED" : c.status === "InFlight" ? "IN_FLIGHT" : "FAILED",
-              failure_reason: c.failure_reason ?? null,
-              is_simulated: c.status !== "Settled",
-              timestamp: Math.floor((c.settled_ns || c.initiated_ns || 0) / 1_000_000),
-            }));
+            .map((c, idx) => {
+              const local = localByKey.get(c.key);
+              return {
+                id: local?.id ?? -(idx + 1),
+                order_id: c.order_id,
+                chunk_index: local?.chunk_index ?? idx + 1,
+                idempotency_key: c.key,
+                amount_in: c.amount_in,
+                settlement_out: c.settlement_out,
+                simulated_out: c.simulated_out,
+                recipient: c.recipient,
+                quote_ref: c.quote_ref,
+                deviation_bps: c.deviation_bps,
+                tx_hash: local?.tx_hash ?? null,
+                explorer_url: local?.explorer_url ?? null,
+                ft_transfer_tx_hash: null,
+                ft_transfer_url: null,
+                settlement_status:
+                  c.status === "Settled" ? "CONFIRMED" : c.status === "InFlight" ? "IN_FLIGHT" : "FAILED",
+                failure_reason: c.failure_reason ?? null,
+                is_simulated: c.status !== "Settled",
+                timestamp: Math.floor((c.settled_ns || c.initiated_ns || 0) / 1_000_000),
+              };
+            });
 
-          const displayFills = fills.length > 0 ? fills : onChainFallback;
+          const displayFills = chainFills.length > 0 ? chainFills : fills;
 
           if (displayFills.length === 0) {
             return <div className="py-4 text-center text-xs text-muted">No fills executed yet.</div>;
@@ -1294,25 +1338,15 @@ export default function DashboardPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        {isConfirmed && f.ft_transfer_url && (
-                          <a
-                            href={f.ft_transfer_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex items-center gap-1 text-[11px] font-mono text-emerald-400 hover:underline"
-                          >
-                            <span>Transfer Receipt</span>
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        )}
                         {f.explorer_url && (
                           <a
                             href={f.explorer_url}
                             target="_blank"
                             rel="noreferrer"
+                            title="Parent execute_chunk transaction. Its receipt tree contains the EURe ft_transfer and the on_chunk_settled callback."
                             className="flex items-center gap-1 text-[11px] font-mono text-accent-blue hover:underline"
                           >
-                            <span>execute_chunk</span>
+                            <span>execute_chunk tx (parent · includes EURe transfer receipt)</span>
                             <ExternalLink className="h-3 w-3" />
                           </a>
                         )}
@@ -1322,25 +1356,25 @@ export default function DashboardPage() {
                     {/* Three explicitly separated provenance facts */}
                     <div className="grid grid-cols-1 gap-0.5 text-[10px] font-mono text-zinc-400 pl-2 border-l border-border">
                       <div>
-                        <span className="text-zinc-500">1. Live 1Click dry quote: </span>
+                        <span className="text-zinc-500">1. Live 1Click dry quote (indicative, not executed): </span>
                         <span className="text-zinc-300">{f.quote_ref}</span>
                         <span> ({f.deviation_bps} bps agent-reported)</span>
                       </div>
                       {Number(escrowByOrder[f.order_id]?.escrowed_in || "0") > 0 ? (
                         <div>
-                          <span className="text-zinc-500">2. Real Circle USDC escrow debit: </span>
-                          <span className="text-blue-300 font-semibold">{inAmt} USDC locked in FxBudget</span>
-                          <span> (Circle Native 3e2210e... on-chain transfer)</span>
+                          <span className="text-zinc-500">2. Circle testnet USDC escrow (real tokens, FX simulated): </span>
+                          <span className="text-blue-300 font-semibold">{inAmt} USDC {isConfirmed ? "consumed from" : "charged against"} escrow</span>
+                          <span> (Circle Native 3e2210e... held by FxBudget; unspent part is refundable)</span>
                         </div>
                       ) : (
                         <div>
-                          <span className="text-zinc-500">2. Simulated FX conversion: </span>
-                          <span className="text-amber-300">{inAmt} USDC input</span>
-                          <span> (indicative FX only, no on-chain USDC debit)</span>
+                          <span className="text-zinc-500">2. Simulated FX conversion (accounting only): </span>
+                          <span className="text-amber-300">{inAmt} USDC budget</span>
+                          <span> (no Circle USDC moved; FX is simulated)</span>
                         </div>
                       )}
                       <div>
-                        <span className="text-zinc-500">3. NEAR testnet token transfer: </span>
+                        <span className="text-zinc-500">3. Demo EURe paid from the prefunded vault{isConfirmed ? " (callback-confirmed)" : " (not confirmed)"}: </span>
                         <span className={isConfirmed ? "text-emerald-400 font-semibold" : "text-zinc-300"}>
                           {outAmt} demo EURe
                         </span>

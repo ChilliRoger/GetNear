@@ -26,6 +26,8 @@ export interface NearWalletContextValue {
   connectionType: WalletConnectionType | null;
   walletName: string | null;
   availableAccounts: string[];
+  /** True only when the team's server-side demo signer is explicitly enabled (NEXT_PUBLIC_DEMO_SIGNER=1). */
+  demoSignerEnabled: boolean;
   connectRole: (accountId: string) => Promise<void>;
   openWalletModal: () => void;
   connect: (accountId?: string) => Promise<void>;
@@ -46,6 +48,33 @@ const DEFAULT_ACCOUNTS = [
   "chilliroger-council2.testnet",
   "chilliroger-council3.testnet",
 ];
+
+/**
+ * Server-side "testnet role" signing (operator / council keys held by the Next.js server) is OFF by default.
+ * Ordinary users sign with their own wallet through the wallet selector.
+ * Enable for the team demo with NEXT_PUBLIC_DEMO_SIGNER=1 (client) + GETNEAR_DEMO_SIGNER=1 and
+ * GETNEAR_DEMO_TOKEN (server).
+ */
+const DEMO_SIGNER_ENABLED = process.env.NEXT_PUBLIC_DEMO_SIGNER === "1";
+const DEMO_TOKEN_STORAGE_KEY = "getnear_demo_token";
+
+/** The bearer token is never bundled: it is typed once per browser session and kept in sessionStorage. */
+function getDemoToken(): string {
+  let token = "";
+  try {
+    token = sessionStorage.getItem(DEMO_TOKEN_STORAGE_KEY) || "";
+  } catch {}
+  if (!token && typeof window !== "undefined") {
+    token = (window.prompt("Demo signer token (GETNEAR_DEMO_TOKEN)") || "").trim();
+    if (token) {
+      try {
+        sessionStorage.setItem(DEMO_TOKEN_STORAGE_KEY, token);
+      } catch {}
+    }
+  }
+  if (!token) throw new Error("Demo signer token required");
+  return token;
+}
 
 const STORAGE_ACCOUNT_KEY = "getnear_connected_account";
 const STORAGE_TYPE_KEY = "getnear_connection_type";
@@ -129,6 +158,7 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
           localStorage.setItem(STORAGE_TYPE_KEY, "wallet-selector");
           refreshBalance(activeAccount);
         } else if (
+          DEMO_SIGNER_ENABLED &&
           savedType === "testnet-role" &&
           savedAccount &&
           savedAccount !== "disconnected" &&
@@ -168,6 +198,10 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
 
   // Connect via testnet role (Operator / Council)
   const connectRole = async (targetAccount: string) => {
+    if (!DEMO_SIGNER_ENABLED) {
+      openWalletModal();
+      return;
+    }
     setIsConnecting(true);
     try {
       if (selector && selector.isSignedIn()) {
@@ -198,7 +232,7 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
 
   // Generic connect method
   const connect = async (accountOrTarget?: string) => {
-    if (accountOrTarget && DEFAULT_ACCOUNTS.includes(accountOrTarget)) {
+    if (DEMO_SIGNER_ENABLED && accountOrTarget && DEFAULT_ACCOUNTS.includes(accountOrTarget)) {
       await connectRole(accountOrTarget);
     } else {
       openWalletModal();
@@ -294,10 +328,13 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
       };
     }
 
-    // Route B: Pre-configured Testnet Role signed via local testnet keychain
+    // Route B (opt-in, team demo only): allow-listed testnet role signed by the local server keychain.
+    if (!DEMO_SIGNER_ENABLED) {
+      throw new Error("No wallet connected. Connect your own NEAR testnet wallet to sign.");
+    }
     const res = await fetch("/api/near/tx", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getDemoToken()}` },
       body: JSON.stringify({
         contractId: params.receiverId,
         methodName: params.methodName,
@@ -330,6 +367,7 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
         connectionType,
         walletName,
         availableAccounts: DEFAULT_ACCOUNTS,
+        demoSignerEnabled: DEMO_SIGNER_ENABLED,
         connectRole,
         openWalletModal,
         connect,
@@ -348,4 +386,9 @@ export function useNearWallet() {
     throw new Error("useNearWallet must be used within a NearWalletProvider");
   }
   return ctx;
+}
+
+/** Authorization header for the opt-in server-side demo routes (/api/faucet, /api/agent/trigger). */
+export function demoAuthHeaders(): Record<string, string> {
+  return { Authorization: `Bearer ${getDemoToken()}` };
 }

@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const userAccount = searchParams.get('account')?.trim()
 
-    const [ordersRes, limitsRes, isPausedRes, settlementTokenRes, inputTokenRes, proposalsRes, vaultEureRes, vaultUsdcRes, userUsdcRes, userDemoUsdcRes, userEureRes] = await Promise.allSettled([
+    const [ordersRes, limitsRes, isPausedRes, settlementTokenRes, inputTokenRes, proposalsRes, vaultEureRes, vaultUsdcRes, userUsdcRes, userDemoUsdcRes, userEureRes, isRequesterRes] = await Promise.allSettled([
       nearClient.callView(FX_BUDGET_ID, 'list_orders', { from_index: 0, limit: 50 }),
       nearClient.callView(FX_BUDGET_ID, 'get_limits', {}),
       nearClient.callView(FX_BUDGET_ID, 'is_paused', {}),
@@ -58,6 +58,7 @@ export async function GET(req: NextRequest) {
       userAccount ? nearClient.callView<string>(USDC_ID, 'ft_balance_of', { account_id: userAccount }) : Promise.resolve('0'),
       userAccount ? nearClient.callView<string>(FAUCET_USDC_ID, 'ft_balance_of', { account_id: userAccount }) : Promise.resolve('0'),
       userAccount ? nearClient.callView<string>(EURE_ID, 'ft_balance_of', { account_id: userAccount }) : Promise.resolve('0'),
+      userAccount ? nearClient.callView<boolean>(FX_BUDGET_ID, 'is_requester', { account: userAccount }) : Promise.resolve(null),
     ])
 
     const orders = (ordersRes.status === 'fulfilled' ? ordersRes.value : []) as Array<{
@@ -116,13 +117,17 @@ export async function GET(req: NextRequest) {
     const userDemoUsdc = userDemoUsdcRes.status === 'fulfilled' ? (Number(userDemoUsdcRes.value || '0') / 1e6) : 0
     const userEure = userEureRes.status === 'fulfilled' ? (Number(userEureRes.value || '0') / 1e6) : 0
 
+    // Only authorized requesters (or the DAO owner) can open orders: ft_on_transfer from anyone else is refunded.
+    const requesterAuthorized =
+      !userAccount || isRequesterRes.status !== 'fulfilled' ? null : Boolean(isRequesterRes.value)
+
     // Read agent fills and decisions (normalize SQLite 0/1 integer to boolean)
     let fills: Record<string, unknown>[] = []
     let decisions: Record<string, unknown>[] = []
     const db = getAgentDb()
     if (db) {
       try {
-        const rawFills = db.prepare('SELECT * FROM agent_fills ORDER BY id DESC LIMIT 20').all() as Record<string, unknown>[]
+        const rawFills = db.prepare('SELECT * FROM agent_fills ORDER BY id DESC LIMIT 100').all() as Record<string, unknown>[]
         fills = rawFills.map((f) => ({
           ...f,
           is_simulated: Boolean(f.is_simulated),
@@ -148,6 +153,7 @@ export async function GET(req: NextRequest) {
           'chilliroger-council3.testnet',
         ],
       },
+      requester: { account: userAccount ?? null, authorized: requesterAuthorized },
       tokens: {
         usdcId: USDC_ID,
         faucetUsdcId: FAUCET_USDC_ID,

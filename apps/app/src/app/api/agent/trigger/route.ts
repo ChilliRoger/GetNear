@@ -1,57 +1,47 @@
-import { NextResponse } from 'next/server'
-import { spawnSync } from 'node:child_process'
-import * as path from 'node:path'
+import { NextRequest, NextResponse } from 'next/server'
+import { checkDemoAccess } from '../../../../lib/demo-guard'
 
 export const dynamic = 'force-dynamic'
 
-export async function POST() {
-  try {
-    // 1. Try hitting the agent runner daemon on port 38175
-    try {
-      const res = await fetch('http://127.0.0.1:38175/trigger', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-      if (res.ok) {
-        const data = await res.json()
-        return NextResponse.json({ ...data, source: 'agent_daemon' })
-      }
-    } catch {
-      // Daemon not running on port 38175; fall back to CLI runner tick
-    }
+/**
+ * Dashboard proxy for the agent's manual trigger. It enforces the SAME access boundary as the agent
+ * itself (opt-in + bearer token + same origin) and forwards with the server-side AGENT_TRIGGER_TOKEN.
+ * There is no fallback that spawns a local process: if the agent daemon is not reachable the request fails.
+ */
+export async function POST(req: NextRequest) {
+  const access = checkDemoAccess(req)
+  if (!access.ok) {
+    return NextResponse.json({ success: false, error: access.error }, { status: access.status })
+  }
 
-    // 2. Trigger via sub-process runner tick
-    const rootDir = path.resolve(process.cwd(), '..', '..')
-
-    const child = spawnSync(
-      'npx',
-      [
-        'tsx',
-        '-e',
-        `import { AgentRunner } from './apps/agent/src/runner.ts'; const r = new AgentRunner(); r.tick().then(() => console.log('TICK_DONE'));`,
-      ],
-      {
-        cwd: rootDir,
-        encoding: 'utf-8',
-        shell: true,
-        timeout: 30000,
-      },
+  const agentToken = (process.env.AGENT_TRIGGER_TOKEN ?? '').trim()
+  if (!agentToken) {
+    return NextResponse.json(
+      { success: false, error: 'AGENT_TRIGGER_TOKEN is not configured for the dashboard server.' },
+      { status: 503 },
     )
+  }
 
-    const output = `${child.stdout || ''}\n${child.stderr || ''}`
-
-    return NextResponse.json({
-      success: true,
-      message: 'Autonomous agent tick executed successfully on NEAR testnet',
-      output: output.slice(-500),
-      source: 'standalone_runner_tick',
+  const agentUrl = (process.env.AGENT_TRIGGER_URL || 'http://127.0.0.1:38175').replace(/\/+$/, '')
+  try {
+    const res = await fetch(`${agentUrl}/trigger`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${agentToken}` },
+      signal: AbortSignal.timeout(60_000),
     })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      return NextResponse.json(
+        { success: false, error: (data as { error?: string }).error || `Agent returned HTTP ${res.status}` },
+        { status: res.status === 401 ? 502 : res.status },
+      )
+    }
+    return NextResponse.json({ ...data, source: 'agent_daemon' })
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err)
-    console.error('[/api/agent/trigger error]:', errMsg)
     return NextResponse.json(
-      { error: errMsg, success: false },
-      { status: 500 },
+      { success: false, error: `Agent daemon unreachable at ${agentUrl}: ${errMsg}. Start it with \`pnpm agent:start\`.` },
+      { status: 502 },
     )
   }
 }

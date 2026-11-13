@@ -1,5 +1,7 @@
 "use client";
 
+import { demoAuthHeaders } from "@/lib/near-wallet";
+
 import { useState } from "react";
 import { Card } from "@/components/card";
 import { useToast } from "@/components/toast-provider";
@@ -49,7 +51,7 @@ export function TokenBalanceCard({
     try {
       const res = await fetch("/api/faucet", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...demoAuthHeaders() },
         body: JSON.stringify({ accountId, amount: 500 }),
       });
       const data = await res.json();
