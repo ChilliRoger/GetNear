@@ -1,0 +1,12 @@
+{
+  "status": "pending",
+  "note": "NOT YET CAPTURED. Needs the upgraded FxBudget deployed on testnet and one signed escrowed-invoice run through the dashboard. Orders #8, #11 and #12 are evidence from the PREVIOUS build.",
+  "plan": {
+    "fundCircleUsdc": "15",
+    "maxChunkUsdc": "10",
+    "targetEure": "8",
+    "recipient": "supplier-eu.chilliroger-operator.testnet",
+    "invoiceRef": "INV-FINAL-CHUNK-8",
+    "why": "Same parameters as historical Order #12 so the two are directly comparable: the live quote for the planned $10 chunk (about 8.96 EURe) exceeds the EUR 8.00 still due, so the upgraded build must cap the payout at 8.00 EURe and charge only the recalculated input (about 8.92 USDC) instead of the full 10.00. Unused escrow (about 6.08 USDC) is then refunded."
+  }
+}

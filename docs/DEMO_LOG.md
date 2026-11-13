@@ -1,5 +1,14 @@
 # GetNear — Testnet Live Demo Log (Block P8)
 
+> **Evidence from the previous version.** Everything below was produced by the contract and agent at commit `ca4eab1`.
+> It is historical evidence, not proof of the behaviour of newer builds. In particular:
+> - **Order #12** charged the full `$10.00` chunk for an `€8.00` payout although the live quote implied about `$8.92`
+>   (`$1.075889` over-charge, kept by `FxBudget`). The agent now sizes the final chunk as
+>   `ceil(remainingOut × quotedIn / quotedOut)`; this is covered by local tests, not by testnet evidence until redeployed.
+> - **Order #11**'s chunk was **scripted** by the drill (`quote_ref = "sha256:partial-expiry-chunk-1"`, hard-coded `€8.70`), not an agent decision on a live quote.
+> - **Order #12**'s refund (`refund_unused_escrow`) was **triggered manually** by the operator account; the contract does not push refunds.
+> - Every explorer link below is the **parent transaction**; the EURe `ft_transfer` and `on_chunk_settled` receipts appear inside its receipt tree.
+
 This document records all deployed testnet accounts, contract transactions, Sputnik DAO governance votes, and state transitions executed live on NEAR testnet.
 
 ---
@@ -242,4 +251,4 @@ Reproduced live on NEAR testnet (`fx-budget.chilliroger-operator.testnet`) via `
 - **Live End-to-End Circle USDC Escrow Verification (`pnpm tsx scripts/near/verify-circle-usdc-escrow.ts` — Order #12 `INV-CIRCLE-15-1794481547`):**
   - **Step 1 — Real Circle USDC Escrow Deposit (`ft_transfer_call`):** Sent `15.00` Circle USDC from `chilliroger-operator.testnet` (`20.00 -> 5.00 USDC`) into `fx-budget.chilliroger-operator.testnet` (`0.00 -> 15.00 USDC`), creating `Order #12` (`Active`, target `€8.00 EURe`, chunk cap `$10.00 USDC`): [`5NnWXU3krRhoezmRtWsbPm23zYmesuDSNwn91gqEvcdZ`](https://testnet.nearblocks.io/txns/5NnWXU3krRhoezmRtWsbPm23zYmesuDSNwn91gqEvcdZ)
   - **Step 2 — Autonomous Chunk #1 Execution & EURe Delivery:** `AgentRunner.tick()` fetched live `1Click` (`0.8964`) & Frankfurter (`0.8987`, `-25 bps`), executed `order-12-seq-1` via restricted `FunctionCall` key, delivered `+€8.00 EURe` to `supplier-eu.chilliroger-operator.testnet` via `#[private] on_chunk_settled`, marked `Order #12` `Completed` with `5.00` Circle USDC remaining unspent in escrow, and saved SQLite fill (`CONFIRMED`, `is_simulated: false`): [`6QV6ZUsCEheaiYhYCXSG5RGEMugAupRift1psAthJphL`](https://testnet.nearblocks.io/txns/6QV6ZUsCEheaiYhYCXSG5RGEMugAupRift1psAthJphL)
-  - **Step 3 — Automatic Unspent Escrow Refund (`refund_unused_escrow`):** Returned the remaining `5.00` unspent Circle USDC back to `chilliroger-operator.testnet` via cross-contract `ft_transfer` + `#[private] on_escrow_refunded` (final operator balance: `10.00 USDC`; `fx-budget` vault: `10.00 USDC`): [`nyUHd7uwsfYBq9Nk7sivdHzCNHHatKfQRG9RryE4nU1`](https://testnet.nearblocks.io/txns/nyUHd7uwsfYBq9Nk7sivdHzCNHHatKfQRG9RryE4nU1)
+  - **Step 3 — Manually triggered Unspent Escrow Refund (`refund_unused_escrow`, signed by the operator account):** Returned the remaining `5.00` unspent Circle USDC back to `chilliroger-operator.testnet` via cross-contract `ft_transfer` + `#[private] on_escrow_refunded` (final operator balance: `10.00 USDC`; `fx-budget` vault: `10.00 USDC`): [`nyUHd7uwsfYBq9Nk7sivdHzCNHHatKfQRG9RryE4nU1`](https://testnet.nearblocks.io/txns/nyUHd7uwsfYBq9Nk7sivdHzCNHHatKfQRG9RryE4nU1)

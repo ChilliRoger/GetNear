@@ -26,3 +26,9 @@ Items noted during P0–P2 for later blocks.
 - [ ] P13: README and hackathon disclosures.
 - [ ] P14: Final QA and submission.
 
+
+## Post-audit follow-ups (separate deployment task)
+- [ ] Rebuild `contracts/fx-budget` (`pnpm build:contract`), run `cargo test --lib`, then redeploy as a code-only upgrade (no `migrate`) via the deployment key; update `res/fx_budget.wasm` and re-run `pnpm verify:readonly`.
+- [ ] After redeploy: DAO `set_order_payout_cap` (or leave legacy Order #6 uncapped = unable to pay), restart the agent, and run one new live escrow order to evidence the adjusted final chunk.
+- [ ] Remove the `FullAccess` keys on `fx-budget` and `chilliroger-agent.testnet` (see `docs/SECURITY.md`).
+- [ ] Add an owner-only withdrawal for retained input USDC; auto-expire never-approved `Pending` escrow orders.
