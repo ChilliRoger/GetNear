@@ -1,12 +1,47 @@
 {
-  "status": "pending",
-  "note": "NOT YET CAPTURED. Needs the upgraded FxBudget deployed on testnet and one signed escrowed-invoice run through the dashboard. Orders #8, #11 and #12 are evidence from the PREVIOUS build.",
+  "status": "captured",
+  "note": "Evidence from the UPGRADED build. USDC escrow is canonical Circle testnet USDC; payout is DEMO EURe from the prefunded vault; the FX conversion is SIMULATED (1Click dry quote is indicative only).",
   "plan": {
-    "fundCircleUsdc": "15",
+    "fundCircleUsdc": "10",
     "maxChunkUsdc": "10",
-    "targetEure": "8",
+    "targetEure": "5",
     "recipient": "supplier-eu.chilliroger-operator.testnet",
-    "invoiceRef": "INV-FINAL-CHUNK-8",
-    "why": "Same parameters as historical Order #12 so the two are directly comparable: the live quote for the planned $10 chunk (about 8.96 EURe) exceeds the EUR 8.00 still due, so the upgraded build must cap the payout at 8.00 EURe and charge only the recalculated input (about 8.92 USDC) instead of the full 10.00. Unused escrow (about 6.08 USDC) is then refunded."
+    "invoiceRef": "INV-FINAL-CHUNK-1794586331",
+    "why": "Final chunk is capped at invoice target due and input charged is recalculated at full quote precision. Unspent escrow is refunded."
+  },
+  "orderId": 13,
+  "invoiceRef": "INV-FINAL-CHUNK-1794586331",
+  "capturedAt": "2026-11-13T16:12:49.115Z",
+  "contractCodeSha256": "0bd188300827654a6be91ed1585955faa6b3459a99e187882657fa23717d2fec",
+  "receipts": {
+    "funding": {
+      "txHash": "ZnaHzUsMawWiTTAa5RrbfqTeQQqyhn8vY6tb41b7nMd",
+      "signer": "chilliroger-operator.testnet",
+      "method": "ft_transfer_call",
+      "explorerUrl": "https://testnet.nearblocks.io/txns/ZnaHzUsMawWiTTAa5RrbfqTeQQqyhn8vY6tb41b7nMd",
+      "note": "Circle testnet USDC ft_transfer_call into FxBudget escrow (parent tx; ft_transfer + ft_on_transfer receipts inside)"
+    },
+    "payout": {
+      "txHash": "6eAGwbnBR8X5Q72J8kf8tPMPaChHSJ5Ma9zmBmzLM7of",
+      "signer": "chilliroger-agent.testnet",
+      "method": "execute_chunk",
+      "explorerUrl": "https://testnet.nearblocks.io/txns/6eAGwbnBR8X5Q72J8kf8tPMPaChHSJ5Ma9zmBmzLM7of",
+      "note": "execute_chunk (parent tx; contains the demo-EURe ft_transfer from the prefunded vault and the on_chunk_settled callback)"
+    },
+    "refund": {
+      "txHash": "63pmWkCcViJShmXwgwELG5uUTbn5TBCRAHjv7Di2pFha",
+      "signer": "chilliroger-operator.testnet",
+      "method": "refund_unused_escrow",
+      "explorerUrl": "https://testnet.nearblocks.io/txns/63pmWkCcViJShmXwgwELG5uUTbn5TBCRAHjv7Di2pFha",
+      "note": "manually triggered refund_unused_escrow (parent tx; contains the Circle USDC ft_transfer back to the requester)"
+    }
+  },
+  "balances": {
+    "walletCircleUsdcBefore": "10000000",
+    "walletCircleUsdcAfter": "4458776",
+    "fxBudgetCircleUsdcBefore": "10000000",
+    "fxBudgetCircleUsdcAfter": "15541224",
+    "supplierEureBefore": "1016700000",
+    "supplierEureAfter": "1021700000"
   }
 }

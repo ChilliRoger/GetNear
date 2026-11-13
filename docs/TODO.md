@@ -22,13 +22,13 @@ Items noted during P0–P2 for later blocks.
 - [x] P10.5: Real on-chain NEP-141 token deployment (USDC & EURe), vault storage registration, 100k EURe liquidity seeding, user faucet API & script, and autonomous agent `ft_transfer` direct wallet settlement.
 - [x] Post-Audit Settlement-Proof Upgrade: Callback-verified NEP-141 EURe settlement inside `FxBudget::execute_chunk` (`on_chunk_settled`), invoice payable tracking (`target_out`, `settled_out`, `remaining_due_out`), `ChunkRecord` idempotency, restricted FunctionCall key enforcement in `AgentRunner`, failure-safe SQLite provenance (`is_simulated = true` on failed transfers), UI Invoice Balance & decimals fix, and live `€1,000` testnet verification (`Order #8`, `INV-2026-1000`).
 - [x] P11 (optional): NEAR AI natural-language order intake (`@getnear/shared` strict Zod parser, `/api/orders/parse`, `<AiOrderIntake />` supporting NEAR AI Cloud + free Gemini/Groq fallbacks; manual form works without key).
-- [ ] P12: End-to-end demo, tests, reproducibility.
+- [x] P12: End-to-end demo, tests, reproducibility (`pnpm demo:setup`, `pnpm demo:run`, `pnpm demo:reset`, `export:simulations`, `docs/FAILURE_DRILLS.md`).
 - [ ] P13: README and hackathon disclosures.
 - [ ] P14: Final QA and submission.
 
 
-## Post-audit follow-ups (separate deployment task)
-- [ ] Rebuild `contracts/fx-budget` (`pnpm build:contract`), run `cargo test --lib`, then redeploy as a code-only upgrade (no `migrate`) via the deployment key; update `res/fx_budget.wasm` and re-run `pnpm verify:readonly`.
-- [ ] After redeploy: DAO `set_order_payout_cap` (or leave legacy Order #6 uncapped = unable to pay), restart the agent, and run one new live escrow order to evidence the adjusted final chunk.
+## Post-audit follow-ups
+- [x] Rebuild `contracts/fx-budget` and redeploy as a code-only upgrade via the deployment key (`0bd1883...`); verified with `pnpm upgrade:verify` and `pnpm verify:readonly --expect-upgraded`.
+- [x] Captured fresh escrowed invoice on upgraded contract (`Order #13`, `INV-FINAL-CHUNK-1794586331`): Circle USDC escrow, minimal covering input recalculated ($5.541224 USDC charged for €5.00 EURe), unspent escrow ($4.458776 USDC) refunded back to operator; verified 86/86 with `pnpm verify:readonly --expect-upgraded --expect-fresh`.
 - [ ] Remove the `FullAccess` keys on `fx-budget` and `chilliroger-agent.testnet` (see `docs/SECURITY.md`).
 - [ ] Add an owner-only withdrawal for retained input USDC; auto-expire never-approved `Pending` escrow orders.
