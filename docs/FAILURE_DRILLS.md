@@ -73,3 +73,4 @@ This document details the expected and verified behavior of GetNear under networ
   - If the same chunk key is submitted twice, the second call reverts with `"Chunk already executed"`.
   - The agent tracks attempt status in SQLite `agent_attempts`, ensuring no duplicate payouts occur.
 * **Observed State**: Exactly-once payout semantics guaranteed on-chain.
+

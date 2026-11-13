@@ -101,3 +101,4 @@ main().catch((err) => {
   console.error('Demo setup check failed:', err)
   process.exit(1)
 })
+
