@@ -1,9 +1,17 @@
 /**
  * GetNear — End-to-End Testnet Approval Flow (P8)
- * 1. Creates an above-cap order (250 USDC > 100 USDC auto-cap) -> status Pending
+ * WRITE-ENABLED: signs transactions with local near-cli credentials (operator + two council accounts).
+ *
+ * 1. Creates an above-cap invoice order (250 USDC budget > 100 USDC auto-cap, EUR 200 invoice target) -> Pending
  * 2. Creates a Sputnik DAO FunctionCall proposal calling approve_order(order_id)
  * 3. Casts 2-of-3 council votes (council1 and council2)
- * 4. Verifies the order status automatically transitions from Pending to Active!
+ * 4. Verifies the order status automatically transitions from Pending to Active
+ *
+ * The upgraded FxBudget requires an invoice target (`target_out`, atomic EURe units) on every order; it is the
+ * on-chain bound for the order's payouts. Arguments are built by ./order-args.ts and unit-tested locally.
+ *
+ * Accounts / contracts used (override with env): OPERATOR_ACCOUNT_ID (requester + proposer),
+ * FX_BUDGET_CONTRACT_ID, SPUTNIK_DAO_ACCOUNT_ID, COUNCIL1_ACCOUNT_ID, COUNCIL2_ACCOUNT_ID.
  *
  * Usage: pnpm tsx scripts/near/demo-approval-flow.ts
  */
@@ -14,12 +22,34 @@ try {
 
 import { NearClient } from '@getnear/near-client'
 import { runCallFunction } from './near-runner.js'
+import {
+  buildApproveOrderProposalArgs,
+  buildCreateOrderArgs,
+  findOrderByInvoiceRef,
+  formatAtomic6,
+  parseAtomic6,
+  type InvoiceOrderParams,
+} from './order-args.js'
 
 const OPERATOR_ID = process.env.OPERATOR_ACCOUNT_ID || 'chilliroger-operator.testnet'
-const CONTRACT_ID = `fx-budget.${OPERATOR_ID}`
-const DAO_ID = 'chilliroger-dao.sputnik-v2.testnet'
+const CONTRACT_ID = process.env.FX_BUDGET_CONTRACT_ID || `fx-budget.${OPERATOR_ID}`
+const DAO_ID = process.env.SPUTNIK_DAO_ACCOUNT_ID || 'chilliroger-dao.sputnik-v2.testnet'
 const COUNCIL1 = process.env.COUNCIL1_ACCOUNT_ID || 'chilliroger-council1.testnet'
 const COUNCIL2 = process.env.COUNCIL2_ACCOUNT_ID || 'chilliroger-council2.testnet'
+const SUPPLIER_ID = `supplier-eu.${OPERATOR_ID}`
+
+/** Exported so the local test can verify the exact transaction arguments without touching the network. */
+export function buildDemoOrderParams(nowMs: number = Date.now()): InvoiceOrderParams {
+  return {
+    totalInAtomic: parseAtomic6('250'), // 250 USDC budget (auto-cap is 100 USDC) -> Pending
+    maxChunkInAtomic: parseAtomic6('20'), // 20 USDC per chunk
+    targetOutAtomic: parseAtomic6('200'), // EUR 200.00 invoice due: REQUIRED, bounds payouts on-chain
+    recipient: SUPPLIER_ID,
+    invoiceRef: `INV-DEMO-APPROVAL-${Math.floor(nowMs / 1000)}`,
+    deadlineNs: BigInt(nowMs) * 1_000_000n + 24n * 3600n * 1_000_000_000n, // 24h
+    maxDevBps: 120,
+  }
+}
 
 async function main() {
   console.log('═'.repeat(60))
@@ -32,27 +62,22 @@ async function main() {
   })
 
   // 1. Create Above-Cap Order
-  console.log('\n[1/4] Creating Above-Cap Order on FxBudget:')
-  const totalIn = '250000000' // 250 USDC (Auto-cap is 100 USDC)
-  const maxChunkIn = '20000000' // 20 USDC
-  const deadlineNs = Date.now() * 1_000_000 + 24 * 3600 * 1_000_000_000 // 24h as number
-  const maxDevBps = 120
+  console.log('\n[1/4] Creating Above-Cap Invoice Order on FxBudget:')
+  const params = buildDemoOrderParams()
+  const createArgs = buildCreateOrderArgs(params)
 
-  console.log(`  Requester: ${OPERATOR_ID}`)
-  console.log(`  Total: 250.00 USDC (Auto-cap limit: 100.00 USDC)`)
-  console.log(`  Max Chunk: 20.00 USDC`)
-  console.log(`  Max Deviation: 120 bps`)
+  console.log(`  Contract:   ${CONTRACT_ID}`)
+  console.log(`  Requester:  ${OPERATOR_ID}`)
+  console.log(`  Recipient:  ${params.recipient}`)
+  console.log(`  Budget:     ${formatAtomic6(params.totalInAtomic)} USDC (auto-cap: 100 USDC)`)
+  console.log(`  Max Chunk:  ${formatAtomic6(params.maxChunkInAtomic)} USDC`)
+  console.log(`  Invoice:    ${formatAtomic6(params.targetOutAtomic)} EURe due (target_out = ${createArgs.target_out})`)
+  console.log(`  Invoice ref: ${params.invoiceRef}`)
 
   const createRes = runCallFunction({
     contractId: CONTRACT_ID,
     methodName: 'create_order',
-    args: {
-      pair_label: 'USDC_EUR',
-      total_in: totalIn,
-      deadline_ns: deadlineNs,
-      max_chunk_in: maxChunkIn,
-      max_dev_bps: maxDevBps,
-    },
+    args: createArgs,
     deposit: '0 NEAR',
     gas: '100.0 Tgas',
     signerId: OPERATOR_ID,
@@ -61,13 +86,17 @@ async function main() {
   console.log(`✓ Order creation submitted! Tx Hash: ${createRes.txHash || 'confirmed'}`)
   await new Promise((r) => setTimeout(r, 4000))
 
-  // Fetch the created order
-  const orders = await client.callView<any[]>(CONTRACT_ID, 'list_orders', { from_index: 0, limit: 10 })
-  const order = orders[orders.length - 1]
+  // Find the order we just created by its unique invoice_ref (list_orders is paged and capped at 100).
+  const order = await findOrderByInvoiceRef(
+    (from, limit) => client.callView<any[]>(CONTRACT_ID, 'list_orders', { from_index: from, limit }),
+    params.invoiceRef,
+  )
+  if (!order) throw new Error(`Created order ${params.invoiceRef} not found on-chain`)
   console.log(`\nVerified Created Order On-Chain:`)
   console.log(`  Order ID: #${order.id}`)
   console.log(`  Pair: ${order.pair_label}`)
   console.log(`  Total In: ${Number(order.total_in) / 1e6} USDC`)
+  console.log(`  Invoice target: ${Number(order.target_out) / 1e6} EURe`)
   console.log(`  Status: ${order.status}  <-- Above auto-cap requires DAO approval!`)
 
   if (order.status !== 'Pending') {
@@ -76,29 +105,14 @@ async function main() {
 
   // 2. Submit Sputnik DAO Proposal
   console.log(`\n[2/4] Submitting Sputnik DAO Proposal to Approve Order #${order.id}:`)
-  const approveArgsBase64 = Buffer.from(JSON.stringify({ id: order.id })).toString('base64')
-
   const propRes = runCallFunction({
     contractId: DAO_ID,
     methodName: 'add_proposal',
-    args: {
-      proposal: {
-        description: `Approve Treasury FX Order #${order.id} (250 USDC -> EURe)`,
-        kind: {
-          FunctionCall: {
-            receiver_id: CONTRACT_ID,
-            actions: [
-              {
-                method_name: 'approve_order',
-                args: approveArgsBase64,
-                deposit: '0',
-                gas: '30000000000000', // 30 Tgas
-              },
-            ],
-          },
-        },
-      },
-    },
+    args: buildApproveOrderProposalArgs(
+      CONTRACT_ID,
+      order.id,
+      `Approve Treasury FX Order #${order.id} (${formatAtomic6(params.totalInAtomic)} USDC -> ${formatAtomic6(params.targetOutAtomic)} EURe)`,
+    ),
     deposit: '0.1 NEAR',
     gas: '100.0 Tgas',
     signerId: OPERATOR_ID,
@@ -145,12 +159,19 @@ async function main() {
 
   if (verifiedOrder.status === 'Active') {
     console.log('\n' + '═'.repeat(60))
-    console.log('🎉 SUCCESS! ORDER HAS BEEN APPROVED AND IS NOW ACTIVE!')
+    console.log('SUCCESS: ORDER HAS BEEN APPROVED AND IS NOW ACTIVE')
     console.log('═'.repeat(60))
-    console.log(`  Order #${verifiedOrder.id} is now available for Agent chunk execution!`)
+    console.log(`  Order #${verifiedOrder.id} is now available for Agent chunk execution.`)
   } else {
-    console.error(`❌ Order did not transition to Active. Current status: ${verifiedOrder.status}`)
+    console.error(`Order did not transition to Active. Current status: ${verifiedOrder.status}`)
+    process.exitCode = 1
   }
 }
 
-main().catch(console.error)
+// Only run when executed directly (the test imports buildDemoOrderParams without side effects).
+if (process.argv[1]?.endsWith('demo-approval-flow.ts')) {
+  main().catch((err) => {
+    console.error(err)
+    process.exit(1)
+  })
+}

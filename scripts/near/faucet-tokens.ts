@@ -13,13 +13,19 @@ try {
 import { NearClient } from '@getnear/near-client'
 import { runCallFunction } from './near-runner.js'
 
+const MAX_FAUCET_AMOUNT = 1000
+const TESTNET_ACCOUNT_RE = /^(?=.{8,64}$)(?:[a-z\d]+[-_])*[a-z\d]+(?:\.(?:[a-z\d]+[-_])*[a-z\d]+)*\.testnet$/
+
 const OPERATOR_ID = process.env.OPERATOR_ACCOUNT_ID || 'chilliroger-operator.testnet'
 const USDC_ID = `usdc.${OPERATOR_ID}`
 const EURE_ID = `eure.${OPERATOR_ID}`
 
 export async function claimFaucetTokens(receiverId: string, amountUsdc: number = 500) {
-  if (!receiverId || !receiverId.includes('.')) {
-    throw new Error(`Invalid NEAR testnet account ID: ${receiverId}`)
+  if (!TESTNET_ACCOUNT_RE.test(receiverId)) {
+    throw new Error(`Invalid NEAR testnet account ID: ${JSON.stringify(receiverId)}`)
+  }
+  if (!Number.isInteger(amountUsdc) || amountUsdc < 1 || amountUsdc > MAX_FAUCET_AMOUNT) {
+    throw new Error(`Faucet amount must be an integer between 1 and ${MAX_FAUCET_AMOUNT}`)
   }
 
   const client = new NearClient({
@@ -117,7 +123,7 @@ export async function claimFaucetTokens(receiverId: string, amountUsdc: number =
 // Standalone execution if run from CLI
 if (process.argv[1]?.endsWith('faucet-tokens.ts')) {
   const target = process.argv[2] || OPERATOR_ID
-  const amount = Number(process.argv[3]) || 500
+  const amount = process.argv[3] === undefined ? 500 : Number(process.argv[3])
   claimFaucetTokens(target, amount)
     .then((res) => {
       console.log('Faucet claim complete:', res)
