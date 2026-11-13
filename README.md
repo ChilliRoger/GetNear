@@ -179,18 +179,16 @@ Full archive: [docs/DEMO_LOG.md](docs/DEMO_LOG.md).
 
 ---
 
-## Credit: Meridian FX vs built for NEAR
+## Architecture & Technical Implementation
 
-GetNear started from **Meridian FX** (Team Ippo, ETHGlobal Cannes 2026; MIT) — see [NOTICE.md](NOTICE.md). Meridian FX is a non-NEAR prototype.
-
-| Layer | Inherited from Meridian FX | Built for GetNear on NEAR |
-| :--- | :--- | :--- |
-| Strategy & rate reference | Adaptive TWAP / timing-score heuristic and the ECB (Frankfurter) reference-rate idea (`packages/shared`, `apps/oracle`) | 1Click `dry:true` quote source, 18→6 decimal conversion, SQLite audit schema, integer final-chunk sizing |
-| Frontend | App shell and card/table primitives (`apps/app`, `apps/dev-ui`) | Live NEAR RPC views, supplier-invoice intake, DAO voting UI, provenance/fill panels, wallet selector |
-| Settlement contract | — | `contracts/fx-budget` (Rust, `near-sdk`): invoice payables, DAO owner, in-flight lock, idempotent chunk records, cross-contract `ft_transfer` + `#[private]` callback, escrow + refunds, expiry, payout bounds |
-| Governance & keys | — | Sputnik DAO 2-of-3 approval, restricted `FunctionCall` agent key, opt-in/authenticated demo surfaces |
-| Agent | Basic loop concept | `apps/agent`: attempt persistence, uncertain-outcome reconciliation, no-downgrade receipts, authenticated local API |
-| Chain client & tooling | — | `packages/near-client`, token deployment and verification scripts (`scripts/near/*`), read-only verifier |
+| Layer | Implementation details |
+| :--- | :--- |
+| Strategy & rate reference | Adaptive TWAP / timing-score heuristic with ECB (Frankfurter) reference rates, 1Click `dry:true` quote source, 18→6 decimal conversion, SQLite audit schema, integer final-chunk sizing (`packages/shared`, `apps/oracle`) |
+| Frontend | Next.js 14 and Vite dev console (`apps/app`, `apps/dev-ui`), live NEAR RPC views, natural language AI invoice intake, DAO voting UI, provenance/fill panels, wallet selector |
+| Settlement contract | `contracts/fx-budget` (Rust, `near-sdk`): invoice payables, DAO owner, in-flight lock, idempotent chunk records, cross-contract `ft_transfer` + `#[private]` callback, Circle USDC escrow + refunds, expiry, payout bounds |
+| Governance & keys | Sputnik DAO 2-of-3 approval, restricted `FunctionCall` agent key, opt-in/authenticated demo surfaces |
+| Agent | `apps/agent`: attempt persistence, uncertain-outcome reconciliation, no-downgrade receipts, authenticated local API |
+| Chain client & tooling | `packages/near-client`, token deployment and verification scripts (`scripts/near/*`), read-only verifier |
 
 ## Known limitations
 

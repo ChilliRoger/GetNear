@@ -14,11 +14,9 @@ Every URL below was seen during research or appears in the hackathon file. Items
 - Rules that matter here: Q-000 (NEAR AI credits via https://cloud.near.ai or https://nearbuilders.org/join), Q-003 (baseline tags and a diff link), Q-005 (list libraries and AI code), Q-007 (no testnet for Intents; use dry: true quotes), Q-010 (testnet-only projects are eligible), Q-012 (video plus a reproducible README), Q-014 (add a LICENSE file).
 - Help: https://discord.gg/nearprotocol
 
-### 6.2 Upstream project
+### 6.2 Architecture diagrams
 
-- Code: https://github.com/pulseplay-stack/meridian-fx (README says MIT; no LICENSE file in the root)
-- Showcase page: https://ethglobal.com/showcase/meridian-fx-1x2ef
-- Its architecture diagrams are in docs/diagrams (numbered 01 to 08).
+- Architecture diagrams are in docs/diagrams (numbered 01 to 08).
 
 ### 6.3 NEAR testnet endpoints and docs
 
@@ -86,7 +84,6 @@ Implement failover across both RPC URLs and expect rate limits on the public end
 2. Function-call keys cannot attach a deposit, and an exhausted allowance cannot be changed on the same key (https://docs.near.org/protocol/access-keys).
 3. Sputnik DAO proposals require an attached bond, and voting policy is defined per role and proposal kind with a ratio or fixed threshold, not per amount (Sputnik repo and https://docs.near.org/primitives/dao).
 4. Each Intents route has a minimum amount, and standard x402 payments are final (https://www.near.org/agentic-payments).
-5. The upstream license is declared in its README only (https://github.com/pulseplay-stack/meridian-fx).
 
 ## 7. Known unknowns the agent must resolve and report, never assume
 

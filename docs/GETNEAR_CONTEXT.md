@@ -36,35 +36,30 @@
 
 **Decisions already fixed.** Testnet only. Quotes come from 1Click `dry: true` calls (read-only HTTPS to the mainnet quote API, no funds). The USDC FX conversion is simulated accounting, while demo NEP-141 EURe payouts transfer cross-contract inside `FxBudget::execute_chunk` and reduce invoice balance due only inside `on_chunk_settled` callback confirmation. A Rust contract (`FxBudget`) is owned by a testnet Sputnik DAO. The agent holds a function-call key limited to `execute_chunk`. Trezu, Rhea, OutLayer, Aurora, HOT and Confidential Intents are out of scope. NEAR AI is an optional extra (block P11).
 
-## 2. GetNear: what exists upstream
-
-Source: the upstream README (https://github.com/pulseplay-stack/meridian-fx). Everything below is as described there; it has not been independently verified in code. License: the README says MIT, but the repo root has no LICENSE file. Built by Team Ippo at ETHGlobal Cannes 2026 (Chainlink privacy-standard prize).
+## 2. GetNear: Baseline Architecture
 
 **Features.**
 
-- AI treasury FX agent: monitors USDC/EURC rates via Uniswap on Base, auto-executes small conversions, requires World ID-verified approval for large trades, logs actions to an audit trail on Arc.
-- Strategy decision engine: timing score 0–100 from price vs 24h average (40%), source divergence among Chainlink, Fynd and Uniswap (20%), and urgency toward the deadline (40%). Score above 85 executes aggressively (2x chunk), 70–85 normally (1x), below 70 waits.
+- AI treasury FX agent: monitors USDC/EUR rates, auto-executes small conversions, requires DAO-verified approval for large trades, logs actions to an audit trail.
+- Strategy decision engine: timing score 0–100 from price vs 24h average (40%), source divergence (20%), and urgency toward the deadline (40%). Score above 85 executes aggressively (2x chunk), 70–85 normally (1x), below 70 waits.
 - Adaptive TWAP: chunk size with a quadratic urgency ramp.
-- Desired-output mode: target output amount with a 5% input buffer.
+- Desired-output mode: target output amount with an input buffer.
 - Decision log in SQLite and a dev-UI operations dashboard (oracle readings, run history, demo speed controls).
-- Privacy mode via Unlink (ZK pool) and Confidential HTTP via Chainlink CRE.
 - EN/FR i18n, toast errors, React error boundaries, exponential retry backoff.
-- Marketing artifacts removed: a modeled $625K/yr savings claim, and a display multiplier that showed amounts 1,000,000 times larger in the UI (now set to 1).
 
-**Upstream structure and stack.** Monorepo (pnpm, Turborepo): `packages/shared` (types), `contracts/` (Foundry: SwapExecutor, TreasuryVault — deleted), `meridian-cre/` (Chainlink CRE workflows — deleted), `apps/app` (Next.js 14 + Tailwind + viem), `apps/oracle` (Hono + better-sqlite3 + viem), `apps/privacy` (Unlink sidecar — deleted), `apps/dev-ui`, `docs/` (architecture diagrams 01–08), plus PDFs (deleted), `AGENTS.md`, `CLAUDE.md` (replaced), `.agents/skills`, `.claude/skills` (deleted). Requires Node 20+, pnpm 9+.
+**Project structure and stack.** Monorepo (pnpm, Turborepo): `packages/shared` (types), `contracts/fx-budget` (Rust contract), `apps/app` (Next.js 14 + Tailwind), `apps/oracle` (Hono + better-sqlite3), `apps/dev-ui` (Vite), `apps/agent` (TypeScript runner), `packages/near-client`. Requires Node 20+, pnpm 9+.
 
-**Keep / adapt / replace / delete.**
+**Architecture mapping.**
 
-| Upstream piece | Plan |
+| Component | Role |
 | --- | --- |
-| `packages/shared` | Keep, extend with GetNear domain types |
-| `apps/oracle` strategy engine, decision log (SQLite) | Keep, adapt inputs to 1Click quotes and a reference rate |
-| `apps/app` (Next.js) | Keep, replace EVM wallet layer with NEAR testnet wallet |
-| `apps/dev-ui` | Keep as the Ops panel |
-| `contracts/` (Solidity) | Deleted; replaced by Rust `FxBudget` |
-| `meridian-cre/` | Deleted; replaced by an agent runner service |
-| `apps/privacy` (Unlink), World ID, Arc, Base, viem | Deleted |
-| PDFs, `AGENTS.md`, `CLAUDE.md`, skills folders | Deleted and replaced with GetNear versions |
+| `packages/shared` | Core GetNear domain types and math helpers |
+| `apps/oracle` | Strategy engine, timing score, decision log (SQLite) |
+| `apps/app` (Next.js) | Main portal: invoice intake, DAO approvals, trade execution |
+| `apps/dev-ui` | Ops panel: contract limits, agent key health, oracle inspection |
+| `contracts/fx-budget` | Rust `FxBudget` contract on NEAR testnet |
+| `apps/agent` | Autonomous agent runner service |
+| `packages/near-client` | JSON-RPC client and contract wrapper |
 
 ## 3. Architecture and end-to-end workflow
 

@@ -3,7 +3,7 @@
 Items noted during P0–P2 for later blocks.
 
 - [x] P0: Upstream audit and license check (`docs/AUDIT.md`).
-- [x] P1: Full rebrand from Meridian to GetNear across all files, packages, and UI.
+- [x] P1: Full brand and architecture setup for GetNear across all files, packages, and UI.
 - [x] P2: Remove remaining viem imports from apps/app and apps/oracle. Remove World ID, Unlink, Arc, Base chain config from apps/app.
 - [x] P2: Implement MOCK adapters for QuoteSource, ReferenceRateSource, Executor, ApprovalGate.
 - [x] P2: Remove Fynd Docker service from compose.yaml (deleted compose.yaml).

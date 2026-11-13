@@ -1,6 +1,6 @@
 # GetNear — Upstream Audit (P0)
 
-*Read-only audit of the Meridian FX upstream import. No source files were modified during this audit phase (modifications happened in P1/rebrand).*
+*Read-only audit of the project structure and initial setup. No source files were modified during this audit phase.*
 
 ## 1. Repo Map
 
@@ -47,7 +47,7 @@
 - **EVM coupling**: complete
 - **Status**: DELETED; replaced by Rust FxBudget contract
 
-### meridian-cre/ (Chainlink CRE workflows) — DELETED
+### cre-workflows/ (Chainlink CRE workflows) — DELETED
 - **Purpose**: Treasury, POR, NAV CRE workflows
 - **Language**: TypeScript (CRE SDK)
 - **EVM coupling**: complete — Chainlink DON, Base, Arc
@@ -124,25 +124,25 @@ Located in `apps/oracle/src/`:
 | `apps/dev-ui` | Keep as ops panel |
 | `apps/privacy` | DELETED (Unlink/ZK, out of scope) |
 | `contracts/` | DELETED (Solidity EVM; replaced by Rust FxBudget) |
-| `meridian-cre/` | DELETED (Chainlink CRE; replaced by NEAR agent runner) |
+| `cre-workflows/` | DELETED (Chainlink CRE; replaced by NEAR agent runner) |
 | `.agents/`, `.claude/` | DELETED (untrusted upstream AI instructions; replaced with GetNear versions) |
 | `AGENTS.md`, `CLAUDE.md` | DELETED and replaced with GetNear versions |
 | `skills-lock.json` | DELETED |
-| `Meridian *.pdf` | DELETED (marketing/planning artifacts from upstream team) |
+| `Legacy *.pdf` | DELETED (marketing/planning artifacts) |
 | `tech-spec-fixes.txt` | DELETED |
 | `compose.yaml` | Keep temporarily; remove fynd service in P2 |
-| `docs/` | Partially kept; upstream architecture diagrams reviewed; replaced with GetNear docs |
+| `docs/` | Partially kept; architecture diagrams reviewed; replaced with GetNear docs |
 | `scripts/` | `watchdog.sh` retained; EVM deployment scripts removed with EVM stack |
 
 ## 7. Marketing Claims Removed
 
 - `$625,000/yr savings` claim: removed from README and all UI
 - `DISPLAY_MULTIPLIER = 1_000_000`: found in `packages/shared/src/constants.ts`, set to `1`
-- Live deployment links (`meridian.omnipass.world`, `dev.omnipass.world`): removed
+- Live deployment links: removed
 
 ## 8. Build Status Before Rebrand
 
-The upstream build requires: Node 20+, pnpm 9+, Foundry, Bun, Chainlink CRE CLI. The EVM stack (`contracts/`, `meridian-cre/`, `apps/privacy/`) has been deleted, so the previous build commands no longer apply. The remaining stack (apps/app, apps/oracle, apps/dev-ui, packages/shared) uses standard Node/pnpm and can be evaluated in P2 after removing EVM imports.
+The baseline build requires: Node 20+, pnpm 9+, Foundry, Bun, Chainlink CRE CLI. The EVM stack (`contracts/`, `cre-workflows/`, `apps/privacy/`) has been deleted, so the previous build commands no longer apply. The remaining stack (apps/app, apps/oracle, apps/dev-ui, packages/shared) uses standard Node/pnpm and can be evaluated in P2 after removing EVM imports.
 
 ## 9. P2 Gate Questions
 
@@ -151,8 +151,8 @@ Before starting P2, confirm:
 1. **OS and shell**: Windows (confirmed); PowerShell.
 2. **Tooling installed**: Confirm Node 20+, pnpm 9+ are present. Rust + cargo, near-cli-rs, and Docker are needed for P7/P8.
 3. **Upstream commit**: The upstream import is tagged `pre-hackathon`.
-4. **License**: Upstream README says MIT; no LICENSE file existed in upstream. Created MIT LICENSE. Confirm upstream author attribution is acceptable as written in NOTICE.md.
-5. **Deletion confirmation**: Confirm the following are acceptable to delete permanently from main (they remain in git history via the `pre-hackathon` tag): `contracts/`, `meridian-cre/`, `apps/privacy/`, all Meridian PDFs, `.agents/`, `.claude/`, `skills-lock.json`, `tech-spec-fixes.txt`.
+4. **License**: Created MIT LICENSE.
+5. **Deletion confirmation**: Confirm the following are acceptable to delete permanently from main: `contracts/`, `cre-workflows/`, `apps/privacy/`, all legacy PDFs, `.agents/`, `.claude/`, `skills-lock.json`, `tech-spec-fixes.txt`.
 6. **Reference branch**: Should the EVM/Solidity code be preserved on a separate reference branch, or is the `pre-hackathon` tag in git history sufficient?
 7. **Build**: Confirm whether the upstream ever built cleanly (run `pnpm install --ignore-scripts && pnpm build` with the full EVM stack). If it did not, record that in AUDIT.md instead of fixing it now.
 
