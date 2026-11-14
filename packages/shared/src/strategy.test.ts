@@ -7,7 +7,7 @@ import {
   strategyConfig,
   type MarketInputs,
   type OrderContext,
-} from './strategy.js'
+} from './strategy'
 
 function assert(condition: boolean, message: string) {
   if (!condition) {

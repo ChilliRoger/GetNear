@@ -22,8 +22,6 @@ const CommaSeparatedUrls = z
   .min(1)
   .transform((s) => s.split(',').map((u) => u.trim()).filter(Boolean))
 
-const GetnearModeSchema = z.enum(['mock', 'testnet']).default('mock')
-
 // ── Main Config Schema ───────────────────────────────────────────────
 
 export const ConfigSchema = z.object({
@@ -44,13 +42,6 @@ export const ConfigSchema = z.object({
   // Agent signing key — restricted function-call key, local only, never committed
   // Set in .env only. Never log or print this value.
   AGENT_PRIVATE_KEY: z.string().optional(),
-
-  // Mode
-  GETNEAR_MODE: GetnearModeSchema,
-  DEMO_MODE: z
-    .string()
-    .optional()
-    .transform((s) => s === 'true' || s === '1'),
 
   // Optional NEAR AI (P11)
   NEAR_AI_API_KEY: z.string().optional(),
@@ -126,8 +117,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GetnearConfig 
     DAO_ACCOUNT_ID: env.DAO_ACCOUNT_ID,
     AGENT_ACCOUNT_ID: env.AGENT_ACCOUNT_ID,
     AGENT_PRIVATE_KEY: env.AGENT_PRIVATE_KEY,
-    GETNEAR_MODE: env.GETNEAR_MODE,
-    DEMO_MODE: env.DEMO_MODE,
     NEAR_AI_API_KEY: env.NEAR_AI_API_KEY,
   })
 
@@ -154,8 +143,6 @@ export function configSummary(cfg: GetnearConfig): Record<string, unknown> {
     FX_BUDGET_CONTRACT_ID: cfg.FX_BUDGET_CONTRACT_ID || '(not set)',
     DAO_ACCOUNT_ID: cfg.DAO_ACCOUNT_ID || '(not set)',
     AGENT_ACCOUNT_ID: cfg.AGENT_ACCOUNT_ID || '(not set)',
-    GETNEAR_MODE: cfg.GETNEAR_MODE,
-    DEMO_MODE: cfg.DEMO_MODE,
     AGENT_PRIVATE_KEY: cfg.AGENT_PRIVATE_KEY ? '[SET — hidden]' : '(not set)',
     NEAR_AI_API_KEY: cfg.NEAR_AI_API_KEY ? '[SET — hidden]' : '(not set)',
   }

@@ -27,15 +27,8 @@ export function yoctoToNear(yocto: string): number {
   return Number(whole) + fractional
 }
 
-/** Format yoctoNEAR for display, e.g. "2.5 NEAR" */
-export function formatNear(yocto: string, decimals = 4): string {
-  return `${yoctoToNear(yocto).toFixed(decimals)} NEAR`
-}
-
 // ── Stablecoin Amount Helpers (6 decimals) ───────────────────────────
 
-/** 1 USDC or EURC = 10^6 atomic units */
-export const ATOMIC_PER_STABLECOIN = 1_000_000n
 
 /** Convert human stablecoin amount to atomic units bigint */
 export function stablecoinToAtomic(amount: number): bigint {
@@ -47,15 +40,8 @@ export function atomicToStablecoin(atomic: string): number {
   return Number(BigInt(atomic)) / 1_000_000
 }
 
-/** Format atomic units for display, e.g. "100.00 USDC" */
-export function formatStablecoin(atomic: string, symbol = 'USDC', decimals = 2): string {
-  return `${atomicToStablecoin(atomic).toFixed(decimals)} ${symbol}`
-}
-
 // ── Nanosecond Time Helpers ──────────────────────────────────────────
 
-/** 1 second in nanoseconds */
-export const NS_PER_SECOND = 1_000_000_000n
 /** 1 millisecond in nanoseconds */
 export const NS_PER_MS = 1_000_000n
 
@@ -124,10 +110,5 @@ export function explorerTxUrl(txHash: string, explorerBase = EXPLORER_BASE): str
 /** Build explorer link for an account */
 export function explorerAccountUrl(accountId: string, explorerBase = EXPLORER_BASE): string {
   return `${explorerBase}/address/${accountId}`
-}
-
-/** Build explorer link for a contract method call result (transaction) */
-export function explorerContractTxUrl(txHash: string, explorerBase = EXPLORER_BASE): string {
-  return explorerTxUrl(txHash, explorerBase)
 }
 

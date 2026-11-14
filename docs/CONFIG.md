@@ -20,8 +20,6 @@ Any invalid variable causes the process to fail immediately on boot.
 | `DAO_ACCOUNT_ID` | P8+ | `""` | Valid NEAR account ID | Sputnik DAO v2 account owning the budget contract (e.g. `getnear-dao.sputnik-v2.testnet`). |
 | `AGENT_ACCOUNT_ID` | P8+ | `""` | Valid NEAR account ID | NEAR testnet account used by the autonomous agent runner. |
 | `AGENT_PRIVATE_KEY` | P9+ | *(none)* | `ed25519:...` | **Restricted function-call key** authorizing only `execute_chunk`. **NEVER commit or log this key**. |
-| `GETNEAR_MODE` | No | `mock` | `mock`, `testnet` | `mock`: runs with simulated quotes and in-memory state. `testnet`: connects to testnet RPC and live contracts. |
-| `DEMO_MODE` | No | `false` | `true`, `false`, `1`, `0` | Enables demo timing (10-minute order horizon, 20s tick interval) and pre-seeded demo orders. |
 | `NEAR_AI_API_KEY` | P11 | *(none)* | String | Optional NEAR AI Cloud API key for natural language order intake. |
 
 ---

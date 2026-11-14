@@ -47,7 +47,7 @@
 - Decision log in SQLite and a dev-UI operations dashboard (oracle readings, run history, demo speed controls).
 - EN/FR i18n, toast errors, React error boundaries, exponential retry backoff.
 
-**Project structure and stack.** Monorepo (pnpm, Turborepo): `packages/shared` (types), `contracts/fx-budget` (Rust contract), `apps/app` (Next.js 14 + Tailwind), `apps/oracle` (Hono + better-sqlite3), `apps/dev-ui` (Vite), `apps/agent` (TypeScript runner), `packages/near-client`. Requires Node 20+, pnpm 9+.
+**Project structure and stack.** Monorepo (pnpm, Turborepo): `packages/shared` (types), `contracts/fx-budget` (Rust contract), `apps/app` (Next.js 14 + Tailwind), `apps/oracle` (Hono + better-sqlite3, read-only market recorder), `apps/agent` (TypeScript runner), `packages/near-client`. Requires Node 20+, pnpm 9+.
 
 **Architecture mapping.**
 
@@ -56,7 +56,6 @@
 | `packages/shared` | Core GetNear domain types and math helpers |
 | `apps/oracle` | Strategy engine, timing score, decision log (SQLite) |
 | `apps/app` (Next.js) | Main portal: invoice intake, DAO approvals, trade execution |
-| `apps/dev-ui` | Ops panel: contract limits, agent key health, oracle inspection |
 | `contracts/fx-budget` | Rust `FxBudget` contract on NEAR testnet |
 | `apps/agent` | Autonomous agent runner service |
 | `packages/near-client` | JSON-RPC client and contract wrapper |

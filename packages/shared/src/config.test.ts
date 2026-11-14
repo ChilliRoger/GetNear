@@ -45,7 +45,6 @@ console.log('\n[Config: defaults]')
 const baseEnv: NodeJS.ProcessEnv = {
   NEAR_NETWORK_ID: 'testnet',
   NEAR_RPC_URLS: 'https://rpc.testnet.near.org,https://test.rpc.fastnear.com',
-  GETNEAR_MODE: 'mock',
 }
 
 const cfg = loadConfig(baseEnv)
@@ -54,32 +53,19 @@ assert('RPC URLs parsed as array', cfg.NEAR_RPC_URLS, [
   'https://rpc.testnet.near.org',
   'https://test.rpc.fastnear.com',
 ])
-assert('mode defaults to mock', cfg.GETNEAR_MODE, 'mock')
-assert('DEMO_MODE defaults false', cfg.DEMO_MODE, false)
 assert('AGENT_PRIVATE_KEY undefined', cfg.AGENT_PRIVATE_KEY, undefined)
-
-// ── Mode validation ──────────────────────────────────────────────────
-console.log('\n[Config: mode]')
-
-const testnetCfg = loadConfig({ ...baseEnv, GETNEAR_MODE: 'testnet' })
-assert('mode=testnet accepted', testnetCfg.GETNEAR_MODE, 'testnet')
-
-assertThrows(
-  'mode=mainnet rejected',
-  () => loadConfig({ ...baseEnv, GETNEAR_MODE: 'mainnet' }),
-)
 
 // ── Network ID validation ───────────────────────────────────────────
 console.log('\n[Config: network ID validation]')
 
 assertThrows(
   'NEAR_NETWORK_ID=mainnet refused without ALLOW_MAINNET',
-  () => loadConfig({ GETNEAR_MODE: 'mock', NEAR_NETWORK_ID: 'mainnet' }),
+  () => loadConfig({ NEAR_NETWORK_ID: 'mainnet' }),
   'testnet-only',
 )
 assert('resolveNetworkId defaults to testnet', resolveNetworkId(undefined, undefined), 'testnet')
 
-const mainnetCfg = loadConfig({ GETNEAR_MODE: 'mock', NEAR_NETWORK_ID: 'mainnet', ALLOW_MAINNET: '1' })
+const mainnetCfg = loadConfig({ NEAR_NETWORK_ID: 'mainnet', ALLOW_MAINNET: '1' })
 assert('NEAR_NETWORK_ID=mainnet accepted', mainnetCfg.NEAR_NETWORK_ID, 'mainnet')
 assert('NEAR_NETWORK_ID=mainnet defaults to mainnet RPCs', mainnetCfg.NEAR_RPC_URLS, [
   'https://rpc.mainnet.near.org',
@@ -95,14 +81,6 @@ assertThrows(
   () => loadConfig({ ...baseEnv, NEAR_NETWORK_ID: 'polygon' as any }),
   'testnet" or "mainnet"',
 )
-
-// ── DEMO_MODE parsing ────────────────────────────────────────────────
-console.log('\n[Config: DEMO_MODE]')
-
-assert('DEMO_MODE=true parsed', loadConfig({ ...baseEnv, DEMO_MODE: 'true' }).DEMO_MODE, true)
-assert('DEMO_MODE=1 parsed', loadConfig({ ...baseEnv, DEMO_MODE: '1' }).DEMO_MODE, true)
-assert('DEMO_MODE=false parsed', loadConfig({ ...baseEnv, DEMO_MODE: 'false' }).DEMO_MODE, false)
-assert('DEMO_MODE absent → false', loadConfig(baseEnv).DEMO_MODE, false)
 
 // ── Secret masking in summary ────────────────────────────────────────
 console.log('\n[Config: secret masking]')
