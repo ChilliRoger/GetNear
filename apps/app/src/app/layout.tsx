@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { I18nProvider } from "@/lib/i18n";
+import { SmoothScroll } from "@/components/smooth-scroll";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -31,22 +32,15 @@ export const metadata: Metadata = {
   },
 };
 
-// Applied before first paint so the page never flashes the wrong theme.
-const themeScript = `try{var t=localStorage.getItem("getnear_theme");if(t!=="light"&&t!=="dark"){t=window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"}document.documentElement.setAttribute("data-theme",t)}catch(e){document.documentElement.setAttribute("data-theme","dark")}`;
-
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-theme="dark" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-      </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background font-sans text-foreground antialiased`}
-      >
+    <html lang="en" className="dark">
+      <body className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background font-mono text-foreground antialiased`}>
+        <SmoothScroll />
         <I18nProvider>{children}</I18nProvider>
       </body>
     </html>

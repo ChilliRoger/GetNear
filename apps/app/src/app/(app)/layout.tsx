@@ -1,11 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { DesktopNav, Nav } from "@/components/nav";
-import { GetNearLogo } from "@/components/getnear-logo";
+import { BrandMark } from "@/components/brand";
 import { WalletConnectButton } from "@/components/wallet-connect-button";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { RateBar } from "@/components/rate-bar";
+import { TickerTape } from "@/components/ticker-tape";
+import { SiteFooter } from "@/components/site-footer";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ToastProvider } from "@/components/toast-provider";
 import { NearWalletProvider } from "@/lib/near-wallet";
@@ -17,39 +16,27 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <ToastProvider>
       <NearWalletProvider>
-        {/* Honesty banner: testnet + what is simulated */}
-        <div className="border-b border-warn/30 bg-warn/10 px-4 py-1.5 text-center text-xs font-medium text-warn">
-          Testnet demo · EURe payout is a callback-verified demo token · USDC→EUR conversion is simulated (1Click dry quotes)
+        <div className="border-b border-dashed border-warn/40 bg-warn/5 px-4 py-1.5 text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-warn">
+          Testnet demo · EURe payout = callback-verified demo token · USDC→EUR conversion is simulated
         </div>
 
-        <header className="sticky top-0 z-40 border-b border-border bg-surface/90 backdrop-blur">
-          <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
-            <Link href="/" className="flex items-center gap-2.5">
-              <GetNearLogo size={32} cropped />
-              <div className="leading-tight">
-                <div className="text-sm font-bold tracking-tight">GetNear</div>
-                <div className="hidden text-[11px] text-muted sm:block">Treasury FX agent · NEAR testnet</div>
-              </div>
-            </Link>
+        <header className="sticky top-0 z-40 border-b border-border-bright bg-background/85 backdrop-blur-md">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
+            <BrandMark />
             <DesktopNav />
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-              <WalletConnectButton />
-            </div>
+            <WalletConnectButton />
           </div>
         </header>
 
-        <RateBar />
+        <TickerTape />
 
-        <main className="mx-auto max-w-5xl px-4 pb-28 pt-6 md:pb-12">
-          <ErrorBoundary
-            fallbackTitle={t("error.boundary_title")}
-            fallbackRetry={t("error.boundary_retry")}
-          >
+        <main className="mx-auto min-h-[70vh] max-w-6xl px-4 pb-28 pt-8 md:pb-16">
+          <ErrorBoundary fallbackTitle={t("error.boundary_title")} fallbackRetry={t("error.boundary_retry")}>
             {children}
           </ErrorBoundary>
         </main>
 
+        <SiteFooter />
         <Nav />
       </NearWalletProvider>
     </ToastProvider>
