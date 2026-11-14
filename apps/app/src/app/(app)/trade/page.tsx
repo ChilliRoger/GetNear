@@ -426,19 +426,19 @@ export default function TradePage() {
           <button
             type="button"
             onClick={() => connect()}
-            className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-accent-blue/40 bg-accent-blue/15 py-2.5 text-xs font-semibold text-accent-blue hover:bg-accent-blue/25 transition-colors"
+            className="w-full flex items-center justify-center gap-2 border border-[#38bdf8] bg-[#38bdf8]/10 py-3 text-xs font-bold text-[#38bdf8] hover:bg-[#38bdf8]/20 transition-colors tracking-wider"
           >
             <PlusCircle className="h-4 w-4" />
-            <span>Connect Test Wallet to Create Order</span>
+            <span>[ CONNECT TESTNET WALLET TO CREATE ORDER ]</span>
           </button>
         ) : (
           <button
             type="submit"
             disabled={submitting}
-            className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-accent-blue py-2.5 text-xs font-semibold text-white hover:bg-accent-blue/90 disabled:opacity-50 transition-colors"
+            className="w-full flex items-center justify-center gap-2 border border-[#00ec97] bg-[#00ec97] py-3 text-xs font-bold text-[#090a0f] hover:bg-[#00ec97]/90 disabled:opacity-50 transition-colors tracking-wider"
           >
             <PlusCircle className="h-4 w-4" />
-            <span>{submitting ? "Signing & Submitting to NEAR Testnet..." : "Create Order on NEAR Testnet"}</span>
+            <span>{submitting ? "[ SIGNING & SUBMITTING TO NEAR TESTNET... ]" : "[ 01 SIGN & CREATE ORDER ON NEAR TESTNET → ]"}</span>
           </button>
         )}
       </form>

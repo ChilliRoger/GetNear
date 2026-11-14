@@ -77,10 +77,10 @@ export function TokenBalanceCard({
       title="Testnet Stablecoin Vault"
       subtitle="Live NEP-141 tokens on NEAR testnet with direct wallet settlement"
     >
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-zinc-800">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-border">
         <div className="flex items-center gap-2">
-          <Coins className="w-4 h-4 text-emerald-400" />
-          <span className="text-xs text-zinc-300">
+          <Coins className="w-4 h-4 text-[#00ec97]" />
+          <span className="text-xs text-muted">
             Automated liquidity reserves & user balances
           </span>
         </div>
@@ -90,46 +90,46 @@ export function TokenBalanceCard({
             href="https://faucet.circle.com/"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-semibold rounded border border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 transition-colors"
+            className="flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-semibold border border-[#38bdf8] bg-[#38bdf8]/10 hover:bg-[#38bdf8]/20 text-[#38bdf8] transition-colors"
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            <span>Circle NEAR Testnet USDC Faucet</span>
+            <span>Circle USDC Faucet ↗</span>
           </a>
           <button
             onClick={handleClaimFaucet}
             disabled={isClaiming || !accountId}
-            className="flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-semibold rounded bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors"
+            className="flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-semibold bg-[#00ec97] hover:bg-[#00ec97]/90 disabled:opacity-50 disabled:cursor-not-allowed text-[#090a0f] transition-colors"
           >
             <Droplets className="w-3.5 h-3.5" />
-            {isClaiming ? "Dispensing Demo USDC..." : "Claim 500 Demo USDC"}
+            {isClaiming ? "Dispensing Demo USDC..." : "[ CLAIM 500 DEMO USDC ]"}
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-4">
-        <div className="p-3.5 bg-zinc-900 border border-zinc-800 rounded">
-          <div className="flex items-center justify-between text-xs text-zinc-400 mb-1">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 my-3">
+        <div className="p-3 bg-[#090a0f] border border-border">
+          <div className="flex items-center justify-between text-xs text-muted mb-1">
             <span>Circle Testnet USDC</span>
-            <span className="text-blue-400 font-mono">Canonical</span>
+            <span className="text-[#38bdf8] font-mono">[Canonical]</span>
           </div>
-          <div className="text-xl font-bold font-mono text-zinc-100" suppressHydrationWarning>
+          <div className="text-xl font-bold font-mono text-foreground" suppressHydrationWarning>
             {userUsdc.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            <span className="text-xs ml-1.5 text-zinc-400 font-normal">USDC</span>
+            <span className="text-xs ml-1.5 text-muted font-normal">USDC</span>
           </div>
           {userDemoUsdc > 0 && (
-            <div className="text-[10px] font-mono text-zinc-500 mt-0.5" suppressHydrationWarning>
+            <div className="text-[10px] font-mono text-muted mt-0.5" suppressHydrationWarning>
               + {userDemoUsdc.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Demo Faucet USDC
             </div>
           )}
-          <div className="mt-2 pt-2 border-t border-zinc-800/80 flex items-center justify-between text-xs">
-            <span className="text-zinc-500 font-mono text-[11px] truncate max-w-[140px]" title={usdcId}>{usdcId}</span>
+          <div className="mt-2 pt-2 border-t border-border flex items-center justify-between text-xs">
+            <span className="text-muted font-mono text-[11px] truncate max-w-[140px]" title={usdcId}>{usdcId}</span>
             <button
               onClick={() => handleCopy(usdcId, "Circle USDC")}
-              className="text-zinc-400 hover:text-zinc-200 transition-colors p-1"
+              className="text-muted hover:text-foreground transition-colors p-1"
               title="Copy Contract ID"
             >
               {copiedToken === "Circle USDC" ? (
-                <Check className="w-3 h-3 text-emerald-400" />
+                <Check className="w-3 h-3 text-[#00ec97]" />
               ) : (
                 <Copy className="w-3 h-3" />
               )}
@@ -137,24 +137,24 @@ export function TokenBalanceCard({
           </div>
         </div>
 
-        <div className="p-3.5 bg-zinc-900 border border-zinc-800 rounded">
-          <div className="flex items-center justify-between text-xs text-zinc-400 mb-1">
+        <div className="p-3 bg-[#090a0f] border border-border">
+          <div className="flex items-center justify-between text-xs text-muted mb-1">
             <span>Your EURe Balance</span>
-            <span className="text-emerald-400 font-mono">6 decimals</span>
+            <span className="text-[#00ec97] font-mono">[6 decimals]</span>
           </div>
-          <div className="text-xl font-bold font-mono text-zinc-100" suppressHydrationWarning>
+          <div className="text-xl font-bold font-mono text-foreground" suppressHydrationWarning>
             {userEure.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            <span className="text-xs ml-1.5 text-zinc-400 font-normal">EURe</span>
+            <span className="text-xs ml-1.5 text-muted font-normal">EURe</span>
           </div>
-          <div className="mt-2 pt-2 border-t border-zinc-800/80 flex items-center justify-between text-xs">
-            <span className="text-zinc-500 font-mono text-[11px] truncate max-w-[140px]">{eureId}</span>
+          <div className="mt-2 pt-2 border-t border-border flex items-center justify-between text-xs">
+            <span className="text-muted font-mono text-[11px] truncate max-w-[140px]">{eureId}</span>
             <button
               onClick={() => handleCopy(eureId, "EURe")}
-              className="text-zinc-400 hover:text-zinc-200 transition-colors p-1"
+              className="text-muted hover:text-foreground transition-colors p-1"
               title="Copy Contract ID"
             >
               {copiedToken === "EURe" ? (
-                <Check className="w-3 h-3 text-emerald-400" />
+                <Check className="w-3 h-3 text-[#00ec97]" />
               ) : (
                 <Copy className="w-3 h-3" />
               )}
@@ -162,17 +162,17 @@ export function TokenBalanceCard({
           </div>
         </div>
 
-        <div className="p-3.5 bg-zinc-900 border border-zinc-800 rounded">
-          <div className="flex items-center justify-between text-xs text-zinc-400 mb-1">
+        <div className="p-3 bg-[#090a0f] border border-border">
+          <div className="flex items-center justify-between text-xs text-muted mb-1">
             <span>Protocol Vault Reserve</span>
-            <ShieldCheck className="w-3.5 h-3.5 text-zinc-500" />
+            <ShieldCheck className="w-3.5 h-3.5 text-muted" />
           </div>
-          <div className="text-xl font-bold font-mono text-zinc-100" suppressHydrationWarning>
+          <div className="text-xl font-bold font-mono text-foreground" suppressHydrationWarning>
             {vaultEure.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            <span className="text-xs ml-1.5 text-zinc-400 font-normal">EURe</span>
+            <span className="text-xs ml-1.5 text-muted font-normal">EURe</span>
           </div>
-          <div className="mt-2 pt-2 border-t border-zinc-800/80 text-[11px] font-mono text-zinc-400" suppressHydrationWarning>
-            Circle USDC Escrowed: <span className="text-blue-300 font-semibold">{vaultUsdc.toFixed(2)} USDC</span>
+          <div className="mt-2 pt-2 border-t border-border text-[11px] font-mono text-muted" suppressHydrationWarning>
+            Circle USDC Escrowed: <span className="text-[#38bdf8] font-semibold">{vaultUsdc.toFixed(2)} USDC</span>
           </div>
         </div>
       </div>

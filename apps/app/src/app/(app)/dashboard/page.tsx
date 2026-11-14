@@ -466,12 +466,14 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-4">
-      {/* 1. System Status & Security Banner */}
-      <div className="rounded-xl border border-border bg-surface p-3 text-xs">
+      {/* 1. Terminal System Status & Security Bar */}
+      <div className="border border-border bg-surface p-3 text-xs font-mono">
         <div className="flex items-center justify-between pb-2 mb-2 border-b border-border">
           <div className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-accent-blue" />
-            <span className="font-semibold text-foreground">NEAR Testnet FX Treasury Agent</span>
+            <span className="text-[#00ec97]">┌─</span>
+            <span className="font-semibold text-foreground uppercase tracking-wider">
+              [ NEAR TESTNET FX TREASURY AGENT ]
+            </span>
           </div>
           <button
             onClick={() => {
@@ -479,10 +481,10 @@ export default function DashboardPage() {
               loadData();
             }}
             disabled={refreshing}
-            className="flex items-center gap-1 text-muted hover:text-foreground text-[11px]"
+            className="flex items-center gap-1 text-muted hover:text-[#00ec97] text-[11px] transition-colors"
           >
             <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
-            <span>Refresh</span>
+            <span>[REFRESH]</span>
           </button>
         </div>
 
@@ -493,7 +495,7 @@ export default function DashboardPage() {
               href={explorerAccountUrl(contractId)}
               target="_blank"
               rel="noreferrer"
-              className="font-mono text-accent-blue hover:underline inline-flex items-center gap-0.5"
+              className="text-[#38bdf8] hover:underline inline-flex items-center gap-0.5"
             >
               <span>{contractId.slice(0, 16)}...</span>
               <ExternalLink className="h-2.5 w-2.5" />
@@ -505,7 +507,7 @@ export default function DashboardPage() {
               href={explorerAccountUrl(daoId)}
               target="_blank"
               rel="noreferrer"
-              className="font-mono text-accent-blue hover:underline inline-flex items-center gap-0.5"
+              className="text-[#38bdf8] hover:underline inline-flex items-center gap-0.5"
             >
               <span>{daoId.slice(0, 16)}...</span>
               <ExternalLink className="h-2.5 w-2.5" />
@@ -513,11 +515,11 @@ export default function DashboardPage() {
           </div>
           <div>
             <span className="text-muted">Auto-Cap: </span>
-            <span className="font-mono font-medium text-foreground">{autoCapUsdc.toFixed(2)} USDC</span>
+            <span className="font-medium text-foreground">{autoCapUsdc.toFixed(2)} USDC</span>
           </div>
           <div>
             <span className="text-muted">Max Chunk: </span>
-            <span className="font-mono font-medium text-foreground">{maxChunkLimitUsdc.toFixed(2)} USDC</span>
+            <span className="font-medium text-[#00ec97]">{maxChunkLimitUsdc.toFixed(2)} USDC</span>
           </div>
         </div>
       </div>
@@ -784,51 +786,57 @@ export default function DashboardPage() {
                   : "bg-zinc-800 text-zinc-400";
 
               return (
-                <div key={o.id} className="rounded-xl border border-border bg-background p-3 text-xs">
+                <div key={o.id} className="border border-border bg-[#090a0f] p-3 text-xs font-mono">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono font-bold text-foreground">Order #{o.id}</span>
-                      <span className="font-mono text-[11px] text-muted">{o.pair_label}</span>
+                      <span className="font-bold text-foreground">ORDER #{o.id}</span>
+                      <span className="text-[11px] text-muted">{o.pair_label}</span>
                       {o.invoice_ref && (
-                        <span className="rounded bg-surface border border-border px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">
+                        <span className="border border-border bg-[#11131b] px-1.5 py-0.5 text-[10px] text-zinc-300">
                           {o.invoice_ref}
                         </span>
                       )}
                     </div>
                     <span
                       data-testid={`order-${o.id}-status`}
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${badgeTone}`}
+                      className={`border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                        display.kind === "paid" || isActive
+                          ? "border-[#00ec97] bg-[#00ec97]/10 text-[#00ec97]"
+                          : isPending || display.kind === "pending_approval"
+                          ? "border-amber-400 bg-amber-400/10 text-amber-400"
+                          : "border-border bg-[#11131b] text-muted"
+                      }`}
                     >
-                      {display.label}
+                      [{display.label}]
                     </span>
                   </div>
 
                   {/* Callback-Confirmed Invoice Balance Panel */}
                   {targetOutEur > 0 && (
-                    <div className="mb-2.5 rounded-lg border border-border bg-surface p-2 space-y-1.5">
+                    <div className="mb-2.5 border border-border bg-[#11131b] p-2 space-y-1.5">
                       <div className="flex items-center justify-between text-[10px] text-muted">
                         <span>
                           Supplier:{" "}
-                          <strong className="font-mono text-foreground">{o.recipient || o.requester}</strong>
+                          <strong className="text-foreground">{o.recipient || o.requester}</strong>
                         </span>
-                        <span className="font-mono">{invoicePct}% settled</span>
+                        <span>{invoicePct}% settled</span>
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-[11px]">
                         <div>
                           <div className="text-[10px] text-muted">Invoice Target</div>
-                          <div className="font-mono font-semibold text-foreground">{targetOutEur.toFixed(2)} EURe</div>
+                          <div className="font-semibold text-foreground">{targetOutEur.toFixed(2)} EURe</div>
                         </div>
                         <div>
                           <div className="text-[10px] text-muted">Confirmed Paid</div>
-                          <div className="font-mono font-semibold text-emerald-400">{settledOutEur.toFixed(2)} EURe</div>
+                          <div className="font-semibold text-[#00ec97]">{settledOutEur.toFixed(2)} EURe</div>
                         </div>
                         <div>
                           <div className="text-[10px] text-muted">Amount Due</div>
-                          <div className="font-mono font-bold text-amber-400">{remainingDueEur.toFixed(2)} EURe</div>
+                          <div className="font-bold text-amber-400">{remainingDueEur.toFixed(2)} EURe</div>
                         </div>
                       </div>
                       {pendingOutEur > 0 && (
-                        <div className="text-[10px] font-mono text-accent-blue">
+                        <div className="text-[10px] text-[#38bdf8]">
                           In-Flight Settlement Callback: {pendingOutEur.toFixed(2)} EURe
                         </div>
                       )}
@@ -841,12 +849,12 @@ export default function DashboardPage() {
                       <span className="text-muted">
                         Budget Settled: <strong className="text-foreground">{executed.toFixed(2)}</strong> / {total.toFixed(2)} USDC
                       </span>
-                      <span className="font-mono font-medium text-foreground">{pct}%</span>
+                      <span className="font-medium text-foreground">{pct}%</span>
                     </div>
-                    <div className="h-1.5 w-full rounded-full bg-zinc-800 overflow-hidden">
+                    <div className="h-1.5 w-full bg-[#181b26] overflow-hidden">
                       <div
                         className={`h-full transition-all duration-300 ${
-                          pct === 100 ? "bg-green-500" : "bg-accent-blue"
+                          pct === 100 ? "bg-[#00ec97]" : "bg-[#38bdf8]"
                         }`}
                         style={{ width: `${pct}%` }}
                       />

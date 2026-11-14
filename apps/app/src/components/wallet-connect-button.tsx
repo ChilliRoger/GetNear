@@ -64,13 +64,13 @@ export function WalletConnectButton() {
   // ──────────────── DISCONNECTED STATE ────────────────
   if (!isConnected || !accountId) {
     return (
-      <div className="relative" ref={dropdownRef}>
+      <div className="relative font-mono" ref={dropdownRef}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-1.5 rounded-lg border border-accent-blue/40 bg-accent-blue/15 px-3 py-1.5 text-xs font-semibold text-accent-blue transition-colors hover:bg-accent-blue/25"
+          className="flex items-center gap-1.5 border border-[#38bdf8] bg-[#38bdf8]/10 px-3 py-1.5 text-xs font-semibold text-[#38bdf8] transition-colors hover:bg-[#38bdf8]/20"
         >
           <Wallet className="h-3.5 w-3.5" />
-          <span>Connect Wallet</span>
+          <span>[ CONNECT WALLET ]</span>
           <ChevronDown
             className={`h-3 w-3 transition-transform ${isOpen ? "rotate-180" : ""}`}
           />
@@ -196,18 +196,18 @@ export function WalletConnectButton() {
     accountId.length > 20 ? `${accountId.slice(0, 16)}...` : accountId;
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative font-mono" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-border-hover"
+        className="flex items-center gap-2 border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-[#00ec97]"
       >
-        <span className="h-2 w-2 rounded-full bg-accent-green" />
-        <span className="rounded bg-zinc-800 px-1 py-0.5 text-[9px] font-mono uppercase text-zinc-300">
+        <span className="h-1.5 w-1.5 bg-[#00ec97]" />
+        <span className="border border-border bg-[#090a0f] px-1 py-0.5 text-[9px] uppercase text-muted">
           {getWalletBadge()}
         </span>
-        <span className="font-mono text-[11px]">{shortName}</span>
+        <span className="text-[11px] font-semibold text-foreground">{shortName}</span>
         {balance && (
-          <span className="text-[10px] text-muted">({balance})</span>
+          <span className="text-[10px] text-[#00ec97]">({balance})</span>
         )}
         <ChevronDown
           className={`h-3 w-3 text-muted transition-transform ${isOpen ? "rotate-180" : ""}`}

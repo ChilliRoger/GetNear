@@ -18,8 +18,8 @@ interface AiOrderIntakeProps {
 }
 
 const EXAMPLE_PROMPTS = [
-  "Convert 500 USDC to EURe in 100 USDC chunks within 24 hours",
-  "Pay supplier-eu.chilliroger-operator.testnet 8.70 EURe from $15 Circle USDC escrow by 24h using max 10 USDC chunks at 200 bps",
+  "Convert 60 USDC to EURe in 20 USDC chunks within 24 hours",
+  "Pay supplier-eu.chilliroger-operator.testnet 8.70 EURe from $15 Circle USDC escrow by 24h using max 10 USDC chunks at 120 bps",
 ];
 
 export function AiOrderIntake({ onApply }: AiOrderIntakeProps) {
@@ -89,19 +89,19 @@ export function AiOrderIntake({ onApply }: AiOrderIntakeProps) {
   };
 
   return (
-    <div className="rounded-lg border border-border bg-background/60 p-2.5 space-y-2 text-xs">
+    <div className="border border-border bg-[#090a0f] p-3 space-y-2 text-xs font-mono">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 font-semibold text-foreground">
-          <MessageSquareText className="h-3.5 w-3.5 text-accent-blue" />
-          <span>Optional Natural-Language Order Intake (No Auto-Sign)</span>
+          <MessageSquareText className="h-3.5 w-3.5 text-[#38bdf8]" />
+          <span>[ NATURAL-LANGUAGE ORDER INTAKE // NO AUTO-SIGN ]</span>
         </div>
 
         {status && (
           <span
-            className={`rounded px-1.5 py-0.5 text-[10px] font-mono ${
+            className={`px-1.5 py-0.5 text-[10px] font-mono border ${
               status.configured
-                ? "bg-accent-blue/15 text-accent-blue"
-                : "bg-surface text-muted border border-border"
+                ? "border-[#38bdf8] bg-[#38bdf8]/10 text-[#38bdf8]"
+                : "bg-surface text-muted border-border"
             }`}
           >
             {status.configured ? `${status.providerLabel} · ${status.model}` : "AI Key Not Set (Optional)"}
@@ -124,9 +124,9 @@ export function AiOrderIntake({ onApply }: AiOrderIntakeProps) {
           <button
             type="button"
             onClick={() => setSelectedProvider(undefined)}
-            className={`rounded px-1.5 py-0.5 font-mono border transition-colors ${
+            className={`px-1.5 py-0.5 font-mono border transition-colors ${
               selectedProvider === undefined
-                ? "border-accent-blue bg-accent-blue/15 text-accent-blue font-semibold"
+                ? "border-[#38bdf8] bg-[#38bdf8]/15 text-[#38bdf8] font-semibold"
                 : "border-border bg-surface text-muted hover:text-foreground"
             }`}
           >
@@ -139,9 +139,9 @@ export function AiOrderIntake({ onApply }: AiOrderIntakeProps) {
                 key={p}
                 type="button"
                 onClick={() => setSelectedProvider(p)}
-                className={`rounded px-1.5 py-0.5 font-mono border transition-colors ${
+                className={`px-1.5 py-0.5 font-mono border transition-colors ${
                   selectedProvider === p
-                    ? "border-accent-blue bg-accent-blue/15 text-accent-blue font-semibold"
+                    ? "border-[#38bdf8] bg-[#38bdf8]/15 text-[#38bdf8] font-semibold"
                     : "border-border bg-surface text-muted hover:text-foreground"
                 }`}
               >
@@ -156,8 +156,8 @@ export function AiOrderIntake({ onApply }: AiOrderIntakeProps) {
           rows={2}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder='e.g. "Pay supplier-eu.chilliroger-operator.testnet 8.70 EURe from $15 Circle USDC escrow by 24h in 10 USDC chunks at 200 bps"'
-          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-zinc-500 focus:border-accent-blue focus:outline-none resize-none"
+          placeholder='e.g. "Pay supplier-eu.chilliroger-operator.testnet 8.70 EURe from $15 Circle USDC escrow by 24h using max 10 USDC chunks at 120 bps"'
+          className="w-full border border-border bg-[#050609] px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted/60 focus:border-[#00ec97] focus:outline-none resize-none font-mono"
         />
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -166,9 +166,9 @@ export function AiOrderIntake({ onApply }: AiOrderIntakeProps) {
                 key={idx}
                 type="button"
                 onClick={() => setPrompt(ex)}
-                className="rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] text-muted hover:text-foreground transition-colors"
+                className="border border-border bg-surface px-1.5 py-0.5 text-[10px] text-muted hover:text-foreground transition-colors"
               >
-                Example {idx + 1}
+                [Example {idx + 1}]
               </button>
             ))}
           </div>
@@ -177,7 +177,7 @@ export function AiOrderIntake({ onApply }: AiOrderIntakeProps) {
             type="button"
             onClick={handleParse}
             disabled={loading || !prompt.trim()}
-            className="flex items-center gap-1 rounded-lg border border-accent-blue/40 bg-accent-blue/15 px-2.5 py-1 text-[11px] font-semibold text-accent-blue hover:bg-accent-blue/25 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-1 border border-[#00ec97] bg-[#00ec97]/15 px-2.5 py-1 text-[11px] font-semibold text-[#00ec97] hover:bg-[#00ec97]/25 disabled:opacity-50 transition-colors"
           >
             {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowRight className="h-3 w-3" />}
             <span>{loading ? "Parsing..." : "Parse into Draft"}</span>

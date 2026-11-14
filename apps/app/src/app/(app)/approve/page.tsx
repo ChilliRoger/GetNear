@@ -5,7 +5,7 @@ import { Card } from "@/components/card";
 import { useToast } from "@/components/toast-provider";
 import { useNearWallet } from "@/lib/near-wallet";
 import { explorerAccountUrl } from "@getnear/shared";
-import { RefreshCw, ExternalLink, ShieldCheck } from "lucide-react";
+import { RefreshCw, ExternalLink, ShieldCheck, CheckCircle2, Clock } from "lucide-react";
 
 interface DaoProposal {
   id: number;
@@ -91,21 +91,21 @@ export default function ApprovePage() {
   const isCouncil = Boolean(accountId && councilAccounts.includes(accountId));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 font-mono">
       {/* 1. Header & Council Switcher */}
       <Card
-        title="Sputnik DAO Multisig Governance"
+        title="SPUTNIK DAO MULTISIG GOVERNANCE (2-OF-3)"
         subtitle="2-of-3 council approval required for orders exceeding 100 USDC auto-cap"
       >
         <div className="space-y-3 pt-1 text-xs">
           <div className="flex items-center justify-between pb-2 border-b border-border">
             <div>
-              <span className="text-muted">DAO Account: </span>
+              <span className="text-muted">DAO Contract: </span>
               <a
                 href={explorerAccountUrl(daoId)}
                 target="_blank"
                 rel="noreferrer"
-                className="font-mono text-accent-blue hover:underline inline-flex items-center gap-0.5"
+                className="text-[#38bdf8] hover:underline inline-flex items-center gap-0.5"
               >
                 <span>{daoId}</span>
                 <ExternalLink className="h-2.5 w-2.5" />
@@ -117,15 +117,17 @@ export default function ApprovePage() {
                 loadProposals();
               }}
               disabled={refreshing}
-              className="flex items-center gap-1 text-muted hover:text-foreground text-[11px]"
+              className="flex items-center gap-1 text-muted hover:text-[#00ec97] text-[11px] transition-colors"
             >
               <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
-              <span>Refresh</span>
+              <span>[REFRESH]</span>
             </button>
           </div>
 
           <div>
-            <div className="text-[11px] text-muted mb-1 font-medium">Switch Council Voter:</div>
+            <div className="text-[10px] uppercase tracking-wider text-muted mb-1.5">
+              Active Voting Council Member:
+            </div>
             <div className="grid grid-cols-3 gap-2">
               {councilAccounts.map((acc, idx) => {
                 const isCurrent = acc === accountId;
@@ -133,13 +135,14 @@ export default function ApprovePage() {
                   <button
                     key={acc}
                     onClick={() => connect(acc)}
-                    className={`rounded-lg py-1.5 px-2 text-center text-xs font-semibold transition-colors border ${
+                    className={`py-1.5 px-2 text-center text-xs font-semibold transition-colors border ${
                       isCurrent
-                        ? "border-accent-blue bg-accent-blue/15 text-accent-blue"
-                        : "border-border bg-background text-muted hover:text-foreground hover:border-zinc-700"
+                        ? "border-[#00ec97] bg-[#00ec97]/15 text-[#00ec97]"
+                        : "border-border bg-[#090a0f] text-muted hover:text-foreground hover:border-zinc-700"
                     }`}
                   >
-                    Council {idx + 1}
+                    <span>[ SEAT {idx + 1} ]</span>
+                    {isCurrent && <span className="block text-[9px] text-[#00ec97]">ACTIVE VOTER</span>}
                   </button>
                 );
               })}
@@ -150,7 +153,7 @@ export default function ApprovePage() {
 
       {/* 2. Proposals List */}
       <Card
-        title={`DAO Proposals (${proposals.length})`}
+        title={`DAO PROPOSALS (${proposals.length})`}
         subtitle="FunctionCall proposals to execute approve_order on fx-budget"
       >
         {loading ? (
@@ -169,104 +172,105 @@ export default function ApprovePage() {
                 const approveVotes = Object.values(p.votes).filter((v) => v === "Approve").length;
                 const isApproved = p.status === "Approved";
                 const isProcessing = votingId === p.id;
-                const hasVoted = accountId && p.votes[accountId];
+                const hasVoted = accountId ? p.votes[accountId] : undefined;
 
               return (
-                <div key={p.id} className="rounded-xl border border-border bg-background p-3 text-xs">
-                  <div className="flex items-center justify-between mb-2">
+                <div key={p.id} className="border border-border bg-[#090a0f] p-3 text-xs font-mono">
+                  <div className="flex items-center justify-between mb-2 pb-2 border-b border-border/60">
                     <div className="flex items-center gap-1.5">
-                      <ShieldCheck className="h-4 w-4 text-accent-blue" />
-                      <span className="font-mono font-bold text-foreground">Proposal #{p.id}</span>
+                      <ShieldCheck className="h-4 w-4 text-[#38bdf8]" />
+                      <span className="font-bold text-foreground">PROPOSAL #{p.id}</span>
                     </div>
                     <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                      className={`border px-2 py-0.5 text-[10px] font-semibold uppercase ${
                         isApproved
-                          ? "bg-green-500/15 text-green-400"
-                          : "bg-amber-500/15 text-amber-400"
+                          ? "border-[#00ec97] bg-[#00ec97]/10 text-[#00ec97]"
+                          : "border-amber-400 bg-amber-400/10 text-amber-400"
                       }`}
                     >
-                      {p.status} ({approveVotes}/2 Approved)
+                      {p.status} ({approveVotes}/2 VOTES)
                     </span>
                   </div>
 
-                  <div className="rounded-lg bg-surface p-2 mb-2 font-mono text-[11px] text-zinc-300 break-all border border-border">
+                  <div className="bg-[#05060a] p-2 mb-2 text-[11px] text-zinc-300 break-all border border-border">
                     {p.description}
                   </div>
 
                   <div className="mb-3 text-[11px] text-muted">
-                    <span className="font-medium text-foreground">Signatures: </span>
+                    <span className="font-semibold text-foreground">COUNCIL SIGNATURES: </span>
                     {Object.keys(p.votes).length === 0 ? (
                       <span>No votes cast yet</span>
                     ) : (
-                      <div className="mt-1 space-y-0.5">
-                        {Object.entries(p.votes).map(([voter, vote]) => (
-                          <div key={voter} className="flex items-center justify-between font-mono text-[10px]">
-                            <span className="text-zinc-400">{voter}</span>
-                            <span
-                              className={`font-semibold ${
-                                vote === "Approve" ? "text-green-400" : "text-red-400"
-                              }`}
-                            >
-                              {vote}
-                            </span>
-                          </div>
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {Object.entries(p.votes).map(([voter, v]) => (
+                          <span
+                            key={voter}
+                            className={`border px-1.5 py-0.5 text-[10px] ${
+                              v === "Approve"
+                                ? "border-[#00ec97] text-[#00ec97] bg-[#00ec97]/10"
+                                : "border-red-400 text-red-400 bg-red-400/10"
+                            }`}
+                          >
+                            [ {voter.replace("chilliroger-", "").replace(".testnet", "")} : {v.toUpperCase()} ]
+                          </span>
                         ))}
                       </div>
                     )}
                   </div>
 
-                  {!isApproved && (
+                  {/* Actions for InProgress proposals */}
+                  {!isApproved && p.status === "InProgress" && (
                     <div className="pt-2 border-t border-border">
-                      {!accountId ? (
-                        <button
-                          onClick={() => connect(councilAccounts[0])}
-                          className="w-full py-1.5 rounded-lg bg-accent-blue/15 text-accent-blue border border-accent-blue/20 font-semibold hover:bg-accent-blue/25 transition-colors text-xs"
-                        >
-                          Connect Council Wallet to Vote
-                        </button>
-                      ) : !isCouncil ? (
-                        <div className="rounded-lg bg-surface border border-border p-2 space-y-1.5">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-amber-400 font-medium">Connected as Operator</span>
-                            <span className="text-[10px] text-muted">Council only</span>
-                          </div>
-                          <div className="text-[11px] text-zinc-400">
-                            Operator cannot vote on DAO proposals. Switch to a Council member:
-                          </div>
+                      {!isCouncil ? (
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] text-amber-400">
+                            Current account ({accountId ? accountId.slice(0, 16) + "..." : "none"}) cannot vote. Connect a Council Member seat above to sign:
+                          </p>
                           <div className="flex gap-2">
-                            {councilAccounts.slice(0, 2).map((acc, idx) => (
+                            {councilAccounts.map((acc, idx) => (
                               <button
                                 key={acc}
                                 onClick={() => connect(acc)}
-                                className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/30 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors font-mono"
+                                className="flex-1 py-1.5 px-2 border border-[#38bdf8] bg-[#38bdf8]/10 text-[#38bdf8] text-[11px] font-semibold hover:bg-[#38bdf8]/20 transition-colors"
                               >
-                                Switch to Council {idx + 1} &rarr;
+                                [ VOTE AS COUNCIL {idx + 1} &rarr; ]
                               </button>
                             ))}
                           </div>
+                        </div>
+                      ) : hasVoted ? (
+                        <div className="text-[11px] text-[#00ec97] font-semibold">
+                          [✓] You already voted &quot;{hasVoted}&quot; on this proposal with {accountId}.
                         </div>
                       ) : (
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleVote(p.id, "VoteApprove")}
                             disabled={isProcessing}
-                            className="flex-1 py-1.5 rounded-lg bg-green-500/15 text-green-400 border border-green-500/20 font-semibold hover:bg-green-500/25 disabled:opacity-50 transition-colors text-xs"
+                            className="flex-1 py-2 bg-[#00ec97] text-[#090a0f] border border-[#00ec97] font-bold hover:bg-[#00ec97]/90 disabled:opacity-50 transition-colors text-xs"
                           >
                             {isProcessing
-                              ? "Submitting..."
-                              : hasVoted
-                              ? "Change Vote to Approve"
-                              : "Vote Approve (2-of-3)"}
+                              ? "[ CASTING VOTE... ]"
+                              : approveVotes === 1
+                              ? "[ 01 CAST 2ND APPROVAL VOTE (ACTIVATES ORDER) → ]"
+                              : "[ 01 CAST APPROVAL VOTE → ]"}
                           </button>
                           <button
                             onClick={() => handleVote(p.id, "VoteReject")}
                             disabled={isProcessing}
-                            className="py-1.5 px-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/20 font-semibold hover:bg-red-500/25 disabled:opacity-50 transition-colors text-xs"
+                            className="py-2 px-4 bg-red-500/10 text-red-400 border border-red-500/30 font-bold hover:bg-red-500/20 disabled:opacity-50 transition-colors text-xs"
                           >
-                            Reject
+                            [ REJECT ]
                           </button>
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {isApproved && (
+                    <div className="pt-2 border-t border-border text-[11px] text-[#00ec97] font-semibold flex items-center gap-1.5">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <span>SPUTNIK DAO APPROVED // ORDER ACTIVATED ON FXBUDGET CONTRACT</span>
                     </div>
                   )}
                 </div>

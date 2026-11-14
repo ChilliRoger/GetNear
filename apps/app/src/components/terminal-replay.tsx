@@ -3,54 +3,46 @@
 import { useState, useEffect, useRef } from "react";
 
 const SIMULATION_LINES = [
-  { text: "$ cre workflow simulate treasury --broadcast", type: "command" as const, delay: 0 },
+  { text: "$ getnear agent monitor --network=testnet --pair=USDC/EURe", type: "command" as const, delay: 0 },
   { text: "", type: "blank" as const, delay: 300 },
-  { text: "Initializing...", type: "system" as const, delay: 600 },
-  { text: "Loading settings...", type: "system" as const, delay: 900 },
-  { text: "Checking RPC connectivity...", type: "system" as const, delay: 1200 },
-  { text: "Compiling workflow...", type: "system" as const, delay: 1800 },
-  { text: "✓ Workflow compiled", type: "success" as const, delay: 2400 },
-  { text: "✓ Simulation limits enabled", type: "success" as const, delay: 2700 },
-  { text: "", type: "blank" as const, delay: 3000 },
-  { text: "[SIMULATION] Simulator Initialized", type: "sim" as const, delay: 3300 },
-  { text: "", type: "blank" as const, delay: 3600 },
-  { text: "[SIMULATION] Running trigger trigger=cron-trigger@1.0.0", type: "sim" as const, delay: 3900 },
-  { text: "[USER LOG] Running CronTrigger", type: "log" as const, delay: 4200 },
-  { text: "[USER LOG] === GetNear Treasury Workflow Start ===", type: "highlight" as const, delay: 4500 },
-  { text: "[USER LOG] Fetching quote from Uniswap Trade API", type: "log" as const, delay: 4800 },
-  { text: "[USER LOG] Quote: rate=0.8682 EURC/USDC  in=5.00 USDC  out=4.34 EURC", type: "data" as const, delay: 5400 },
-  { text: "[USER LOG] Reading policy from TreasuryVault on Arc", type: "log" as const, delay: 5900 },
-  { text: "[USER LOG] Policy: threshold=$10  band=[0.80, 1.10]  v2", type: "data" as const, delay: 6400 },
-  { text: "[USER LOG] Reading balances from SwapExecutor on Base", type: "log" as const, delay: 6900 },
-  { text: "[USER LOG] Balances: USDC=$9.00  EURC=$0.87", type: "data" as const, delay: 7400 },
-  { text: "[USER LOG] Decision: EXECUTE (amount=$5.00 ≤ threshold=$10)", type: "decision" as const, delay: 8000 },
-  { text: "", type: "blank" as const, delay: 8300 },
-  { text: "[USER LOG] Executing auto-trade on Base via Uniswap V3", type: "action" as const, delay: 8600 },
-  { text: "[USER LOG] executeSwap tx succeeded ✓", type: "success" as const, delay: 9400 },
-  { text: "[USER LOG] Logging execution on Arc", type: "action" as const, delay: 9900 },
-  { text: "[USER LOG] logExecution tx succeeded ✓", type: "success" as const, delay: 10400 },
-  { text: "", type: "blank" as const, delay: 10700 },
-  { text: "[USER LOG] === AUTO EXECUTE complete ===", type: "highlight" as const, delay: 11000 },
-  { text: "", type: "blank" as const, delay: 11300 },
-  { text: '✓ Workflow Simulation Result: "EXECUTED"', type: "result" as const, delay: 11600 },
-  { text: "", type: "blank" as const, delay: 11900 },
-  { text: "╭──────────────────────────────────────────────────────╮", type: "box" as const, delay: 12200 },
-  { text: "│ Simulation complete! Ready to deploy your workflow.  │", type: "box" as const, delay: 12200 },
-  { text: "╰──────────────────────────────────────────────────────╯", type: "box" as const, delay: 12200 },
+  { text: "[AGENT] Initializing GetNear Autonomous Treasury Runner...", type: "system" as const, delay: 600 },
+  { text: "[AGENT] Connected to NEAR RPC: https://testnet.nearblocks.io", type: "system" as const, delay: 900 },
+  { text: "[AGENT] Verified restricted function-call key: chilliroger-agent.testnet", type: "success" as const, delay: 1200 },
+  { text: "[CONTRACT] Reading limits from fx-budget.chilliroger-operator.testnet", type: "system" as const, delay: 1600 },
+  { text: "[CONTRACT] Limits: auto_cap=$100 USDC | max_chunk=$20 USDC | min_interval=60s", type: "data" as const, delay: 2000 },
+  { text: "", type: "blank" as const, delay: 2300 },
+  { text: "[ORACLE] Querying 1Click API (dry: true) for USDC → EURe quote...", type: "sim" as const, delay: 2600 },
+  { text: "[ORACLE] 1Click quote rate = 0.90354 EURe per USDC", type: "data" as const, delay: 3100 },
+  { text: "[ORACLE] Querying European Central Bank reference rate via Frankfurter...", type: "sim" as const, delay: 3500 },
+  { text: "[ORACLE] ECB reference rate = 0.90481 EUR per USD", type: "data" as const, delay: 4000 },
+  { text: "[STRATEGY] Calculating price divergence: dev = -14 bps (Max allowed: 120 bps)", type: "highlight" as const, delay: 4500 },
+  { text: "[STRATEGY] Timing Score = 85 / 100 [ACTION: EXECUTE_CHUNK]", type: "decision" as const, delay: 5000 },
+  { text: "", type: "blank" as const, delay: 5300 },
+  { text: "[DISPATCH] Calling execute_chunk on fx-budget.chilliroger-operator.testnet", type: "action" as const, delay: 5600 },
+  { text: "[CHAIN] Transaction signed with restricted agent key ✓", type: "success" as const, delay: 6200 },
+  { text: "[SETTLEMENT] On-chain cross-contract callback on_chunk_settled() triggered", type: "sim" as const, delay: 6800 },
+  { text: "[VAULT] 2.16 EURe transferred to supplier-eu.chilliroger-operator.testnet ✓", type: "success" as const, delay: 7400 },
+  { text: "[ESCROW] Circle testnet USDC accounted / debited from escrow pool ✓", type: "success" as const, delay: 8000 },
+  { text: "[NEARBLOCKS] Tx confirmed: 8xKq3W...9z2L (Gas: 0.0008 NEAR)", type: "data" as const, delay: 8600 },
+  { text: "", type: "blank" as const, delay: 8900 },
+  { text: "┌────────────────────────────────────────────────────────┐", type: "box" as const, delay: 9200 },
+  { text: "│ [✓] CHUNK EXECUTION VERIFIED ON NEAR TESTNET           │", type: "box" as const, delay: 9200 },
+  { text: "│     Invoice target: 5.00 EURe · Settled: 2.16 EURe     │", type: "box" as const, delay: 9200 },
+  { text: "└────────────────────────────────────────────────────────┘", type: "box" as const, delay: 9200 },
 ];
 
 const typeColors: Record<string, string> = {
-  command: "text-accent-green font-bold",
+  command: "text-[#00ec97] font-bold",
   system: "text-muted",
-  success: "text-accent-green",
-  sim: "text-accent-blue/70",
+  success: "text-[#00ec97]",
+  sim: "text-[#38bdf8]",
   log: "text-muted/80",
-  data: "text-accent-blue font-medium",
-  highlight: "text-accent-amber font-bold",
-  decision: "text-accent-green font-bold",
-  action: "text-foreground",
-  result: "text-accent-green font-bold text-lg",
-  box: "text-accent-blue",
+  data: "text-[#38bdf8] font-medium",
+  highlight: "text-amber-400 font-bold",
+  decision: "text-[#00ec97] font-bold",
+  action: "text-foreground font-semibold",
+  result: "text-[#00ec97] font-bold text-base",
+  box: "text-[#00ec97]",
   blank: "",
 };
 
@@ -60,7 +52,6 @@ export function TerminalReplay() {
   const containerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
 
-  // Start animation when component scrolls into view
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -78,7 +69,6 @@ export function TerminalReplay() {
     return () => observerRef.current?.disconnect();
   }, [started]);
 
-  // Animate lines appearing
   useEffect(() => {
     if (!started) return;
 
@@ -94,7 +84,6 @@ export function TerminalReplay() {
     return () => timers.forEach(clearTimeout);
   }, [started]);
 
-  // Auto-scroll to bottom as lines appear
   useEffect(() => {
     if (containerRef.current) {
       const el = containerRef.current;
@@ -103,37 +92,42 @@ export function TerminalReplay() {
   }, [visibleLines]);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-[#0c0c0c]">
-      {/* Terminal header */}
-      <div className="flex items-center gap-2 border-b border-border/50 px-4 py-2.5">
-        <div className="flex gap-1.5">
-          <div className="h-3 w-3 rounded-full bg-accent-red/60" />
-          <div className="h-3 w-3 rounded-full bg-accent-amber/60" />
-          <div className="h-3 w-3 rounded-full bg-accent-green/60" />
+    <div className="border border-border bg-[#07080c] text-xs font-mono select-none">
+      {/* Terminal Title Bar */}
+      <div className="flex items-center justify-between border-b border-border bg-[#11131b] px-3 py-2 text-[11px] text-muted">
+        <div className="flex items-center gap-2">
+          <span className="text-[#00ec97]">●</span>
+          <span className="text-foreground font-semibold uppercase tracking-wider">
+            GETNEAR AUTONOMOUS AGENT CONSOLE // TESTNET REPLAY
+          </span>
         </div>
-        <span className="ml-2 text-[11px] font-medium text-muted/60">
-          CRE Workflow Simulation — Live Demo
-        </span>
+        <span className="text-[10px] text-muted">PID: 38175 · PORT: 38174</span>
       </div>
 
-      {/* Terminal body */}
+      {/* Terminal Output */}
       <div
         ref={containerRef}
-        className="h-[380px] overflow-y-auto px-4 py-3 font-mono text-[12px] leading-[1.7]"
+        className="h-80 overflow-y-auto p-4 space-y-1 font-mono text-[11px] leading-relaxed"
       >
-        {SIMULATION_LINES.slice(0, visibleLines).map((line, i) => (
-          <div
-            key={i}
-            className={`${typeColors[line.type] || ""} ${
-              line.type === "blank" ? "h-[1.7em]" : ""
-            } animate-fade-in`}
-          >
+        {SIMULATION_LINES.slice(0, visibleLines).map((line, idx) => (
+          <div key={idx} className={typeColors[line.type] || "text-foreground"}>
             {line.text}
           </div>
         ))}
-        {visibleLines < SIMULATION_LINES.length && started && (
-          <span className="inline-block h-4 w-2 animate-pulse bg-accent-green/80" />
+        {visibleLines < SIMULATION_LINES.length && (
+          <span className="inline-block h-3.5 w-2 bg-[#00ec97] animate-pulse align-middle" />
         )}
+      </div>
+
+      {/* Terminal Footer */}
+      <div className="border-t border-border bg-[#11131b] px-3 py-1.5 flex items-center justify-between text-[10px] text-muted">
+        <span>STATUS: AUTONOMOUS TWAP VERIFIED</span>
+        <button
+          onClick={() => setVisibleLines(SIMULATION_LINES.length)}
+          className="text-[#38bdf8] hover:underline"
+        >
+          [ SHOW FULL LOG ]
+        </button>
       </div>
     </div>
   );

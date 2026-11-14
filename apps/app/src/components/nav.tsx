@@ -5,11 +5,11 @@ import { usePathname } from "next/navigation";
 import { useI18n } from "@/lib/i18n";
 
 const tabs = [
-  { labelKey: "nav.dashboard", href: "/dashboard", icon: DashboardIcon },
-  { labelKey: "nav.analytics", href: "/analytics", icon: AnalyticsIcon },
-  { labelKey: "nav.trade", href: "/trade", icon: TradeIcon },
-  { labelKey: "nav.approve", href: "/approve", icon: ApproveIcon },
-  { labelKey: "nav.settings", href: "/settings", icon: SettingsIcon },
+  { id: "01", labelKey: "nav.dashboard", href: "/dashboard" },
+  { id: "02", labelKey: "nav.analytics", href: "/analytics" },
+  { id: "03", labelKey: "nav.trade", href: "/trade" },
+  { id: "04", labelKey: "nav.approve", href: "/approve" },
+  { id: "05", labelKey: "nav.settings", href: "/settings" },
 ];
 
 export function Nav() {
@@ -17,8 +17,8 @@ export function Nav() {
   const { t } = useI18n();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-surface/95 backdrop-blur-md">
-      <div className="mx-auto flex max-w-lg items-center justify-around">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-[#090a0f] select-none font-mono">
+      <div className="mx-auto flex max-w-xl items-center justify-between px-2">
         {tabs.map((tab) => {
           const isActive =
             pathname === tab.href || pathname.startsWith(tab.href + "/");
@@ -26,68 +26,25 @@ export function Nav() {
             <Link
               key={tab.href}
               href={tab.href}
-              className={`flex flex-1 flex-col items-center gap-1 py-3 text-xs transition-colors min-h-[48px] justify-center ${
+              className={`flex flex-1 flex-col items-center justify-center py-2.5 text-[11px] transition-colors border-t-2 ${
                 isActive
-                  ? "text-accent-blue"
-                  : "text-muted hover:text-foreground"
+                  ? "border-[#00ec97] bg-[#11131b] text-[#00ec97]"
+                  : "border-transparent text-muted hover:text-foreground hover:bg-surface/50"
               }`}
             >
-              <tab.icon active={isActive} />
-              <span className={isActive ? "font-medium" : ""}>{t(tab.labelKey)}</span>
-              {isActive && (
-                <span className="absolute top-0 h-0.5 w-12 rounded-b bg-accent-blue" />
-              )}
+              <div className="flex items-center gap-1 font-semibold tracking-wider">
+                <span className={isActive ? "text-[#00ec97]" : "text-muted/60"}>
+                  {tab.id}
+                </span>
+                <span>{t(tab.labelKey).toUpperCase()}</span>
+              </div>
+              <span className="text-[9px] text-muted/60">
+                {isActive ? "[ACTIVE]" : "······"}
+              </span>
             </Link>
           );
         })}
       </div>
     </nav>
-  );
-}
-
-function DashboardIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className={active ? "text-accent-blue" : "text-muted"}>
-      <rect x="2" y="2" width="7" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="2" y="12" width="7" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="11" y="2" width="7" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="11" y="10" width="7" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  );
-}
-
-function ApproveIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className={active ? "text-accent-blue" : "text-muted"}>
-      <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M7 10l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function TradeIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className={active ? "text-accent-blue" : "text-muted"}>
-      <path d="M4 8l4-4m0 0l4 4M8 4v12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M16 12l-4 4m0 0l-4-4m4 4V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function AnalyticsIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className={active ? "text-accent-blue" : "text-muted"}>
-      <path d="M3 17V9l3-3 4 4 4-6 3 3v10H3z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M3 13l3-3 4 4 4-6 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function SettingsIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className={active ? "text-accent-blue" : "text-muted"}>
-      <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M10 2v2m0 12v2m-8-8h2m12 0h2M4.93 4.93l1.41 1.41m7.32 7.32l1.41 1.41M4.93 15.07l1.41-1.41m7.32-7.32l1.41-1.41" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
   );
 }

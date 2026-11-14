@@ -1,174 +1,175 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
+import { useState, useEffect } from "react";
 
 interface QuoteData {
   quote: {
-    amountIn: string
-    amountOut: string
-    rate: number
-    source: string
-    quoteId: string
-    timeEstimate?: number
-    signature?: string
-  }
+    amountIn: string;
+    amountOut: string;
+    rate: number;
+    source: string;
+    quoteId: string;
+    timeEstimate?: number;
+    signature?: string;
+  };
   reference: {
-    pair: string
-    rate: number
-    source: string
-    timestamp: number
-  }
-  deviationBps: number
-  deviationPercent: string
-  isSimulated: boolean
+    pair: string;
+    rate: number;
+    source: string;
+    timestamp: number;
+  };
+  deviationBps: number;
+  deviationPercent: string;
+  isSimulated: boolean;
   route: {
-    pair: string
-    recommendedMinChunkUsd: number
-  }
+    pair: string;
+    recommendedMinChunkUsd: number;
+  };
 }
 
 export function LiveQuoteCard() {
-  const [data, setData] = useState<QuoteData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [amount, setAmount] = useState<number>(10)
+  const [data, setData] = useState<QuoteData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [amount, setAmount] = useState<number>(10);
 
   const fetchQuote = async (val: number) => {
-    setLoading(true)
-    setError(null)
+    setLoading(true);
+    setError(null);
     try {
-      const res = await fetch(`/api/quotes?amount=${val}`)
+      const res = await fetch(`/api/quotes?amount=${val}`);
       if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}))
-        throw new Error(errJson.error || `HTTP ${res.status}`)
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `HTTP ${res.status}`);
       }
-      const json = await res.json()
-      setData(json)
+      const json = await res.json();
+      setData(json);
     } catch (err) {
-      setError((err as Error).message)
+      setError((err as Error).message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    fetchQuote(amount)
-  }, [amount])
+    fetchQuote(amount);
+  }, [amount]);
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5 text-card-foreground">
-      <div className="flex items-center justify-between pb-3 border-b border-border/60">
+    <div className="border border-border bg-surface p-4 text-foreground font-mono">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-border/60 gap-2">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Live FX Rate Discovery
+          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted">
+            <span className="text-[#00ec97]">┌─</span>
+            <span>[ LIVE FX RATE DISCOVERY ]</span>
           </div>
-          <div className="text-base font-semibold text-foreground mt-0.5">
-            USDC / EURe Market Quote vs Reference
+          <div className="text-sm font-semibold text-foreground mt-0.5 pl-3">
+            USDC / EURe Market Quote vs ECB Reference
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border border-border/50 text-xs">
+          <div className="flex items-center bg-[#090a0f] p-0.5 border border-border text-xs">
             {[10, 50, 100].map((val) => (
               <button
                 key={val}
                 type="button"
                 onClick={() => setAmount(val)}
-                className={`px-2 py-0.5 rounded font-mono text-[11px] transition-colors ${
+                className={`px-2 py-0.5 text-[11px] transition-colors ${
                   amount === val
-                    ? "bg-background text-foreground font-semibold shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "bg-[#00ec97] text-[#090a0f] font-bold"
+                    : "text-muted hover:text-foreground"
                 }`}
               >
                 ${val}
               </button>
             ))}
           </div>
-          <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-muted text-muted-foreground">
-            Dry Quotes
+          <span className="text-[10px] uppercase px-1.5 py-0.5 border border-border bg-[#090a0f] text-muted">
+            DRY QUOTE
           </span>
           <button
             onClick={() => fetchQuote(amount)}
             disabled={loading}
-            className="text-xs px-2.5 py-1 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors disabled:opacity-50"
+            className="text-[11px] px-2.5 py-0.5 border border-border bg-surface hover:border-[#00ec97] hover:text-[#00ec97] transition-colors disabled:opacity-50"
           >
-            {loading ? "Refreshing..." : "Refresh"}
+            {loading ? "[...]" : "[REFRESH]"}
           </button>
         </div>
       </div>
 
       {error ? (
-        <div className="py-4 text-xs text-destructive">
+        <div className="py-4 text-xs text-red-400">
           Failed to load live quote: {error}
         </div>
       ) : !data ? (
-        <div className="py-4 text-xs text-muted-foreground">
+        <div className="py-4 text-xs text-muted">
           Fetching quote from 1Click and ECB...
         </div>
       ) : (
-        <div className="mt-4 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
-              <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
-                1Click Dry Quote
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="p-2.5 bg-[#090a0f] border border-border">
+              <div className="text-[10px] font-semibold text-muted uppercase tracking-wider">
+                1CLICK DRY QUOTE
               </div>
-              <div className="text-xl font-bold font-mono text-foreground mt-1">
+              <div className="text-lg font-bold text-foreground mt-1">
                 {data.quote.rate.toFixed(5)}
               </div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">
+              <div className="text-[10px] text-muted mt-0.5">
                 EURe per USDC ({data.quote.source})
               </div>
             </div>
 
-            <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
-              <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
-                ECB Official Reference
+            <div className="p-2.5 bg-[#090a0f] border border-border">
+              <div className="text-[10px] font-semibold text-muted uppercase tracking-wider">
+                ECB OFFICIAL REF
               </div>
-              <div className="text-xl font-bold font-mono text-foreground mt-1">
+              <div className="text-lg font-bold text-foreground mt-1">
                 {data.reference.rate.toFixed(5)}
               </div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">
+              <div className="text-[10px] text-muted mt-0.5">
                 EUR per USD ({data.reference.source})
               </div>
             </div>
 
-            <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
-              <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
-                Spread Deviation
+            <div className="p-2.5 bg-[#090a0f] border border-border">
+              <div className="text-[10px] font-semibold text-muted uppercase tracking-wider">
+                SPREAD DEVIATION
               </div>
               <div
-                className={`text-xl font-bold font-mono mt-1 ${
+                className={`text-lg font-bold mt-1 ${
                   Math.abs(data.deviationBps) <= 50
-                    ? "text-emerald-500"
-                    : "text-amber-500"
+                    ? "text-[#00ec97]"
+                    : Math.abs(data.deviationBps) <= 120
+                    ? "text-amber-400"
+                    : "text-red-400"
                 }`}
               >
                 {data.deviationBps > 0 ? "+" : ""}
-                {data.deviationBps} bps ({data.deviationPercent})
+                {data.deviationBps} bps
               </div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">
-                {Math.abs(data.deviationBps) <= 50
-                  ? "Within 50 bps budget"
-                  : "Adverse spread (> 50 bps)"}
+              <div className="text-[10px] text-muted mt-0.5">
+                {data.deviationPercent} vs ECB reference
               </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between text-xs text-muted-foreground pt-2 border-t border-border/40 gap-2">
+          <div className="flex flex-wrap items-center justify-between text-xs text-muted pt-2 border-t border-border/40 gap-2">
             <div>
               <span>Probe Size: </span>
               <span className="font-semibold text-foreground">${amount}.00 USDC</span>
-              <span className="mx-2">|</span>
+              <span className="mx-2 text-border">|</span>
               <span>Min Feasible Chunk: </span>
-              <span className="font-semibold text-foreground">
+              <span className="font-semibold text-[#00ec97]">
                 ${data.route.recommendedMinChunkUsd}.00 USDC
               </span>
             </div>
-            <div className="font-mono text-[11px]">
+            <div className="text-[10px] text-muted/70">
               Correlation ID: {data.quote.quoteId.slice(0, 16)}...
             </div>
           </div>
         </div>
       )}
     </div>
-  )
+  );
 }

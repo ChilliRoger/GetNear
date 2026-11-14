@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card } from "@/components/card";
 import { explorerAccountUrl } from "@getnear/shared";
-import { ExternalLink, Lock } from "lucide-react";
+import { ExternalLink, Lock, ShieldCheck } from "lucide-react";
 
 export default function SettingsPage() {
   const [contractId] = useState("fx-budget.chilliroger-operator.testnet");
@@ -52,41 +52,43 @@ export default function SettingsPage() {
   }, []);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 font-mono">
       {/* Header */}
       <div>
-        <h2 className="text-lg font-semibold text-foreground">Operations & Security Audit</h2>
-        <p className="text-xs text-muted">
+        <h2 className="text-base font-bold uppercase tracking-wider text-foreground">
+          [ OPERATIONS &amp; SECURITY AUDIT // TESTNET ]
+        </h2>
+        <p className="text-[11px] text-muted">
           Verifiable on-chain parameters, restricted agent keys, and multisig governance rules on NEAR testnet.
         </p>
       </div>
 
       {/* 1. RPC & Network Health */}
-      <Card title="NEAR Testnet Network Health">
+      <Card title="NEAR TESTNET NETWORK HEALTH">
         <div className="space-y-2 pt-1 text-xs">
           <div className="flex items-center justify-between">
             <span className="text-muted">Network ID</span>
-            <span className="font-mono font-medium text-foreground">testnet (Strictly Isolated)</span>
+            <span className="font-semibold text-[#00ec97]">[testnet · STRICTLY ISOLATED]</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted">Primary RPC</span>
-            <span className="font-mono text-zinc-300">https://rpc.testnet.near.org</span>
+            <span className="text-foreground">https://rpc.testnet.near.org</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted">Fallback RPC</span>
-            <span className="font-mono text-zinc-300">https://test.rpc.fastnear.com</span>
+            <span className="text-foreground">https://test.rpc.fastnear.com</span>
           </div>
           <div className="flex items-center justify-between pt-1 border-t border-border">
             <span className="text-muted">RPC Latency</span>
-            <span className="font-mono font-medium text-green-400">
-              {rpcStatus === "checking" ? "Pinging..." : `${latencyMs}ms (${rpcStatus})`}
+            <span className="font-semibold text-[#00ec97]">
+              {rpcStatus === "checking" ? "Pinging..." : `${latencyMs}ms (${rpcStatus.toUpperCase()})`}
             </span>
           </div>
         </div>
       </Card>
 
       {/* 2. On-Chain Smart Contract Limits */}
-      <Card title="FxBudget Smart Contract Limits">
+      <Card title="FXBUDGET SMART CONTRACT LIMITS">
         <div className="space-y-2 pt-1 text-xs">
           <div className="flex items-center justify-between">
             <span className="text-muted">Contract ID</span>
@@ -94,7 +96,7 @@ export default function SettingsPage() {
               href={explorerAccountUrl(contractId)}
               target="_blank"
               rel="noreferrer"
-              className="font-mono text-accent-blue hover:underline inline-flex items-center gap-1"
+              className="text-[#38bdf8] hover:underline inline-flex items-center gap-1"
             >
               <span>{contractId}</span>
               <ExternalLink className="h-3 w-3" />
@@ -102,31 +104,31 @@ export default function SettingsPage() {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted">Contract Owner</span>
-            <span className="font-mono text-foreground">{daoId} (Sputnik DAO)</span>
+            <span className="text-foreground">{daoId} (Sputnik DAO)</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted">Auto-Cap Limit</span>
-            <span className="font-mono font-semibold text-foreground">{autoCapUsdc.toFixed(2)} USDC</span>
+            <span className="font-semibold text-foreground">{autoCapUsdc.toFixed(2)} USDC</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted">Max Chunk Limit</span>
-            <span className="font-mono font-semibold text-foreground">{maxChunkUsdc.toFixed(2)} USDC</span>
+            <span className="font-semibold text-[#00ec97]">{maxChunkUsdc.toFixed(2)} USDC</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted">Min Chunk Interval</span>
-            <span className="font-mono text-foreground">{minIntervalSec} seconds</span>
+            <span className="text-foreground">{minIntervalSec} seconds</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted">Settlement Token (NEP-141)</span>
-            <span className="font-mono text-foreground">{settlementToken}</span>
+            <span className="text-foreground">{settlementToken}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted">Max Order Horizon</span>
-            <span className="font-mono text-foreground">7 days</span>
+            <span className="text-foreground">7 days</span>
           </div>
           <div className="flex items-center justify-between pt-1 border-t border-border">
             <span className="text-muted">Contract Paused</span>
-            <span className={`font-mono font-medium ${isPaused ? "text-red-400" : "text-green-400"}`}>
+            <span className={`font-semibold ${isPaused ? "text-red-400" : "text-[#00ec97]"}`}>
               {isPaused ? "YES (Paused)" : "NO (Active)"}
             </span>
           </div>
@@ -134,7 +136,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* 3. Agent Restricted Key Security */}
-      <Card title="Restricted Agent Function-Call Key">
+      <Card title="RESTRICTED AGENT FUNCTION-CALL KEY">
         <div className="space-y-2 pt-1 text-xs">
           <div className="flex items-center justify-between">
             <span className="text-muted">Agent Account</span>
@@ -142,7 +144,7 @@ export default function SettingsPage() {
               href={explorerAccountUrl(agentId)}
               target="_blank"
               rel="noreferrer"
-              className="font-mono text-accent-blue hover:underline inline-flex items-center gap-1"
+              className="text-[#38bdf8] hover:underline inline-flex items-center gap-1"
             >
               <span>{agentId}</span>
               <ExternalLink className="h-3 w-3" />
@@ -150,30 +152,30 @@ export default function SettingsPage() {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted">Allowed Methods</span>
-            <span className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-green-400 font-bold">
+            <span className="border border-[#00ec97] bg-[#00ec97]/10 px-1.5 py-0.5 text-[#00ec97] font-bold">
               [&quot;execute_chunk&quot;]
             </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted">Key Allowance</span>
-            <span className="font-mono text-foreground">0.25 NEAR (Gas Only)</span>
+            <span className="text-foreground">0.25 NEAR (Gas Only)</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted">Deposit Authority</span>
-            <span className="font-mono text-red-400 font-bold">0 NEAR (Deposit Forbidden)</span>
+            <span className="text-red-400 font-bold">0 NEAR (Deposit Forbidden)</span>
           </div>
-          <div className="rounded-lg bg-surface p-2 mt-1 border border-border text-[11px] text-zinc-300">
-            <div className="flex items-center gap-1.5 font-medium text-foreground mb-0.5">
-              <Lock className="h-3.5 w-3.5 text-accent-blue" />
-              <span>Cryptographic Constraint</span>
+          <div className="border border-border bg-[#090a0f] p-2.5 mt-1 text-[11px] text-muted leading-relaxed">
+            <div className="flex items-center gap-1.5 font-bold text-foreground mb-1">
+              <Lock className="h-3.5 w-3.5 text-[#38bdf8]" />
+              <span>CRYPTOGRAPHIC RESTRICTION</span>
             </div>
-            The agent runner&apos;s operational FunctionCall key can call only <code className="font-mono">execute_chunk</code> on FxBudget and cannot transfer NEAR or override limits. Supplier balance reduces solely after cross-contract <code className="font-mono">ft_transfer</code> callback confirmation; deviation caps remain an on-chain policy check on an agent-reported value.
+            The agent runner&apos;s operational FunctionCall key can call only <code className="text-[#00ec97]">execute_chunk</code> on FxBudget and cannot transfer NEAR or override limits. Supplier balance reduces solely after cross-contract <code className="text-[#00ec97]">ft_transfer</code> callback confirmation; deviation caps remain an on-chain policy check on an agent-reported value.
           </div>
         </div>
       </Card>
 
       {/* 4. Sputnik DAO Multisig Architecture */}
-      <Card title="Sputnik DAO Multisig Governance">
+      <Card title="SPUTNIK DAO MULTISIG GOVERNANCE">
         <div className="space-y-2 pt-1 text-xs">
           <div className="flex items-center justify-between">
             <span className="text-muted">DAO Account</span>
@@ -181,7 +183,7 @@ export default function SettingsPage() {
               href={explorerAccountUrl(daoId)}
               target="_blank"
               rel="noreferrer"
-              className="font-mono text-accent-blue hover:underline inline-flex items-center gap-1"
+              className="text-[#38bdf8] hover:underline inline-flex items-center gap-1"
             >
               <span>{daoId}</span>
               <ExternalLink className="h-3 w-3" />
@@ -189,13 +191,13 @@ export default function SettingsPage() {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted">Threshold Policy</span>
-            <span className="font-mono font-semibold text-accent-blue">2 of 3 Council Votes ([1, 2])</span>
+            <span className="font-semibold text-[#00ec97]">2 of 3 Council Votes ([1, 2])</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted">Council Members</span>
-            <span className="font-mono text-foreground">3 Registered Signers</span>
+            <span className="text-foreground">3 Registered Signers</span>
           </div>
-          <div className="space-y-1 pt-1 font-mono text-[10px] text-zinc-400">
+          <div className="space-y-1 pt-1 text-[10px] text-muted">
             <div>&bull; chilliroger-council1.testnet</div>
             <div>&bull; chilliroger-council2.testnet</div>
             <div>&bull; chilliroger-council3.testnet</div>

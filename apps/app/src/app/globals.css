@@ -99,13 +99,16 @@ body {
   animation: fade-in 0.15s ease-out;
 }
 
-/* Marquee scroll for overflowing single-line text */
-@keyframes marquee {
-  0%, 15% { transform: translateX(0); }
-  40%, 60% { transform: translateX(-40%); }
-  85%, 100% { transform: translateX(0); }
+/* Marquee scroll for continuous ASCII ticker tape */
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
-.animate-marquee {
-  display: inline-block;
-  animation: marquee 12s ease-in-out infinite;
+.animate-ticker {
+  display: flex;
+  width: max-content;
+  animation: ticker-scroll 35s linear infinite;
+}
+.animate-ticker:hover {
+  animation-play-state: paused;
 }
