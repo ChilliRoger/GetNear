@@ -188,3 +188,16 @@ html.lenis body {
 .chip-icon {
   @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-brand;
 }
+
+/* CSS-only 3D spin used when WebGL is blocked */
+@keyframes near-spin {
+  from { transform: rotateY(0deg); }
+  to { transform: rotateY(360deg); }
+}
+.near-spin {
+  animation: near-spin 9s linear infinite;
+  transform-style: preserve-3d;
+}
+@media (prefers-reduced-motion: reduce) {
+  .near-spin { animation: none; }
+}

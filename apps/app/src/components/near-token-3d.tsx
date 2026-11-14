@@ -5,6 +5,24 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
+/** True only if a WebGL context exists AND returns the pixel we just drew (Brave Shields etc. can block or garble it). */
+function webglUsable(): boolean {
+  try {
+    const c = document.createElement("canvas");
+    c.width = c.height = 4;
+    const gl = (c.getContext("webgl2") || c.getContext("webgl")) as WebGLRenderingContext | null;
+    if (!gl) return false;
+    gl.clearColor(1, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    const px = new Uint8Array(4);
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return px[0] > 200 && px[1] < 60 && px[2] < 60;
+  } catch {
+    return false;
+  }
+}
+
 interface NearToken3DProps {
   className?: string;
   modelUrl?: string;
@@ -16,10 +34,16 @@ export function NearToken3D({
 }: NearToken3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [fallback, setFallback] = useState(false);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    if (!webglUsable()) {
+      setFallback(true);
+      setIsLoading(false);
+      return;
+    }
 
     let animationFrameId: number;
     let isDisposed = false;
@@ -206,9 +230,20 @@ export function NearToken3D({
       };
     } catch (err) {
       console.error("[NearToken3D] Initialization error:", err);
+      setFallback(true);
       setIsLoading(false);
     }
   }, [modelUrl]);
+
+  if (fallback) {
+    return (
+      <div className={`relative flex h-[340px] w-full max-w-[520px] items-center justify-center select-none sm:h-[440px] ${className}`} style={{ perspective: 900 }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/near-logo.png" alt="NEAR logo" className="near-spin h-56 w-56 drop-shadow-[0_0_40px_rgba(34,197,94,0.45)] sm:h-72 sm:w-72" />
+        <div className="pointer-events-none absolute bottom-2 text-[11px] text-muted opacity-70">3D needs WebGL: shown as a flat logo</div>
+      </div>
+    );
+  }
 
   return (
     <div className={`relative flex items-center justify-center select-none ${className}`}>
