@@ -49,10 +49,19 @@ function getAgentDb() {
   return null
 }
 
+const cacheMap = new Map<string, { timestamp: number; data: unknown }>()
+const CACHE_TTL_MS = 3000
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const userAccount = searchParams.get('account')?.trim()
+    const bypassCache = searchParams.get('fresh') === 'true'
+    const cacheKey = userAccount || '__default__'
+    const cached = cacheMap.get(cacheKey)
+    if (!bypassCache && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return NextResponse.json(cached.data)
+    }
 
     const [ordersRes, limitsRes, isPausedRes, settlementTokenRes, inputTokenRes, proposalsRes, vaultEureRes, vaultUsdcRes, userUsdcRes, userDemoUsdcRes, userEureRes, isRequesterRes] = await Promise.allSettled([
       nearClient.callView(FX_BUDGET_ID, 'list_orders', { from_index: 0, limit: 50 }),
@@ -147,9 +156,9 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({
+    const payload = {
       success: true,
-      networkId: 'testnet',
+      networkId: NETWORK_ID,
       accounts: {
         operator: OPERATOR,
         contractId: FX_BUDGET_ID,
@@ -190,7 +199,10 @@ export async function GET(req: NextRequest) {
         fills,
         decisions,
       },
-    })
+    }
+
+    cacheMap.set(cacheKey, { timestamp: Date.now(), data: payload })
+    return NextResponse.json(payload)
   } catch (err) {
     console.error('[/api/near error]', err)
     return NextResponse.json(
