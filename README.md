@@ -191,7 +191,7 @@ Full archive: [docs/DEMO_LOG.md](docs/DEMO_LOG.md).
 | Layer | Implementation details |
 | :--- | :--- |
 | Strategy & rate reference | Adaptive TWAP / timing-score heuristic with ECB (Frankfurter) reference rates, 1Click `dry:true` quote source, 18→6 decimal conversion, SQLite audit schema, integer final-chunk sizing (`packages/shared`, `apps/oracle`) |
-| Frontend | Next.js 14 and Vite dev console (`apps/app`, `apps/dev-ui`), live NEAR RPC views, natural language AI invoice intake, DAO voting UI, provenance/fill panels, wallet selector |
+| Frontend | Next.js 14 dashboard (`apps/app`), live NEAR RPC views, natural language AI invoice intake, DAO voting UI, provenance/fill panels, wallet selector |
 | Settlement contract | `contracts/fx-budget` (Rust, `near-sdk`): invoice payables, DAO owner, in-flight lock, idempotent chunk records, cross-contract `ft_transfer` + `#[private]` callback, Circle USDC escrow + refunds, expiry, payout bounds |
 | Governance & keys | Sputnik DAO 2-of-3 approval, restricted `FunctionCall` agent key, opt-in/authenticated demo surfaces |
 | Agent | `apps/agent`: attempt persistence, uncertain-outcome reconciliation, no-downgrade receipts, authenticated local API |

@@ -16,7 +16,7 @@ Every URL below was seen during research or appears in the hackathon file. Items
 
 ### 6.2 Architecture diagrams
 
-- Architecture diagrams are in docs/diagrams (numbered 01 to 08).
+- Architecture: see the README and `docs/CONTRACT.md`.
 
 ### 6.3 NEAR testnet endpoints and docs
 

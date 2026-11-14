@@ -22,4 +22,4 @@ check_restart() {
 
 check_restart "app" 3100 "apps/app" "npx next dev -p 3100"
 check_restart "oracle" 38174 "apps/oracle" "npx tsx src/index.ts"
-check_restart "devui" 58173 "apps/dev-ui" "npx vite --port 58173 --host"
+check_restart "agent" 38175 "apps/agent" "npx tsx src/index.ts"
