@@ -5,7 +5,7 @@ import { Card } from "@/components/card";
 import { useToast } from "@/components/toast-provider";
 import { useNearWallet } from "@/lib/near-wallet";
 import { explorerAccountUrl } from "@getnear/shared";
-import { RefreshCw, ExternalLink, ShieldCheck, CheckCircle2, Clock } from "lucide-react";
+import { RefreshCw, ExternalLink, ShieldCheck, CheckCircle2 } from "lucide-react";
 
 interface DaoProposal {
   id: number;

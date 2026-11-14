@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card } from "@/components/card";
 import { explorerAccountUrl } from "@getnear/shared";
-import { ExternalLink, Lock, ShieldCheck } from "lucide-react";
+import { ExternalLink, Lock } from "lucide-react";
 
 export default function SettingsPage() {
   const [contractId] = useState("fx-budget.chilliroger-operator.testnet");

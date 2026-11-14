@@ -553,16 +553,6 @@ export default function DashboardPage() {
               const isActive = o.status === "Active";
               const display = deriveInvoiceDisplay(o);
               const isEscrowed = Number(escrowByOrder[o.id]?.escrowed_in || "0") > 0;
-              const badgeTone =
-                display.kind === "paid"
-                  ? "bg-green-500/15 text-green-400"
-                  : display.kind === "budget_exhausted" || display.kind === "closed_unpaid" || display.kind === "pending_approval"
-                  ? "bg-amber-500/15 text-amber-400"
-                  : isActive
-                  ? "bg-green-500/15 text-green-400"
-                  : isPending
-                  ? "bg-amber-500/15 text-amber-400"
-                  : "bg-zinc-800 text-zinc-400";
 
               return (
                 <div key={o.id} className="border border-border bg-background p-3 text-xs ">

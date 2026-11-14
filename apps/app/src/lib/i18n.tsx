@@ -25,7 +25,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const value = useMemo(() => ({ locale, setLocale, t }), [t]);
+  const value = useMemo(() => ({ locale, setLocale, t }), [locale, setLocale, t]);
 
   return (
     <I18nContext.Provider value={value}>
@@ -241,9 +241,6 @@ const translations: Record<Locale, Record<string, string>> = {
     "dashboard.source": "Source",
     "dashboard.price": "Price",
     "dashboard.divergence": "Divergence",
-    "dashboard.chainlink": "ECB Ref",
-    "dashboard.fynd": "1Click Quote",
-    "dashboard.uniswap": "1Click Quote",
     "dashboard.max_divergence": "Max divergence",
 
     // Toast / error handling

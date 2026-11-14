@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFeed, type FeedEvent } from "@/lib/live";
 
 const TAG: Record<FeedEvent["tag"], string> = {
@@ -20,7 +20,7 @@ export function LiveFeed({ rows = 10 }: { rows?: number }) {
   const seen = useRef<Set<string>>(new Set());
   const [fresh, setFresh] = useState<Set<string>>(new Set());
 
-  const events = data?.events ?? [];
+  const events = useMemo(() => data?.events ?? [], [data]);
 
   useEffect(() => {
     if (!events.length) return;
