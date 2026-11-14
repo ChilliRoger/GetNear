@@ -418,3 +418,21 @@ export function updateAttempt(
     idempotencyKey,
   )
 }
+
+// ── First-seen timestamps (the contract stores no creation time; the urgency curve needs one) ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS agent_order_seen (
+    order_id INTEGER PRIMARY KEY,
+    first_seen_ms INTEGER NOT NULL
+  );
+`)
+
+/** When the agent first saw an order. Persisted so a restart does not reset the urgency curve. */
+export function getOrderFirstSeen(orderId: number, nowMs: number = Date.now()): number {
+  const row = db.prepare('SELECT first_seen_ms FROM agent_order_seen WHERE order_id = ?').get(orderId) as
+    | { first_seen_ms: number }
+    | undefined
+  if (row) return row.first_seen_ms
+  db.prepare('INSERT OR IGNORE INTO agent_order_seen (order_id, first_seen_ms) VALUES (?, ?)').run(orderId, nowMs)
+  return nowMs
+}

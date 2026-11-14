@@ -25,6 +25,8 @@ import {
   computeSimulatedOutput,
   planChunkAmounts,
   resolveNetworkId,
+  evaluateStrategy,
+  computeAdaptiveChunkSize,
   type QuoteSnapshot,
 } from '@getnear/shared'
 import {
@@ -33,6 +35,7 @@ import {
   getFillByKey,
   getAttempt,
   getUnresolvedAttempts,
+  getOrderFirstSeen,
   recordAttemptPrepared,
   updateAttempt,
   isUnresolved,
@@ -155,6 +158,9 @@ export class AgentRunner {
   private lastDecisionByOrder = new Map<number, string>()
   private tickInFlight: Promise<void> | null = null
   private historyReconciled = false
+  private strategyMode: 'score' | 'immediate'
+  private rateSamples: Array<{ t: number; rate: number }> = []
+  private lastScoreByOrder = new Map<number, number>()
   private isRunning = false
   private timer: NodeJS.Timeout | null = null
   private pollIntervalMs: number
@@ -168,6 +174,8 @@ export class AgentRunner {
     pollIntervalMs?: number
     pollDelayMs?: number
     attemptLandingWindowMs?: number
+    /** 'score' (default): the timing-score strategy gates every chunk. 'immediate': execute whenever guards pass. */
+    strategyMode?: 'score' | 'immediate'
     contractId?: string
     agentId?: string
     rpcUrls?: string[]
@@ -182,6 +190,8 @@ export class AgentRunner {
     this.attemptLandingWindowMs =
       options?.attemptLandingWindowMs ??
       (Number(process.env.AGENT_ATTEMPT_LANDING_WINDOW_MS) || DEFAULT_ATTEMPT_LANDING_WINDOW_MS)
+    this.strategyMode =
+      options?.strategyMode ?? (process.env.AGENT_STRATEGY?.trim().toLowerCase() === 'immediate' ? 'immediate' : 'score')
     const networkId = resolveNetworkId(process.env.NEAR_NETWORK_ID, process.env.ALLOW_MAINNET)
     const isMainnet = networkId === 'mainnet'
     this.operatorId = process.env.OPERATOR_ACCOUNT_ID || (isMainnet ? 'operator.near' : 'chilliroger-operator.testnet')
@@ -215,6 +225,7 @@ export class AgentRunner {
       settlementTokenId: this.eureId,
       isRunning: this.isRunning,
       pollIntervalMs: this.pollIntervalMs,
+      strategyMode: this.strategyMode,
       totalChunksExecuted: this.totalChunksExecuted,
       lastTickTime: this.lastTickTime,
       lastStatus: this.lastStatus,
@@ -377,7 +388,7 @@ export class AgentRunner {
           recordDecision({
             order_id: meta.orderId,
             timestamp: meta.nowMs,
-            score: 88,
+            score: this.lastScoreByOrder.get(meta.orderId) ?? 0,
             decision: 'EXECUTE',
             reason: `CHUNK_SETTLED_ONCHAIN: ${Number(chunkRecord.amount_in) / 1e6} USDC -> ${(Number(chunkRecord.settlement_out) / 1e6).toFixed(2)} EURe (${chunkRecord.deviation_bps} bps)`,
             chunk_size: chunkRecord.amount_in,
@@ -633,10 +644,7 @@ export class AgentRunner {
       const minIntervalNs = BigInt(limits.min_interval_ns)
 
       // 3. List all orders
-      const orders = await this.client.callView<ContractOrder[]>(this.contractId, 'list_orders', {
-        from_index: 0,
-        limit: 100,
-      })
+      const orders = await this.listAllOrders()
 
       // 3b. Startup: reflect on-chain history (incl. closed orders) into SQLite exactly once.
       if (!this.historyReconciled) {
@@ -660,6 +668,29 @@ export class AgentRunner {
       this.lastStatus = `ERROR: ${err instanceof Error ? err.message : String(err)}`
       console.error('[Agent] Error during tick:', err)
     }
+  }
+
+  /** Page through list_orders (max 100 per call) so no order is ever skipped. */
+  private async listAllOrders(): Promise<ContractOrder[]> {
+    const pageSize = 100
+    const all: ContractOrder[] = []
+    for (let from = 0; ; from += pageSize) {
+      const page = await this.client.callView<ContractOrder[]>(this.contractId, 'list_orders', {
+        from_index: from,
+        limit: pageSize,
+      })
+      all.push(...page)
+      if (page.length < pageSize) break
+    }
+    return all
+  }
+
+  /** Average of recent quote rates (24h window), or null while there are too few samples to mean anything. */
+  private rollingAverageRate(nowMs: number): number | null {
+    const cutoff = nowMs - 24 * 3600 * 1000
+    this.rateSamples = this.rateSamples.filter((s) => s.t >= cutoff).slice(-2880)
+    if (this.rateSamples.length < 3) return null
+    return this.rateSamples.reduce((acc, s) => acc + s.rate, 0) / this.rateSamples.length
   }
 
   /** Explicit on-chain payout cap for legacy orders without an invoice target (null when not set / unsupported). */
@@ -852,12 +883,64 @@ export class AgentRunner {
         return
       }
 
+      // Timing-score strategy (same engine as the oracle): decides WAIT/EXECUTE and the adaptive chunk size.
+      let sizedCandidate = candidateChunk
+      if (this.strategyMode === 'score') {
+        const nowSec = Math.floor(nowMs / 1000)
+        const createdAtSec = Math.floor(getOrderFirstSeen(order.id, nowMs) / 1000)
+        const deadlineSec = Math.floor(order.deadline_ns / 1e9)
+        const avg = this.rollingAverageRate(nowMs)
+        this.rateSamples.push({ t: nowMs, rate: quote.rate })
+        const verdict = evaluateStrategy(
+          { quoteRate: quote.rate, referenceRate: refRate, avg24hRate: avg, quoteExpiresAt: quote.expiresAt },
+          {
+            id: String(order.id),
+            inputAmount: totalIn,
+            filledAmount: executedIn,
+            createdAt: createdAtSec,
+            deadline: deadlineSec,
+            maxDeviationBps: order.max_dev_bps,
+            status: 'Active',
+            fromToken: 'USDC',
+            toToken: 'EURe',
+          },
+          nowSec,
+        )
+        this.lastScoreByOrder.set(order.id, verdict.score)
+        if (verdict.action === 'WAIT') {
+          this.logDecision({
+            order_id: order.id,
+            timestamp: nowMs,
+            score: verdict.score,
+            decision: 'WAIT',
+            reason: `STRATEGY_WAIT: ${verdict.reason}`,
+            chunk_size: '0',
+            deviation_bps: verdict.deviationBps ?? deviationBps,
+          })
+          return
+        }
+        let adaptive = computeAdaptiveChunkSize({
+          inputAmount: totalIn,
+          filledAmount: executedIn,
+          deadlineSec,
+          createdAtSec,
+          nowSec,
+          timingScore: verdict.score,
+          maxChunkIn: orderMaxChunk < globalMaxChunk ? orderMaxChunk : globalMaxChunk,
+          routeMinimumAtomic: ROUTE_MIN_IN,
+        })
+        if (adaptive > remainingIn) adaptive = remainingIn
+        if (adaptive > orderMaxChunk) adaptive = orderMaxChunk
+        if (adaptive > globalMaxChunk) adaptive = globalMaxChunk
+        if (adaptive > 0n) sizedCandidate = adaptive
+      }
+
       // Size the chunk. When the remaining due is below the quoted output, the payout is clamped to the
       // remaining due AND the USDC charged is reduced to ceil(remainingOut x quotedIn / quotedOut).
       const quoteRef = computeQuoteRef(quote.quoteId, quote.amountIn, quote.amountOut, nowMs)
       const decimalsOut = quote.decimalsOut ?? 18
       const planned = planChunkAmounts({
-        candidateIn: candidateChunk,
+        candidateIn: sizedCandidate,
         quoteIn: BigInt(quote.amountIn),
         quoteOut: BigInt(quote.amountOut),
         decimalsOut,
@@ -887,7 +970,7 @@ export class AgentRunner {
       const recipient = order.recipient || order.requester
 
       console.log(`\n[Agent] EXECUTING CHUNK for Order #${order.id} (key=${idempotencyKey}):`)
-      console.log(`  Amount In (USDC budget): ${Number(chunkIn) / 1e6} USDC${adjusted ? ` (final chunk, reduced from ${Number(candidateChunk) / 1e6})` : ''}`)
+      console.log(`  Amount In (USDC budget): ${Number(chunkIn) / 1e6} USDC${adjusted ? ` (final chunk, reduced from ${Number(sizedCandidate) / 1e6})` : ''}`)
       console.log(`  Indicative Out (1Click decimals=${decimalsOut}): ${(Number(simulatedOut) / Math.pow(10, decimalsOut)).toFixed(4)} EURe`)
       console.log(`  Settlement Payout (6-dec EURe): ${Number(settlementOut) / 1e6} EURe -> ${recipient}`)
       console.log(`  Quote Rate: ${quote.rate.toFixed(4)} | Ref Rate: ${refRate.toFixed(4)} | Agent-Reported Dev: ${deviationBps} bps`)

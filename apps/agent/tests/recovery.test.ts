@@ -150,6 +150,7 @@ function chunkFromArgs(args: Record<string, any>, status: 'Settled' | 'InFlight'
 
 function newRunner(rpcUrl: string, exec: any, extra: Record<string, unknown> = {}) {
   return new AgentRunner({
+    strategyMode: 'immediate',
     rpcUrls: [rpcUrl],
     pollDelayMs: 5,
     quoteSource: order12Quote,

@@ -271,6 +271,56 @@ describe('AgentRunner Dynamic HTTP JSON-RPC Reconciliation', () => {
     }),
   }
 
+  test('score strategy: a fresh order far from its deadline WAITs (no broadcast) with the score logged', async () => {
+    const farNs = (Date.now() + 4 * 3600 * 1000) * 1_000_000
+    const state: RpcState = {
+      orders: [
+        {
+          id: 702,
+          requester: 'operator.testnet',
+          recipient: 'supplier-eu.testnet',
+          invoice_ref: 'INV-702',
+          pair_label: 'USD/EUR',
+          total_in: '10000000',
+          executed_in: '0',
+          pending_in: '0',
+          target_out: '8700000',
+          settled_out: '0',
+          pending_out: '0',
+          max_chunk_in: '10000000',
+          deadline_ns: farNs,
+          max_dev_bps: 100,
+          status: 'Active',
+          last_chunk_ns: 0,
+          chunks_count: 0,
+        },
+      ],
+      chunks: new Map(),
+      getChunkCalls: new Map(),
+    }
+    const rpc = await startRpcServer(state)
+    let broadcastCount = 0
+    try {
+      const runner = new AgentRunner({
+        strategyMode: 'score',
+        rpcUrls: [rpc.url],
+        quoteSource: fixedQuoteSource,
+        refRateSource: fixedRefRateSource,
+        resolveCredentialPath: async () => '/tmp/fake-agent-key.json',
+        executeChunkCall: () => {
+          broadcastCount++
+          return { txHash: 'x' }
+        },
+      })
+      await runner.tick()
+      assert.equal(broadcastCount, 0, 'Low timing score + low urgency must not execute yet')
+      const waits = getRecentDecisions(50).filter((d) => d.order_id === 702)
+      assert.ok(waits.some((d) => d.decision === 'WAIT' && d.reason.startsWith('STRATEGY_WAIT')))
+    } finally {
+      await rpc.close()
+    }
+  })
+
   test('Case A: uncertain RPC timeout after on-chain Settled reconciles without re-broadcast', async () => {
     const nowNs = (Date.now() + 300_000) * 1_000_000
     const state: RpcState = {
@@ -303,6 +353,7 @@ describe('AgentRunner Dynamic HTTP JSON-RPC Reconciliation', () => {
     let broadcastCount = 0
     try {
       const runner = new AgentRunner({
+        strategyMode: 'immediate',
         rpcUrls: [rpc.url],
         quoteSource: fixedQuoteSource,
         refRateSource: fixedRefRateSource,
@@ -384,6 +435,7 @@ describe('AgentRunner Dynamic HTTP JSON-RPC Reconciliation', () => {
     let broadcastCount = 0
     try {
       const runner = new AgentRunner({
+        strategyMode: 'immediate',
         rpcUrls: [rpc.url],
         quoteSource: fixedQuoteSource,
         refRateSource: fixedRefRateSource,
@@ -481,6 +533,7 @@ describe('AgentRunner Dynamic HTTP JSON-RPC Reconciliation', () => {
     let broadcastCount = 0
     try {
       const runner = new AgentRunner({
+        strategyMode: 'immediate',
         rpcUrls: [rpc.url],
         quoteSource: fixedQuoteSource,
         refRateSource: fixedRefRateSource,
