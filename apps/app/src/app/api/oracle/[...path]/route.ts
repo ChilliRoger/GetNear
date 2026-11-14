@@ -4,6 +4,15 @@ const ORACLE_URL = process.env.ORACLE_URL || "http://localhost:38174";
 
 async function proxy(req: NextRequest, { params }: { params: { path: string[] } }) {
   const path = params.path.join("/");
+
+  // Read-only by default. The only writes the dashboard may proxy are the demo clock and simulated order
+  // intake; strategy config, approvals and cancellations are reachable only from the local dev console.
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    const writable = req.method === "POST" && (path === "api/demo/speed" || path === "api/trades");
+    if (!writable) {
+      return NextResponse.json({ error: "Not allowed through the dashboard proxy" }, { status: 403 });
+    }
+  }
   const search = new URL(req.url).search;
   const url = `${ORACLE_URL}/${path}${search}`;
 

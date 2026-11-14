@@ -342,7 +342,7 @@ app.get('/api/trades', (c) => {
     const statuses = status.split(',').map((s) => s.trim()).filter(Boolean)
     if (statuses.length > 0) {
       const placeholders = statuses.map(() => '?').join(', ')
-      const rows = db.prepare(`SELECT * FROM trade_orders WHERE status IN (${placeholders}) ORDER BY created_at DESC`).all(...statuses)
+      const rows = db.prepare(`SELECT * FROM trade_orders WHERE UPPER(status) IN (${placeholders}) ORDER BY created_at DESC`).all(...statuses.map((x) => x.toUpperCase()))
       return c.json(rows)
     }
   }
@@ -499,10 +499,70 @@ app.get('/api/strategy/decisions', (c) => {
 
 app.get('/api/strategy/config', (c) => c.json(strategyConfig))
 
+// Allowed tunables and their valid ranges. Anything else (e.g. routeMinimumAtomic as a bigint) is rejected.
+const CONFIG_RANGES: Record<string, [number, number]> = {
+  weightPrice: [0, 1],
+  weightDivergence: [0, 1],
+  weightUrgency: [0, 1],
+  executeThreshold: [0, 100],
+  aggressiveThreshold: [0, 100],
+  urgencyOverride: [0, 100],
+  defaultMaxDeviationBps: [1, 5000],
+  defaultMaxChunkPercent: [0.01, 1],
+}
+
 app.put('/api/strategy/config', async (c) => {
-  const body = await c.req.json().catch(() => ({}))
-  updateStrategyConfig(body)
-  return c.json(strategyConfig)
+  const adminToken = (process.env.ORACLE_ADMIN_TOKEN ?? '').trim()
+  if (adminToken) {
+    const header = c.req.header('authorization') ?? ''
+    if (header !== `Bearer ${adminToken}`) return c.json({ error: 'Unauthorized' }, 401)
+  }
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return c.json({ error: 'Body must be a JSON object' }, 400)
+  }
+  const patch: Record<string, number> = {}
+  for (const [key, value] of Object.entries(body)) {
+    const range = CONFIG_RANGES[key]
+    if (!range) return c.json({ error: `Unknown or read-only setting: ${key}` }, 400)
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < range[0] || value > range[1]) {
+      return c.json({ error: `${key} must be a number between ${range[0]} and ${range[1]}` }, 400)
+    }
+    patch[key] = value
+  }
+  const merged = { ...strategyConfig, ...patch }
+  const weightSum = merged.weightPrice + merged.weightDivergence + merged.weightUrgency
+  if (Math.abs(weightSum - 1) > 0.01) {
+    return c.json({ error: `weightPrice + weightDivergence + weightUrgency must sum to 1 (got ${weightSum.toFixed(2)})` }, 400)
+  }
+  if (merged.aggressiveThreshold < merged.executeThreshold) {
+    return c.json({ error: 'aggressiveThreshold must be >= executeThreshold' }, 400)
+  }
+  updateStrategyConfig(patch)
+  return c.json(strategyConfig, 200)
+})
+
+// ---------- Demo speed (time-compression for the fill simulation) ----------
+
+let demoSpeed: 1 | 10 = 1
+const FILL_TICK_MS = 15_000
+let fillTimer: ReturnType<typeof setInterval> | null = null
+
+function scheduleFillTick() {
+  if (fillTimer) clearInterval(fillTimer)
+  fillTimer = setInterval(dynamicFillTick, FILL_TICK_MS / demoSpeed)
+}
+
+app.get('/api/demo/speed', (c) => c.json({ speed: demoSpeed, demoMode: DEMO_MODE }))
+
+app.post('/api/demo/speed', async (c) => {
+  const body = (await c.req.json().catch(() => null)) as { speed?: unknown } | null
+  if (body?.speed !== 1 && body?.speed !== 10) {
+    return c.json({ error: 'speed must be 1 or 10' }, 400)
+  }
+  demoSpeed = body.speed
+  if (DEMO_MODE) scheduleFillTick()
+  return c.json({ speed: demoSpeed })
 })
 
 // ---------- Dynamic Fill Simulation Loop ----------
@@ -609,7 +669,7 @@ async function main() {
   setInterval(record, RECORD_INTERVAL)
 
   if (DEMO_MODE) {
-    setInterval(dynamicFillTick, 15_000) // tick every 15s in demo mode
+    scheduleFillTick() // every 15s (1x) or 1.5s (10x) in demo mode
     console.log('[GetNear Oracle] Dynamic fill engine active (evaluating every 15s)')
   }
 
