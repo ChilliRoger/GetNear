@@ -55,7 +55,7 @@ export function PriceHistoryChart() {
   const [history, setHistory] = useState<PricePoint[]>([]);
   const [hours, setHours] = useState(24);
   const [loading, setLoading] = useState(true);
-  const pair = "EURC/USD";
+  const pair = "USDC/EURe";
 
   const activeRef = useRef(true);
 
@@ -70,7 +70,17 @@ export function PriceHistoryChart() {
         );
         if (!res.ok) return;
         const data = await res.json();
-        if (activeRef.current) setHistory(data.points || []);
+        const rawPoints = Array.isArray(data.points) ? data.points : [];
+        const mapped = rawPoints.map((p: any) => ({
+          timestamp: p.timestamp,
+          chainlink: p.refPrice ?? p.chainlink ?? 0,
+          fynd: p.quotePrice ?? p.fynd ?? null,
+          divergence_pct:
+            p.deviationBps != null
+              ? Math.abs(p.deviationBps) / 100
+              : p.divergence_pct ?? null,
+        }));
+        if (activeRef.current) setHistory(mapped);
       } catch (err) {
         console.error("Failed to fetch price history:", err);
       } finally {
@@ -145,7 +155,7 @@ export function PriceHistoryChart() {
                   labelFormatter={(ts: number) => formatDateTime(ts)}
                   formatter={(value: number, name: string) => [
                     value.toFixed(6),
-                    name === "chainlink" ? "Chainlink" : "Fynd",
+                    name === "chainlink" ? "ECB Ref Rate" : "1Click Dry Quote",
                   ]}
                 />
                 <Line
@@ -172,11 +182,11 @@ export function PriceHistoryChart() {
         <div className="mt-2 flex items-center gap-4 text-[11px] text-muted">
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-0.5 w-4 rounded bg-accent-blue" />
-            Chainlink
+            ECB Reference (Frankfurter)
           </span>
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-0.5 w-4 rounded bg-accent-green" style={{ borderTop: "1px dashed" }} />
-            Fynd
+            1Click Dry-Quote (Indicative)
           </span>
         </div>
       </Card>

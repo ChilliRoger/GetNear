@@ -243,7 +243,8 @@ app.get('/prices/current', async (c) => {
 })
 
 app.get('/prices/history', (c) => {
-  const pair = c.req.query('pair') || 'USDC/EURe'
+  let pair = c.req.query('pair') || 'USDC/EURe'
+  if (pair === 'EURC/USD' || pair === 'USD/EUR') pair = 'USDC/EURe'
   const hours = Math.min(Number(c.req.query('hours') || 24), 168)
   const since = Math.floor(Date.now() / 1000) - hours * 3600
   const rows = db.prepare(
@@ -255,6 +256,9 @@ app.get('/prices/history', (c) => {
     quotePrice: r.quote_price,
     refPrice: r.ref_price,
     deviationBps: r.deviation_bps,
+    chainlink: r.ref_price,
+    fynd: r.quote_price,
+    divergence_pct: r.deviation_bps != null ? Math.abs(r.deviation_bps) / 100 : 0,
   }))
   return c.json({ pair, points, isSimulated: true })
 })
