@@ -236,8 +236,21 @@ export default function DashboardPage() {
 
     setSubmittingOrder(true);
     try {
+      const chunkInNum = parseFloat(maxChunk || "20");
+      if (!chunkInNum || chunkInNum <= 0) {
+        showToast("Please enter a valid max chunk size", "error");
+        return;
+      }
+      if (chunkInNum > maxChunkLimitUsdc) {
+        showToast(
+          `Max chunk size ($${chunkInNum} USDC) exceeds contract limit ($${maxChunkLimitUsdc} USDC). Enter ${maxChunkLimitUsdc} or less.`,
+          "error",
+        );
+        return;
+      }
+
       const totalIn = BigInt(Math.round(amtNum * 1e6)).toString();
-      const chunkIn = BigInt(Math.round(parseFloat(maxChunk || "20") * 1e6)).toString();
+      const chunkIn = BigInt(Math.round(chunkInNum * 1e6)).toString();
       const devBps = parseInt(maxDevBps || "120", 10);
       const hours = parseFloat(deadlineHours || "4");
       const deadlineNs = Date.now() * 1_000_000 + Math.round(hours * 3600 * 1_000_000_000);
@@ -531,7 +544,13 @@ export default function DashboardPage() {
           <AiOrderIntake
             onApply={(parsed: ParsedOrderData) => {
               setOrderAmount(String(parsed.totalUsdc));
-              if (parsed.maxChunkUsdc !== null) setMaxChunk(String(parsed.maxChunkUsdc));
+              if (parsed.maxChunkUsdc !== null) {
+                const clamped = Math.min(parsed.maxChunkUsdc, maxChunkLimitUsdc);
+                setMaxChunk(String(clamped));
+                if (parsed.maxChunkUsdc > maxChunkLimitUsdc) {
+                  showToast(`Max chunk capped at contract limit ($${maxChunkLimitUsdc} USDC)`, "info");
+                }
+              }
               if (parsed.deadlineHours !== null) setDeadlineHours(String(Math.max(1, Math.round(parsed.deadlineHours))));
               if (parsed.maxDevBps !== null) setMaxDevBps(String(parsed.maxDevBps));
               if (parsed.recipient !== null) setRecipientAccount(parsed.recipient);
@@ -599,7 +618,10 @@ export default function DashboardPage() {
               />
             </div>
             <div>
-              <label className="text-[11px] text-muted block mb-1">Max Chunk (USDC)</label>
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-[11px] text-muted block">Max Chunk (USDC)</label>
+                <span className="text-[10px] text-muted font-mono">Limit: ${maxChunkLimitUsdc}</span>
+              </div>
               <input
                 type="number"
                 value={maxChunk}
