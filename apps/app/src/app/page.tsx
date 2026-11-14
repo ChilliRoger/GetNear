@@ -4,7 +4,6 @@ import Link from "next/link";
 import { GetNearLogo } from "@/components/getnear-logo";
 import { AsciiArt } from "@/components/ascii-art";
 import { AsciiTickerBar } from "@/components/ascii-ticker-bar";
-import { SavingsCalculator } from "@/components/savings-calculator";
 import { TerminalReplay } from "@/components/terminal-replay";
 import { useI18n } from "@/lib/i18n";
 
@@ -341,7 +340,6 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <SavingsCalculator />
         </div>
       </section>
 

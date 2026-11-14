@@ -2,7 +2,7 @@ import type { ExecutionReceipt, PendingTrade, QuoteSnapshot } from "@getnear/sha
 
 // ── Balances ──────────────────────────────────────────────────────────
 // Raw amounts are 6-decimal USDC/EURC values.
-// The UI multiplies by DISPLAY_MULTIPLIER (1,000,000) for presentation.
+// MOCK DATA: shown only in mock mode and always labeled as such.
 
 export const executionBalances = {
   usdc: "5000000000", // $5,000 real -> displays as $5,000,000,000 ... wait

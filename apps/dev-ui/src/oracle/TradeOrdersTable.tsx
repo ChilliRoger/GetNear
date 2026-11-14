@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type { TradeOrder } from './types'
 
 const STATUS_STYLES: Record<string, string> = {
@@ -70,10 +69,7 @@ interface Props {
   error: string | null
 }
 
-const DISPLAY_MULTIPLIER = 1_000_000
-
 export default function TradeOrdersTable({ data, loading, error }: Props) {
-  const [showScaled, setShowScaled] = useState(true)
   if (error && !data) {
     return (
       <div className="bg-surface border border-border rounded-xl p-4">
@@ -115,14 +111,7 @@ export default function TradeOrdersTable({ data, loading, error }: Props) {
                 <th className="text-left text-muted text-[0.65rem] uppercase tracking-wide px-2 py-1.5 border-b border-border">ID</th>
                 <th className="text-left text-muted text-[0.65rem] uppercase tracking-wide px-2 py-1.5 border-b border-border">Dir</th>
                 <th className="text-right text-muted text-[0.65rem] uppercase tracking-wide px-2 py-1.5 border-b border-border">
-                  <span className="mr-1">Amount</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowScaled((s) => !s)}
-                    className="inline-block text-[0.55rem] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/20 text-accent cursor-pointer hover:bg-accent/30 transition-colors"
-                  >
-                    {showScaled ? 'x1M' : 'Raw'}
-                  </button>
+                  <span>Amount (USDC)</span>
                 </th>
                 <th className="text-left text-muted text-[0.65rem] uppercase tracking-wide px-2 py-1.5 border-b border-border w-28">Filled</th>
                 <th className="text-left text-muted text-[0.65rem] uppercase tracking-wide px-2 py-1.5 border-b border-border">Status</th>
@@ -145,9 +134,7 @@ export default function TradeOrdersTable({ data, loading, error }: Props) {
                       {order.direction}
                     </td>
                     <td className="px-2 py-2 border-b border-border text-right tabular-nums">
-                      {showScaled
-                        ? (Number(order.amount) * DISPLAY_MULTIPLIER).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
-                        : `$${Number(order.amount).toFixed(2)}`}
+                      {`$${Number(order.amount).toFixed(2)}`}
                     </td>
                     <td className="px-2 py-2 border-b border-border">
                       <div className="flex items-center gap-2">

@@ -1,8 +1,6 @@
-export const DISPLAY_MULTIPLIER = 1
-
 export function formatDisplayAmount(rawAmount: bigint, currency = 'USD'): string {
   const realUsd = Number(rawAmount) / 1e6
-  const displayUsd = realUsd * DISPLAY_MULTIPLIER
+  const displayUsd = realUsd
   return displayUsd.toLocaleString('en-US', {
     style: 'currency',
     currency,
@@ -11,15 +9,14 @@ export function formatDisplayAmount(rawAmount: bigint, currency = 'USD'): string
 }
 
 export function displayToRaw(displayAmount: number): bigint {
-  const realAmount = displayAmount / DISPLAY_MULTIPLIER
-  return BigInt(Math.floor(realAmount * 1e6))
+  return BigInt(Math.floor(displayAmount * 1e6))
 }
 
 // Contract minimum
 export const MIN_TRADE_AMOUNT = 1_000_000n // 1 USD stablecoin (6 decimals)
 
 // Supported testnet pairs for GetNear
-export const SUPPORTED_PAIRS = ['USDC/EURC', 'EURC/USDC'] as const
+export const SUPPORTED_PAIRS = ['USDC/EURe'] as const
 export type SupportedPair = typeof SUPPORTED_PAIRS[number]
 
 // Default network mode
