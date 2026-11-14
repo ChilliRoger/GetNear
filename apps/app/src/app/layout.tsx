@@ -3,6 +3,7 @@ import { Space_Mono } from "next/font/google";
 import "./globals.css";
 import { I18nProvider } from "@/lib/i18n";
 import { SmoothScroll } from "@/components/smooth-scroll";
+import { SiteBackground } from "@/components/site-background";
 
 // One monospace family for the whole product (free, Google Fonts).
 const spaceMono = Space_Mono({
@@ -36,7 +37,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${spaceMono.variable} min-h-screen bg-background font-sans text-foreground antialiased`}>
+      <body className={`${spaceMono.variable} min-h-screen font-sans text-foreground antialiased`}>
+        <SiteBackground />
         <SmoothScroll />
         <I18nProvider>{children}</I18nProvider>
       </body>

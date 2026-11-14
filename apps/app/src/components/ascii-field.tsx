@@ -5,10 +5,20 @@ import { useEffect, useRef } from "react";
 const RAMP = " .·:-=+*#%@";
 
 /**
- * Interactive ASCII field: a drifting character wave that ripples away from the pointer.
- * Pure canvas, no dependencies. Pauses off-screen; renders a single still frame for reduced motion.
+ * Interactive ASCII field: a drifting, multi-colour character wave that ripples away from the pointer.
+ * Pure canvas, no dependencies. Pauses off-screen / when the tab is hidden; a single still frame for reduced motion.
  */
-export function AsciiField({ className = "", height = 220 }: { className?: string; height?: number }) {
+export function AsciiField({
+  className = "",
+  height = 220,
+  fps = 30,
+  cell = { w: 11, h: 18 },
+}: {
+  className?: string;
+  height?: number | string;
+  fps?: number;
+  cell?: { w: number; h: number };
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -18,8 +28,8 @@ export function AsciiField({ className = "", height = 220 }: { className?: strin
     if (!ctx) return;
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const CW = 11;
-    const CH = 18;
+    const CW = cell.w;
+    const CH = cell.h;
     let w = 0;
     let h = 0;
     let cols = 0;
@@ -27,10 +37,12 @@ export function AsciiField({ className = "", height = 220 }: { className?: strin
     let dpr = 1;
     let visible = true;
     let raf = 0;
+    let last = 0;
+    const step = 1000 / fps;
     const mouse = { x: -9999, y: -9999, active: false, t: -10 };
 
     const resize = () => {
-      dpr = Math.min(2, window.devicePixelRatio || 1);
+      dpr = Math.min(1.5, window.devicePixelRatio || 1);
       w = cv.clientWidth;
       h = cv.clientHeight;
       cv.width = Math.round(w * dpr);
@@ -57,33 +69,37 @@ export function AsciiField({ className = "", height = 220 }: { className?: strin
             Math.sin((c + r * 1.6) * 0.07 + t * 0.4) * 0.6;
           v = (v + 1.6) / 3.2;
 
-          // pointer ripple: ring travelling outwards from the last move
+          // pointer ripple: a ring travelling outwards from the last move
+          let boost = 0;
           if (mouse.active || age < 2.5) {
             const dx = x - mouse.x;
             const dy = (y - mouse.y) * 1.5;
             const d = Math.hypot(dx, dy);
-            const ring = Math.sin(d * 0.07 - age * 7) * Math.exp(-d / 170) * Math.exp(-age * 0.9);
-            const halo = Math.exp(-d / 90) * (mouse.active ? 0.9 : 0);
+            const ring = Math.sin(d * 0.07 - age * 7) * Math.exp(-d / 190) * Math.exp(-age * 0.9);
+            const halo = Math.exp(-d / 110) * (mouse.active ? 0.9 : 0);
+            boost = Math.max(0, ring) + halo;
             v = Math.min(1, Math.max(0, v + ring * 0.55 + halo * 0.5));
           }
 
           const idx = Math.min(RAMP.length - 1, Math.max(0, Math.floor(v * RAMP.length)));
           if (idx === 0) continue;
-          // deep green -> bright green -> near white at the peaks
-          const hot = v > 0.82;
-          const rr = hot ? 200 : Math.round(20 + v * 60);
-          const gg = hot ? 255 : Math.round(120 + v * 110);
-          const bb = hot ? 210 : Math.round(60 + v * 50);
-          ctx.fillStyle = `rgba(${rr},${gg},${bb},${0.16 + v * 0.7})`;
+
+          // Colour sweeps green -> teal -> blue -> violet across the page and drifts with time.
+          const hue = 170 + 60 * Math.sin(c * 0.022 + t * 0.25) + 50 * Math.sin(r * 0.035 - t * 0.18) + boost * 70;
+          const hot = v > 0.86;
+          const light = hot ? 78 : 42 + v * 22;
+          ctx.fillStyle = `hsla(${hue.toFixed(0)},${hot ? 95 : 85}%,${light.toFixed(0)}%,${(0.2 + v * 0.7).toFixed(2)})`;
           ctx.fillText(RAMP[idx], x, y);
         }
       }
     };
 
-    const loop = (time: number) => {
+    const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
-      if (!visible) return;
-      draw(time);
+      if (!visible || document.hidden) return;
+      if (now - last < step) return;
+      last = now;
+      draw(now);
     };
 
     const onMove = (e: PointerEvent) => {
@@ -118,7 +134,7 @@ export function AsciiField({ className = "", height = 220 }: { className?: strin
       window.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerleave", onLeave);
     };
-  }, []);
+  }, [fps, cell.w, cell.h]);
 
   return <canvas ref={ref} aria-hidden="true" className={`block w-full ${className}`} style={{ height }} />;
 }

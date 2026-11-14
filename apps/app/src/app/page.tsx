@@ -6,7 +6,6 @@ import { BrandMark } from "@/components/brand";
 import { TickerTape } from "@/components/ticker-tape";
 import { SiteFooter } from "@/components/site-footer";
 import { AsciiScene } from "@/components/ascii-scene";
-import { AsciiField } from "@/components/ascii-field";
 import { Reveal } from "@/components/reveal";
 import { RateChart } from "@/components/rate-chart";
 import { LiveFeed } from "@/components/live-feed";
@@ -221,12 +220,10 @@ export default function LandingPage() {
 
       {/* ── Interactive CTA ────────────────────────────────── */}
       <section className="relative isolate overflow-hidden border-t-2 border-brand/40">
-        <AsciiField height={280} className="absolute inset-0 -z-10 h-full opacity-80" />
-        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-background via-background/30 to-background" />
         <div className="mx-auto flex max-w-[1100px] flex-col items-center px-4 py-24 text-center">
           <Reveal>
             <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Try it on testnet</h2>
-            <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-muted">Free demo tokens, a real contract and real DAO votes. Move your pointer over the field.</p>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-muted">Free demo tokens, a real contract and real DAO votes. Move your pointer anywhere: the whole page reacts.</p>
             <div className="mt-8 flex flex-wrap justify-center gap-4">
               <Link href="/dashboard" className="btn-primary h-10 px-5">
                 Launch App <ArrowRight size={14} />
