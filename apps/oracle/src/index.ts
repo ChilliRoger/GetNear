@@ -497,7 +497,10 @@ app.get('/api/strategy/decisions', (c) => {
   return c.json(rows)
 })
 
-app.get('/api/strategy/config', (c) => c.json(strategyConfig))
+// routeMinimumAtomic is a bigint, which JSON cannot carry: expose it as a string.
+const publicConfig = () => ({ ...strategyConfig, routeMinimumAtomic: strategyConfig.routeMinimumAtomic.toString() })
+
+app.get('/api/strategy/config', (c) => c.json(publicConfig()))
 
 // Allowed tunables and their valid ranges. Anything else (e.g. routeMinimumAtomic as a bigint) is rejected.
 const CONFIG_RANGES: Record<string, [number, number]> = {
@@ -539,7 +542,7 @@ app.put('/api/strategy/config', async (c) => {
     return c.json({ error: 'aggressiveThreshold must be >= executeThreshold' }, 400)
   }
   updateStrategyConfig(patch)
-  return c.json(strategyConfig, 200)
+  return c.json(publicConfig(), 200)
 })
 
 // ---------- Demo speed (time-compression for the fill simulation) ----------
