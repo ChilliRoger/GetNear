@@ -34,3 +34,12 @@ The dashboard degrades cleanly without the oracle and agent: the chart shows "Or
 - `pnpm verify:readonly --expect-upgraded --expect-fresh` passes against testnet.
 - No secrets in the repo (`git ls-files | grep -i env` shows only `.env.example` files).
 - Faucet: its `vercel.json` currently sends `Access-Control-Allow-Origin: *` on `/api/*`; restrict it to your dashboard origin before a public launch.
+
+## Deployed dashboard
+- Production: https://getnear-psi.vercel.app (Vercel project `getnear`, Root Directory `apps/app`, Node 22).
+- Deployed with the Vercel CLI (`vercel deploy --prod`). The GitHub auto-deploy integration is disconnected on purpose.
+- **Commit author must be a GitHub-linked address.** Vercel blocks a deployment whose commit author it cannot match to a team
+  member ("the commit author doesn't have permission to create deployments"). A mistyped `user.email` (for example `...@gamil.com`)
+  causes exactly this. Use your GitHub account email or its `ID+username@users.noreply.github.com` address.
+- Without the oracle the dashboard still shows the live headline rate (served by a serverless fallback) and builds a
+  chart from live samples kept in the browser; recorded history and the agent feed need the oracle/agent services.
