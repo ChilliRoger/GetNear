@@ -16,8 +16,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <ToastProvider>
       <NearWalletProvider>
-        <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-md">
-          <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between gap-6 px-4">
+        <header className="sticky top-0 z-40 border-b-2 border-brand/40 bg-black/90 backdrop-blur-md">
+          <div className="mx-auto flex h-16 max-w-[1320px] items-center justify-between gap-6 px-4">
             <div className="flex items-center gap-8">
               <BrandMark />
               <DesktopNav />
@@ -27,11 +27,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <TickerTape />
         </header>
 
-        <div className="border-b border-warn/20 bg-warn/[0.04] px-4 py-1 text-center text-[11px] text-warn/90">
+        <div className="border-b border-warn/30 bg-black/70 px-4 py-1 text-center text-[11px] text-warn">
           Testnet demo · EURe payout is a callback-verified demo token · USDC to EUR conversion is simulated (1Click dry quotes)
         </div>
 
-        <main className="mx-auto min-h-[70vh] max-w-[1440px] px-4 pb-28 pt-5 md:pb-12">
+        <main className="mx-auto min-h-[70vh] max-w-[1320px] px-4 pb-28 pt-8 md:pb-14">
           <ErrorBoundary fallbackTitle={t("error.boundary_title")} fallbackRetry={t("error.boundary_retry")}>
             {children}
           </ErrorBoundary>

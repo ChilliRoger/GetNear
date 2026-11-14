@@ -109,7 +109,7 @@ export default function AnalyticsPage() {
 
               <div className="border-t border-border pt-4">
                 <div className="mb-1.5 text-xs text-muted">Score history</div>
-                <Spark values={scoreSeries} color="rgb(56 204 230)" />
+                <Spark values={scoreSeries} color="rgb(34 197 94)" />
               </div>
               <p className="text-xs leading-5 text-muted">{latest?.reason ?? "Waiting for the first strategy evaluation."}</p>
             </div>
@@ -125,7 +125,7 @@ export default function AnalyticsPage() {
         </Reveal>
         <Reveal delay={80} className="space-y-4 lg:col-span-5">
           <Card title="Deviation, last 60 samples" subtitle="Absolute distance between quote and ECB: shorter is tighter">
-            <Spark values={(devStats?.series ?? []).map((v) => Math.abs(v))} height={120} color="rgb(125 140 255)" />
+            <Spark values={(devStats?.series ?? []).map((v) => Math.abs(v))} height={120} color="rgb(190 200 195)" />
             <dl className="mt-4 grid grid-cols-3 divide-x divide-border border-t border-border pt-3 text-xs">
               {[
                 ["Min", devStats ? `${devStats.min} bps` : "--"],

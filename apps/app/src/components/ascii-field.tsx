@@ -69,12 +69,12 @@ export function AsciiField({ className = "", height = 220 }: { className?: strin
 
           const idx = Math.min(RAMP.length - 1, Math.max(0, Math.floor(v * RAMP.length)));
           if (idx === 0) continue;
+          // deep green -> bright green -> near white at the peaks
           const hot = v > 0.82;
-          // cyan -> periwinkle -> pink as intensity rises
-          const rr = hot ? 255 : Math.round(63 + v * 120);
-          const gg = hot ? 140 + Math.round((1 - v) * 400) : Math.round(230 - v * 130);
-          const bb = hot ? 190 : 255;
-          ctx.fillStyle = `rgba(${rr},${Math.min(255, gg)},${bb},${0.18 + v * 0.7})`;
+          const rr = hot ? 200 : Math.round(20 + v * 60);
+          const gg = hot ? 255 : Math.round(120 + v * 110);
+          const bb = hot ? 210 : Math.round(60 + v * 50);
+          ctx.fillStyle = `rgba(${rr},${gg},${bb},${0.16 + v * 0.7})`;
           ctx.fillText(RAMP[idx], x, y);
         }
       }

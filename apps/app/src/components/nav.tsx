@@ -18,12 +18,12 @@ function useActive() {
   return (href: string) => pathname === href || pathname.startsWith(href + "/");
 }
 
-/** Desktop header navigation. */
+/** Desktop header navigation: active page is a raised, bordered button. */
 export function DesktopNav() {
   const isActive = useActive();
   const { t } = useI18n();
   return (
-    <nav className="hidden items-center gap-1 md:flex" aria-label="Primary">
+    <nav className="hidden items-center gap-2 md:flex" aria-label="Primary">
       {tabs.map(({ labelKey, href }) => {
         const active = isActive(href);
         return (
@@ -31,8 +31,10 @@ export function DesktopNav() {
             key={href}
             href={href}
             aria-current={active ? "page" : undefined}
-            className={`relative rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
-              active ? "bg-surface-2 text-foreground" : "text-muted hover:text-foreground"
+            className={`rounded-lg border-2 px-3 py-1 text-[13px] font-bold transition-all ${
+              active
+                ? "border-brand bg-black text-foreground shadow-brutal-xs"
+                : "border-transparent text-muted hover:border-border-bright hover:text-foreground"
             }`}
           >
             {t(labelKey)}
@@ -48,14 +50,14 @@ export function Nav() {
   const isActive = useActive();
   const { t } = useI18n();
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 backdrop-blur md:hidden" aria-label="Primary">
+    <nav className="fixed inset-x-0 bottom-0 z-50 border-t-2 border-brand bg-black/95 backdrop-blur md:hidden" aria-label="Primary">
       <div className="mx-auto flex max-w-xl items-center justify-between px-1">
         {tabs.map(({ labelKey, href, Icon }) => (
           <Link
             key={href}
             href={href}
             aria-current={isActive(href) ? "page" : undefined}
-            className={`flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium transition-colors ${
+            className={`flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-bold transition-colors ${
               isActive(href) ? "text-brand" : "text-muted"
             }`}
           >

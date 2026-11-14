@@ -36,7 +36,7 @@ export function AsciiScene({ className = "", speed = 1 }: { className?: string; 
           pre.current.style.fontSize = `${w / (COLS * cellW)}px`;
         };
         fit();
-        stop = play(pre.current, piece, { speed });
+        stop = play(pre.current, piece, { speed, look: { mono: true } });
         ro = new ResizeObserver(fit);
         ro.observe(wrap.current);
       } catch (err) {
@@ -58,7 +58,7 @@ export function AsciiScene({ className = "", speed = 1 }: { className?: string; 
       aria-hidden="true"
       className={`overflow-hidden [&>canvas]:absolute [&>canvas]:left-0 [&>canvas]:top-1/2 [&>canvas]:-translate-y-[56%] [&>canvas]:!max-w-none ${className}`}
     >
-      <pre ref={pre} className="m-0 text-foreground" style={{ display: "none" }} />
+      <pre ref={pre} className="m-0 text-brand" style={{ display: "none" }} />
       {failed && <div className="absolute inset-0 bg-gradient-to-b from-info/10 via-pink/10 to-background" />}
     </div>
   );

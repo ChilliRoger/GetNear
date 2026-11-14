@@ -5,7 +5,7 @@ export function Spark({
   values,
   height = 36,
   className = "",
-  color = "rgb(56 204 230)",
+  color = "rgb(34 197 94)",
 }: {
   values: number[];
   height?: number;
@@ -62,10 +62,10 @@ export interface Kpi {
 export function KpiStrip({ items }: { items: Kpi[] }) {
   const color = { default: "text-foreground", ok: "text-ok", warn: "text-warn", danger: "text-danger", brand: "text-brand" };
   return (
-    <div className="grid grid-cols-2 divide-border rounded-lg border border-border bg-surface md:grid-cols-4 md:divide-x lg:grid-cols-[repeat(var(--n),minmax(0,1fr))]" style={{ ["--n" as string]: items.length }}>
+    <div className="grid grid-cols-2 divide-border rounded-2xl border-2 border-brand bg-surface shadow-brutal md:grid-cols-4 md:divide-x lg:grid-cols-[repeat(var(--n),minmax(0,1fr))]" style={{ ["--n" as string]: items.length }}>
       {items.map((k, i) => (
         <div key={k.label} className={`px-4 py-3 ${i >= 2 ? "border-t border-border md:border-t-0" : ""} ${i % 2 === 1 ? "border-l border-border md:border-l-0" : ""}`}>
-          <div className="text-[11px] text-muted">{k.label}</div>
+          <div className="text-[11px] font-bold text-muted">{k.label}</div>
           <div className={`num mt-1 text-lg font-semibold leading-none ${color[k.tone ?? "default"]}`}>{k.value}</div>
           {k.sub && <div className="mt-1.5 truncate text-[11px] text-muted">{k.sub}</div>}
         </div>

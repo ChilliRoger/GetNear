@@ -154,8 +154,8 @@ export function RateChart({ height = 280, defaultHours = 24 }: { height?: number
           >
             <defs>
               <linearGradient id="rc-fill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="rgb(56 204 230)" stopOpacity="0.2" />
-                <stop offset="100%" stopColor="rgb(56 204 230)" stopOpacity="0" />
+                <stop offset="0%" stopColor="rgb(34 197 94)" stopOpacity="0.2" />
+                <stop offset="100%" stopColor="rgb(34 197 94)" stopOpacity="0" />
               </linearGradient>
             </defs>
 
@@ -164,8 +164,8 @@ export function RateChart({ height = 280, defaultHours = 24 }: { height?: number
               const yy = pad.t + f * ih;
               return (
                 <g key={f}>
-                  <line x1={pad.l} x2={width - pad.r} y1={yy} y2={yy} stroke="rgb(30 36 47)" />
-                  <text x={width - pad.r + 8} y={yy + 3.5} fontSize="10" fill="rgb(122 133 152)" className="num">
+                  <line x1={pad.l} x2={width - pad.r} y1={yy} y2={yy} stroke="rgb(28 46 36)" />
+                  <text x={width - pad.r + 8} y={yy + 3.5} fontSize="10" fill="rgb(160 168 163)" className="num">
                     {v.toFixed(4)}
                   </text>
                 </g>
@@ -174,22 +174,22 @@ export function RateChart({ height = 280, defaultHours = 24 }: { height?: number
             {[0, 0.25, 0.5, 0.75, 1].map((f) => {
               const t = geo.t0 + f * (geo.t1 - geo.t0);
               return (
-                <text key={f} x={geo.x(t)} y={height - 6} textAnchor={f === 0 ? "start" : f === 1 ? "end" : "middle"} fontSize="10" fill="rgb(122 133 152)" className="num">
+                <text key={f} x={geo.x(t)} y={height - 6} textAnchor={f === 0 ? "start" : f === 1 ? "end" : "middle"} fontSize="10" fill="rgb(160 168 163)" className="num">
                   {fmtTime(t, hours)}
                 </text>
               );
             })}
 
             <path d={geo.area} fill="url(#rc-fill)" />
-            <path d={geo.r} fill="none" stroke="rgb(125 140 255)" strokeWidth="1" strokeDasharray="4 4" strokeOpacity="0.8" />
-            <path d={geo.q} fill="none" stroke="rgb(56 204 230)" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
+            <path d={geo.r} fill="none" stroke="rgb(190 200 195)" strokeWidth="1" strokeDasharray="4 4" strokeOpacity="0.8" />
+            <path d={geo.q} fill="none" stroke="rgb(34 197 94)" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
 
             {/* last-price tag on the right axis */}
             {last && (
               <g>
-                <line x1={pad.l} x2={width - pad.r} y1={geo.y(last.quotePrice)} y2={geo.y(last.quotePrice)} stroke="rgb(56 204 230)" strokeOpacity="0.45" strokeDasharray="2 3" />
-                <rect x={width - pad.r + 2} y={geo.y(last.quotePrice) - 9} width={pad.r - 4} height="18" rx="3" fill="rgb(56 204 230)" />
-                <text x={width - pad.r + 8} y={geo.y(last.quotePrice) + 3.5} fontSize="10" fontWeight="600" fill="rgb(9 11 15)" className="num">
+                <line x1={pad.l} x2={width - pad.r} y1={geo.y(last.quotePrice)} y2={geo.y(last.quotePrice)} stroke="rgb(34 197 94)" strokeOpacity="0.45" strokeDasharray="2 3" />
+                <rect x={width - pad.r + 2} y={geo.y(last.quotePrice) - 9} width={pad.r - 4} height="18" rx="3" fill="rgb(34 197 94)" />
+                <text x={width - pad.r + 8} y={geo.y(last.quotePrice) + 3.5} fontSize="10" fontWeight="600" fill="rgb(4 6 5)" className="num">
                   {last.quotePrice.toFixed(4)}
                 </text>
               </g>
@@ -197,9 +197,9 @@ export function RateChart({ height = 280, defaultHours = 24 }: { height?: number
 
             {hp && (
               <g>
-                <line x1={geo.x(hp.timestamp)} x2={geo.x(hp.timestamp)} y1={pad.t} y2={pad.t + ih} stroke="rgb(228 232 239)" strokeOpacity="0.35" strokeDasharray="2 3" />
-                <circle cx={geo.x(hp.timestamp)} cy={geo.y(hp.quotePrice)} r="3.5" fill="rgb(9 11 15)" stroke="rgb(56 204 230)" strokeWidth="1.5" />
-                <circle cx={geo.x(hp.timestamp)} cy={geo.y(hp.refPrice)} r="3.5" fill="rgb(9 11 15)" stroke="rgb(125 140 255)" strokeWidth="1.5" />
+                <line x1={geo.x(hp.timestamp)} x2={geo.x(hp.timestamp)} y1={pad.t} y2={pad.t + ih} stroke="rgb(244 242 240)" strokeOpacity="0.35" strokeDasharray="2 3" />
+                <circle cx={geo.x(hp.timestamp)} cy={geo.y(hp.quotePrice)} r="3.5" fill="rgb(4 6 5)" stroke="rgb(34 197 94)" strokeWidth="1.5" />
+                <circle cx={geo.x(hp.timestamp)} cy={geo.y(hp.refPrice)} r="3.5" fill="rgb(4 6 5)" stroke="rgb(190 200 195)" strokeWidth="1.5" />
               </g>
             )}
           </svg>

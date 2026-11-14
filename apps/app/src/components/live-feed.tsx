@@ -56,9 +56,9 @@ export function LiveFeed({ rows = 10 }: { rows?: number }) {
         </span>
       </div>
 
-      <ol className="-mx-4 divide-y divide-border border-t border-border text-xs">
+      <ol className="-mx-5 divide-y divide-border border-t border-border text-xs">
         {events.slice(0, rows).map((e) => (
-          <li key={e.id} className={`grid grid-cols-[60px_64px_1fr_auto] items-center gap-3 px-4 py-2 ${fresh.has(e.id) ? "flash-in" : ""}`}>
+          <li key={e.id} className={`grid grid-cols-[60px_64px_1fr_auto] items-center gap-3 px-5 py-2 ${fresh.has(e.id) ? "flash-in" : ""}`}>
             <time className="num text-muted">{hhmmss(e.ts)}</time>
             <span className={`rounded-sm px-1.5 py-0.5 text-center text-[10px] font-semibold ${TAG[e.tag]}`}>{e.tag}</span>
             <span className="min-w-0 truncate text-foreground/90" title={e.text}>
@@ -68,7 +68,7 @@ export function LiveFeed({ rows = 10 }: { rows?: number }) {
           </li>
         ))}
         {events.length === 0 && (
-          <li className="px-4 py-8 text-center text-muted">
+          <li className="px-5 py-8 text-center text-muted">
             {loading ? "Listening…" : "No decisions yet. Create an order and the agent's reasoning streams here."}
           </li>
         )}
