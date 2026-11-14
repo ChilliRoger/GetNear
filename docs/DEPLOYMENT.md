@@ -26,6 +26,9 @@ The dashboard degrades cleanly without the oracle and agent: the chart shows "Or
 `GETNEAR_DEMO_SIGNER`, `NEXT_PUBLIC_DEMO_SIGNER`, `GETNEAR_DEMO_TOKEN`, `AGENT_TRIGGER_TOKEN`. The server-side demo signer shells out to a local `near-cli` with local credential files; it cannot work on Vercel and must never be enabled on a public host. Users sign with their own wallet. Never set `ALLOW_MAINNET`.
 
 ### Hosting the agent / oracle
+Step-by-step for a free Oracle Cloud VM (and a Cloudflare Tunnel fallback): [`docs/ORACLE_CLOUD.md`](ORACLE_CLOUD.md); setup files in `deploy/vm/`.
+The oracle forwards the agent's read-only routes under `/agent/*`, so only port 38174 needs to be public.
+
 - Oracle: `pnpm --filter @getnear/oracle start` (port 38174, `PORT` env). It is read-only and holds no secrets.
 - Agent: `pnpm agent:start` (port 38175). It binds to loopback by default. If the dashboard runs elsewhere, expose only the read-only routes (`/status`, `/fills`, `/decisions`, set `AGENT_ALLOW_REMOTE=1`) behind a private network or reverse proxy, and never expose `POST /trigger`. The restricted key file must stay on the agent host.
 

@@ -1,0 +1,19 @@
+[Unit]
+Description=GetNear oracle (read-only market recorder)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=__USER__
+WorkingDirectory=__DIR__/apps/oracle
+EnvironmentFile=/etc/getnear.env
+ExecStart=__PNPM__ start
+Restart=always
+RestartSec=5
+# Hardening: it only needs to read the network and write its own data directory
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

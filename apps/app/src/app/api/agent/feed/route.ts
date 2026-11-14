@@ -23,7 +23,7 @@ async function getJson<T>(url: string, ms = 4000): Promise<T | null> {
 
 /** Read-only view of the on-chain agent's status and decision log (the agent binds to loopback only). */
 export async function GET() {
-  const agentBase = (process.env.AGENT_TRIGGER_URL || "http://127.0.0.1:38175").replace(/\/+$/, "");
+  const agentBase = (process.env.AGENT_API_URL || process.env.AGENT_TRIGGER_URL || "http://127.0.0.1:38175").replace(/\/+$/, "");
 
   const [status, decisions] = await Promise.all([
     getJson<NonNullable<unknown> & Record<string, unknown>>(`${agentBase}/status`),

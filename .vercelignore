@@ -25,3 +25,6 @@ frontend/
 scripts/
 .github/
 .vscode/
+
+# VM setup package is not part of the dashboard build
+deploy/

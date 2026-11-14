@@ -31,6 +31,8 @@ const PORT = Number(process.env.PORT || 38174)
 const RECORD_INTERVAL = 30_000
 const PAIR = 'USDC/EURe'
 const DEFAULT_MAX_DEVIATION_BPS = 120
+// The agent stays private on loopback; the oracle forwards ONLY its read-only routes (see /agent/* below).
+const AGENT_LOCAL_URL = (process.env.AGENT_LOCAL_URL || 'http://127.0.0.1:38175').replace(/\/+$/, '')
 
 const quoteSource = new OneClickQuoteSource()
 const refRateSource = new FrankfurterReferenceSource()
@@ -185,6 +187,22 @@ app.get('/api/strategy/market', (c) => {
     note: 'Market-only score. Deadline urgency (40%) is added per order by the agent.',
     timestamp: row.timestamp,
   })
+})
+
+/**
+ * Read-only window onto the co-located agent (status, fills, decisions). This lets a hosted dashboard see the agent
+ * through the oracle's single public port while the agent itself keeps listening on loopback only. The agent's
+ * state-changing route (POST /trigger) is deliberately NOT forwarded.
+ */
+app.get('/agent/:name{status|fills|decisions}', async (c) => {
+  const name = c.req.param('name')
+  const search = new URL(c.req.url).search
+  try {
+    const res = await fetch(`${AGENT_LOCAL_URL}/${name}${search}`, { signal: AbortSignal.timeout(4000) })
+    return new Response(await res.text(), { status: res.status, headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/json' } })
+  } catch {
+    return c.json({ error: 'Agent unavailable' }, 502)
+  }
 })
 
 // ---------- Bootstrap ----------
