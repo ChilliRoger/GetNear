@@ -14,7 +14,7 @@ const spaceMono = Space_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GetNear — Controlled supplier payments on NEAR testnet",
+  title: "GetNear",
   description:
     "A treasury agent that pays supplier invoices in chunks under on-chain limits and DAO approval. Testnet-only hackathon prototype; the FX conversion is simulated.",
   openGraph: {
