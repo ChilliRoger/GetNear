@@ -10,7 +10,9 @@ The Rust `FxBudget` contract reserves each chunk in flight, sends demo EURe to t
 cross-contract `ft_transfer`, and reduces the amount due **only inside the `#[private] on_chunk_settled` callback**.
 A failed transfer leaves the invoice due unchanged and the chunk retryable; refunds return unspent escrow.
 
-> Testnet-only hackathon prototype. No mainnet funds. See [what is real vs simulated](#what-is-real-vs-simulated).
+> Testnet-only hackathon prototype. No mainnet funds. Mainnet is **roadmap, not shipped**: no mainnet contract, DAO or vault exists, and the code refuses `NEAR_NETWORK_ID=mainnet` unless `ALLOW_MAINNET=1`. See [what is real vs simulated](#what-is-real-vs-simulated).
+
+**When does the agent pay?** By default (`AGENT_STRATEGY=score`) a 0-100 timing score (price vs rolling average 40%, quote vs ECB reference 20%, deadline urgency 40%) gates every chunk: ≥85 pays a 2x chunk, 70-85 a normal chunk, below 70 it waits (deadline pressure can force execution). Hard guards (deviation limit, interval, on-chain caps) always apply. `AGENT_STRATEGY=immediate` skips the score for short demos. The score is a heuristic, not a claim of better rates.
 
 ---
 
@@ -22,12 +24,12 @@ pnpm install --frozen-lockfile
 pnpm verify:readonly      # read-only testnet queries; prints expected vs observed for Orders #8, #11, #12
 ```
 
-Expected: `PASS 62  FAIL 0  RPC_ERROR 0` and exit code `0`. Exit `1` means the live chain does not match the documented
+Expected: `PASS 86  FAIL 0  RPC_ERROR 0` and exit code `0`. Exit `1` means the live chain does not match the documented
 evidence; exit `2` means the RPC could not answer (retry or pass `--rpc <url>`): RPC failures are reported separately
 from assertion failures. It checks, read-only: the deployed code hash against the bundled artifacts, Orders #8, #11, #12 (labelled
-**historical, previous build**), the Order #12 escrow reconciliation, and the **fresh upgraded-build invoice** (currently
-`pending`: see [Evidence](#evidence)). Strict modes: `--expect-upgraded` (the upgraded contract must be live) and
-`--expect-fresh` (the fresh invoice must be captured); both currently exit `1` by design because neither has happened yet.
+**historical, previous build**), the Order #12 escrow reconciliation, and the **fresh upgraded-build invoice** (Order #13).
+Strict modes `--expect-upgraded` (the upgraded contract must be live) and `--expect-fresh` (the fresh invoice must be captured)
+both pass on the current testnet state.
 
 Optional local checks:
 
@@ -67,13 +69,18 @@ Every chunk shown in the dashboard separates four facts:
 
 ## Evidence
 
-### Fresh invoice from the upgraded build — PENDING
+### Fresh invoice from the upgraded build: Order #13 (captured 2026-11-13)
 
-One escrowed supplier invoice (canonical Circle testnet USDC, demo EURe payout, simulated FX) whose final quoted chunk exceeds the amount
-due, so the upgraded build **caps the payout at the remaining balance, recalculates the USDC debit at full quote precision, and refunds the
-unused escrow**. Not captured yet: it needs the upgraded contract deployed and one signed run. The exact steps, inputs and acceptance criteria are in
-[docs/UPGRADE_AND_FRESH_INVOICE.md](docs/UPGRADE_AND_FRESH_INVOICE.md); the result will be recorded in
-[`docs/evidence/fresh-invoice.json`](docs/evidence/fresh-invoice.json) and checked live by `pnpm verify:readonly --expect-fresh`.
+One escrowed supplier invoice (`INV-FINAL-CHUNK-1794586331`: canonical Circle testnet USDC escrow, demo EURe payout, simulated FX) whose final
+quoted chunk exceeded the amount due, so the upgraded build **capped the payout at the remaining balance (€5.00), recalculated the USDC debit
+at full quote precision ($5.541224 charged) and refunded the unused escrow ($4.458776)**. Recorded in
+[`docs/evidence/fresh-invoice.json`](docs/evidence/fresh-invoice.json) and checked live by `pnpm verify:readonly --expect-upgraded --expect-fresh`.
+
+| Step | Parent transaction |
+| :--- | :--- |
+| Escrow funding (`ft_transfer_call`, $10 Circle USDC) | [ZnaHzUsM…](https://testnet.nearblocks.io/txns/ZnaHzUsMawWiTTAa5RrbfqTeQQqyhn8vY6tb41b7nMd) |
+| Final `execute_chunk` (+€5.00 demo EURe, restricted agent key) | [6eAGwbnB…](https://testnet.nearblocks.io/txns/6eAGwbnBR8X5Q72J8kf8tPMPaChHSJ5Ma9zmBmzLM7of) |
+| `refund_unused_escrow` ($4.458776 back to the operator) | [63pmWkCc…](https://testnet.nearblocks.io/txns/63pmWkCcViJShmXwgwELG5uUTbn5TBCRAHjv7Di2pFha) |
 
 ### Orders #8, #11, #12 — historical evidence from the PREVIOUS build
 
@@ -98,7 +105,7 @@ unused escrow**. Not captured yet: it needs the upgraded contract deployed and o
 quote implied `€8.9645` for `$10` (≈ `$8.92` for `€8.00`), an over-charge of `$1.075889` retained by the contract. The fixed agent
 charges the adjusted input; this is covered by local tests, **not** by testnet evidence yet.
 
-## What changed since the evidence (needs redeploy / restart to take effect on testnet)
+## What changed since Orders #8, #11, #12 (now live on testnet; code hash `0bd18830…7d2fec`)
 
 | Area | Change | Where |
 | :--- | :--- | :--- |
@@ -169,7 +176,7 @@ Circle testnet USDC comes from [faucet.circle.com](https://faucet.circle.com/).
 
 ## Deployed testnet infrastructure
 
-- **FxBudget:** [`fx-budget.chilliroger-operator.testnet`](https://testnet.nearblocks.io/address/fx-budget.chilliroger-operator.testnet) (the **previous build**; V2 `migrate` [tx](https://testnet.nearblocks.io/txns/EKfuns36z7MM6tAUxZYTmHbgP4uYxMGa457zEWXowATD), V3 `migrate_v3` [tx](https://testnet.nearblocks.io/txns/AsvHD4dd3U9uALori1hVwd8ihBYunBjrqSRskgBwb7fo))
+- **FxBudget:** [`fx-budget.chilliroger-operator.testnet`](https://testnet.nearblocks.io/address/fx-budget.chilliroger-operator.testnet) (the **upgraded build**, code sha256 `0bd18830…7d2fec`; V2 `migrate` [tx](https://testnet.nearblocks.io/txns/EKfuns36z7MM6tAUxZYTmHbgP4uYxMGa457zEWXowATD), V3 `migrate_v3` [tx](https://testnet.nearblocks.io/txns/AsvHD4dd3U9uALori1hVwd8ihBYunBjrqSRskgBwb7fo))
 - **Sputnik DAO v2 (owner, 2-of-3):** [`chilliroger-dao.sputnik-v2.testnet`](https://testnet.nearblocks.io/address/chilliroger-dao.sputnik-v2.testnet)
 - **Escrow input token (Circle Native NEAR testnet USDC):** [`3e2210e1…b8af`](https://testnet.nearblocks.io/token/3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af)
 - **Demo settlement token:** [`eure.chilliroger-operator.testnet`](https://testnet.nearblocks.io/address/eure.chilliroger-operator.testnet) · **Demo faucet USDC:** `usdc.chilliroger-operator.testnet`
@@ -194,6 +201,6 @@ Full archive: [docs/DEMO_LOG.md](docs/DEMO_LOG.md).
 
 * Retained input USDC has no withdrawal path (see [docs/SECURITY.md](docs/SECURITY.md)); `settlement_out` is not tied to `amount_in` on-chain.
 * Pending (never-approved) escrowed orders are not auto-expired; someone must call `expire_order`. Refunds are a manual call.
-* The deployed testnet contract and agent are the **previous build**. The upgrade (code-only), the fresh escrowed invoice and their live re-verification are **pending** and need signing credentials: see [docs/UPGRADE_AND_FRESH_INVOICE.md](docs/UPGRADE_AND_FRESH_INVOICE.md).
+* The upgrade was a code-only redeploy; orders #8, #11 and #12 predate it and are labelled historical. Re-running the live write drills needs signing credentials.
 * `rpc.testnet.near.org` can rate-limit; the verifier and apps fall back to `test.rpc.fastnear.com`.
 * Release-WASM hashes depend on the rustc version and host OS. The committed artifact's hash and build environment are in `contracts/fx-budget/res/artifacts.json`; the deployed bytes, not a rebuild, are what `verify:readonly` compares.

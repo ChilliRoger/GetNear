@@ -32,3 +32,10 @@ Items noted during P0–P2 for later blocks.
 - [x] Captured fresh escrowed invoice on upgraded contract (`Order #13`, `INV-FINAL-CHUNK-1794586331`): Circle USDC escrow, minimal covering input recalculated ($5.541224 USDC charged for €5.00 EURe), unspent escrow ($4.458776 USDC) refunded back to operator; verified 86/86 with `pnpm verify:readonly --expect-upgraded --expect-fresh`.
 - [ ] Remove the `FullAccess` keys on `fx-budget` and `chilliroger-agent.testnet` (see `docs/SECURITY.md`).
 - [ ] Add an owner-only withdrawal for retained input USDC; auto-expire never-approved `Pending` escrow orders.
+
+## 2026-11-14 hardening pass
+- [x] Mainnet refused unless `ALLOW_MAINNET=1` (testnet-only claim restored; mainnet = roadmap).
+- [x] Agent: timing-score + adaptive TWAP gate (`AGENT_STRATEGY`), all orders paginated, async signing.
+- [x] Oracle: `/api/demo/speed`, case-insensitive status filter, validated config updates, read-only dashboard proxy.
+- [x] Removed the 1,000,000x display inflation and the savings calculator.
+- [ ] UI redesign (clean fintech style).
