@@ -44,7 +44,9 @@ import {
 } from './db.js'
 import {
   findKeyCredentialPath,
-  runCallFunction,
+  runCallFunctionAsync,
+  type CallFunctionParams,
+  type TxResult,
   classifyCliFailure,
   NearCliError,
   type NearCliFailureKind,
@@ -138,6 +140,7 @@ export function classifySubmissionError(err: unknown): {
   }
 }
 
+type CallFn = (params: CallFunctionParams) => TxResult | Promise<TxResult>
 type QuoteProvider = Pick<OneClickQuoteSource, 'getQuote'>
 type RefRateProvider = Pick<FrankfurterReferenceSource, 'getReferenceRate'>
 
@@ -145,8 +148,8 @@ export class AgentRunner {
   private client: NearClient
   private quoteSource: QuoteProvider
   private refRateSource: RefRateProvider
-  private executeChunkCall: typeof runCallFunction
-  private expireCall: typeof runCallFunction
+  private executeChunkCall: CallFn
+  private expireCall: CallFn
   private resolveCredentialOverride?: () => Promise<string | undefined>
   private contractId: string
   private agentId: string
@@ -181,8 +184,8 @@ export class AgentRunner {
     rpcUrls?: string[]
     quoteSource?: QuoteProvider
     refRateSource?: RefRateProvider
-    executeChunkCall?: typeof runCallFunction
-    expireCall?: typeof runCallFunction
+    executeChunkCall?: CallFn
+    expireCall?: CallFn
     resolveCredentialPath?: () => Promise<string | undefined>
   }) {
     this.pollIntervalMs = options?.pollIntervalMs || Number(process.env.AGENT_POLL_INTERVAL_MS || 10_000)
@@ -213,8 +216,8 @@ export class AgentRunner {
 
     this.quoteSource = options?.quoteSource || new OneClickQuoteSource()
     this.refRateSource = options?.refRateSource || new FrankfurterReferenceSource()
-    this.executeChunkCall = options?.executeChunkCall || runCallFunction
-    this.expireCall = options?.expireCall || runCallFunction
+    this.executeChunkCall = options?.executeChunkCall || runCallFunctionAsync
+    this.expireCall = options?.expireCall || runCallFunctionAsync
     this.resolveCredentialOverride = options?.resolveCredentialPath
   }
 
@@ -776,7 +779,7 @@ export class AgentRunner {
       if (nowNs >= BigInt(order.deadline_ns)) {
         if (this.expireSignerId) {
           try {
-            this.expireCall({
+            await this.expireCall({
               contractId: this.contractId,
               methodName: 'expire_order',
               args: { id: order.id },
@@ -1072,7 +1075,7 @@ export class AgentRunner {
         )
 
         try {
-          txResult = this.executeChunkCall({
+          txResult = await this.executeChunkCall({
             contractId: this.contractId,
             methodName: 'execute_chunk',
             args: {

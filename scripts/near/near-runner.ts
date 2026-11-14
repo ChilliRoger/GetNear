@@ -9,7 +9,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 
 const DEFAULT_TIMEOUT_MS = 120_000
 
@@ -162,6 +162,100 @@ function runNear(argsList: string[], timeoutMs: number = getCliTimeoutMs()): TxR
     )
   }
   return { stdout: output, txHash, explorerUrl }
+}
+
+/** Async twin of runNear: never blocks the event loop (the agent HTTP API stays responsive while signing). */
+function runNearAsync(argsList: string[], timeoutMs: number = getCliTimeoutMs()): Promise<TxResult> {
+  return new Promise((resolve, reject) => {
+    let stdout = ''
+    let stderr = ''
+    let timedOut = false
+    let settled = false
+    const child = spawn(getNearBin(), argsList, { shell: false })
+    const timer = setTimeout(() => {
+      timedOut = true
+      child.kill('SIGKILL')
+    }, timeoutMs)
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      fn()
+    }
+    child.stdout?.on('data', (d) => (stdout += d.toString()))
+    child.stderr?.on('data', (d) => (stderr += d.toString()))
+    child.on('error', (err: NodeJS.ErrnoException) => {
+      const output = `${stdout}
+${stderr}`
+      finish(() => reject(new NearCliError(`Failed to spawn near-cli (${err.code ?? err.message})`, 'not_sent', output)))
+    })
+    child.on('close', (code) => {
+      const output = `${stdout}
+${stderr}`
+      const { txHash, explorerUrl } = extractTxInfo(output)
+      finish(() => {
+        if (timedOut) {
+          reject(
+            new NearCliError(
+              `ETIMEDOUT: near-cli did not finish within ${timeoutMs}ms; transaction outcome unknown`,
+              'uncertain',
+              output,
+              txHash,
+            ),
+          )
+        } else if (code !== 0) {
+          reject(new NearCliError(`Command failed with status ${code}:
+${output}`, classifyCliFailure(output), output, txHash))
+        } else {
+          resolve({ stdout: output, txHash, explorerUrl })
+        }
+      })
+    })
+  })
+}
+
+function buildCallFunctionArgs(params: CallFunctionParams, credPath: string): string[] {
+  return [
+    'contract',
+    'call-function',
+    'as-transaction',
+    params.contractId,
+    params.methodName,
+    'json-args',
+    JSON.stringify(params.args),
+    'prepaid-gas',
+    params.gas,
+    'attached-deposit',
+    params.deposit,
+    'sign-as',
+    params.signerId,
+    'network-config',
+    'testnet',
+    'sign-with-access-key-file',
+    credPath,
+    'send',
+  ]
+}
+
+export interface CallFunctionParams {
+  contractId: string
+  methodName: string
+  args: Record<string, unknown>
+  deposit: string
+  gas: string
+  signerId: string
+  credentialPath?: string
+  timeoutMs?: number
+}
+
+export async function runCallFunctionAsync(params: CallFunctionParams): Promise<TxResult> {
+  let credPath: string
+  try {
+    credPath = getCredentialPath(params.signerId, params.credentialPath)
+  } catch (err) {
+    throw new NearCliError(err instanceof Error ? err.message : String(err), 'not_sent', '')
+  }
+  return runNearAsync(buildCallFunctionArgs(params, credPath), params.timeoutMs)
 }
 
 export function runCallFunction(params: {
