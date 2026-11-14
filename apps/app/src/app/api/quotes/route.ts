@@ -6,6 +6,9 @@ import { computeDeviationBps, bpsToPercent } from '@getnear/shared'
 const quoteSource = new OneClickQuoteSource()
 const refSource = new FrankfurterReferenceSource()
 
+const quoteCache = new Map<string, { timestamp: number; data: unknown }>()
+const QUOTE_CACHE_TTL = 5000
+
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
@@ -18,6 +21,12 @@ export async function GET(req: NextRequest) {
     const amountNum = parseFloat(amountStr)
     if (isNaN(amountNum) || amountNum <= 0) {
       return NextResponse.json({ error: 'amount must be a positive number' }, { status: 400 })
+    }
+
+    const cacheKey = `${fromToken}-${toToken}-${amountStr}`
+    const cached = quoteCache.get(cacheKey)
+    if (cached && Date.now() - cached.timestamp < QUOTE_CACHE_TTL) {
+      return NextResponse.json(cached.data)
     }
 
     // Atomic units for USDC (6 decimals)
@@ -37,7 +46,7 @@ export async function GET(req: NextRequest) {
     // 3. Compute basis point deviation
     const deviationBps = computeDeviationBps(quote.rate, ref.rate)
 
-    return NextResponse.json({
+    const payload = {
       success: true,
       quote,
       reference: ref,
@@ -50,7 +59,10 @@ export async function GET(req: NextRequest) {
         outputDecimals: 18,
         recommendedMinChunkUsd: 5,
       },
-    })
+    }
+
+    quoteCache.set(cacheKey, { timestamp: Date.now(), data: payload })
+    return NextResponse.json(payload)
   } catch (err) {
     console.error('[/api/quotes error]', err)
     return NextResponse.json(
