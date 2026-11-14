@@ -62,6 +62,7 @@ export async function GET() {
     });
   }
   for (const d of oracle ?? []) {
+    if (d.order_id === null) continue; // ignore idle "no active orders" evaluations
     events.push({
       id: `o${d.id}`,
       ts: d.timestamp * 1000,

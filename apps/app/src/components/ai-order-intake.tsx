@@ -92,7 +92,7 @@ export function AiOrderIntake({ onApply }: AiOrderIntakeProps) {
     <div className="border border-border bg-background p-3 space-y-2 text-xs ">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 font-semibold text-foreground">
-          <MessageSquareText className="h-3.5 w-3.5 text-info" />
+          <MessageSquareText className="h-3.5 w-3.5 text-brand" />
           <span>Natural-language order intake · no auto-sign</span>
         </div>
 
@@ -100,7 +100,7 @@ export function AiOrderIntake({ onApply }: AiOrderIntakeProps) {
           <span
             className={`px-1.5 py-0.5 text-[10px] border ${
               status.configured
-                ? "border-info bg-info/10 text-info"
+                ? "border-brand bg-brand/10 text-brand"
                 : "bg-surface text-muted border-border"
             }`}
           >
@@ -126,7 +126,7 @@ export function AiOrderIntake({ onApply }: AiOrderIntakeProps) {
             onClick={() => setSelectedProvider(undefined)}
             className={`px-1.5 py-0.5 border transition-colors ${
               selectedProvider === undefined
-                ? "border-info bg-info/15 text-info font-semibold"
+                ? "border-brand bg-brand/15 text-brand font-semibold"
                 : "border-border bg-surface text-muted hover:text-foreground"
             }`}
           >
@@ -141,7 +141,7 @@ export function AiOrderIntake({ onApply }: AiOrderIntakeProps) {
                 onClick={() => setSelectedProvider(p)}
                 className={`px-1.5 py-0.5 border transition-colors ${
                   selectedProvider === p
-                    ? "border-info bg-info/15 text-info font-semibold"
+                    ? "border-brand bg-brand/15 text-brand font-semibold"
                     : "border-border bg-surface text-muted hover:text-foreground"
                 }`}
               >

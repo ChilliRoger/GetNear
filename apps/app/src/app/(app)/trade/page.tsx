@@ -428,7 +428,7 @@ export default function TradePage() {
           <button
             type="button"
             onClick={() => connect()}
-            className="w-full flex items-center justify-center gap-2 border border-info bg-info/10 py-3 text-xs font-bold text-info hover:bg-info/20 transition-colors tracking-wider"
+            className="w-full flex items-center justify-center gap-2 border border-brand bg-brand/10 py-3 text-xs font-bold text-brand hover:bg-brand/20 transition-colors tracking-wider"
           >
             <PlusCircle className="h-4 w-4" />
             <span>Connect testnet wallet to create order</span>
@@ -448,6 +448,23 @@ export default function TradePage() {
         <LiveQuoteCard />
         <Card title="USDC / EURe" subtitle="1Click dry quote vs ECB reference">
           <RateChart height={220} defaultHours={6} />
+        </Card>
+        <Card title="What happens after you sign" subtitle="Every step is a testnet transaction you can open on NEARBlocks">
+          <ol className="space-y-3 text-xs leading-5 text-muted">
+            {[
+              ["Order created", "Under the $100 auto-cap it is Active at once. Above it, it stays Pending for DAO approval."],
+              ["DAO votes", "Two of three council members approve on the Approve page; the contract then activates the order."],
+              ["Agent pays in chunks", "It scores live quotes against ECB and your deadline, then calls execute_chunk with its restricted key."],
+              ["Settled by callback", "Demo EURe reaches the supplier; the amount due only falls after the transfer is confirmed on-chain."],
+            ].map(([title, desc], i) => (
+              <li key={title} className="flex gap-3">
+                <span className="num flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-brand/50 text-[10px] font-semibold text-brand">{i + 1}</span>
+                <span>
+                  <b className="text-foreground">{title}.</b> {desc}
+                </span>
+              </li>
+            ))}
+          </ol>
         </Card>
       </aside>
       </div>

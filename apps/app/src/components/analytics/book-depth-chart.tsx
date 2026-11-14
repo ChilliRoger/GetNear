@@ -223,7 +223,7 @@ export function BookDepthChart() {
         </div>
 
         <button
-          className="mt-3 w-full rounded-xl border-none bg-accent-blue py-3 text-[0.95rem] font-semibold text-white transition-colors hover:bg-accent-blue/80 disabled:cursor-not-allowed disabled:opacity-40"
+          className="mt-3 w-full rounded-xl border-none bg-accent-blue py-3 text-[0.95rem] font-semibold text-background transition-colors hover:bg-accent-blue/80 disabled:cursor-not-allowed disabled:opacity-40"
           onClick={fetchBook}
           disabled={loading}
         >

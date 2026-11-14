@@ -123,8 +123,8 @@ export default function AnalyticsPage() {
             <LiveFeed rows={10} />
           </Card>
         </Reveal>
-        <Reveal delay={80} className="lg:col-span-5">
-          <Card title="Deviation, last 60 samples" subtitle="Absolute distance between quote and ECB: shorter is tighter" className="h-full">
+        <Reveal delay={80} className="space-y-4 lg:col-span-5">
+          <Card title="Deviation, last 60 samples" subtitle="Absolute distance between quote and ECB: shorter is tighter">
             <Spark values={(devStats?.series ?? []).map((v) => Math.abs(v))} height={120} color="rgb(125 140 255)" />
             <dl className="mt-4 grid grid-cols-3 divide-x divide-border border-t border-border pt-3 text-xs">
               {[
@@ -138,6 +138,24 @@ export default function AnalyticsPage() {
                 </div>
               ))}
             </dl>
+          </Card>
+
+          <Card title="How the timing score works" subtitle="Why the agent waits or pays">
+            <ol className="space-y-3 text-xs leading-5 text-muted">
+              <li>
+                <b className="text-foreground">Price vs average (40%).</b> A quote above its recent average scores higher.
+              </li>
+              <li>
+                <b className="text-foreground">Quote vs ECB (20%).</b> A quote at or above the ECB reference scores 100; it falls as the adverse deviation approaches the order limit.
+              </li>
+              <li>
+                <b className="text-foreground">Deadline urgency (40%).</b> Rises with the square of elapsed time, so the agent always finishes before the deadline.
+              </li>
+              <li className="border-t border-border pt-3">
+                Score <b className="num text-ok">70+</b> pays a normal chunk, <b className="num text-ok">85+</b> pays double, below 70 it waits.
+                Hard guards (deviation limit, interval, on-chain caps) always apply. This is a timing heuristic, not a promise of better rates.
+              </li>
+            </ol>
           </Card>
         </Reveal>
       </div>

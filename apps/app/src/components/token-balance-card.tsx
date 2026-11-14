@@ -90,7 +90,7 @@ export function TokenBalanceCard({
             href="https://faucet.circle.com/"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-semibold border border-info bg-info/10 hover:bg-info/20 text-info transition-colors"
+            className="flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-semibold border border-brand bg-brand/10 hover:bg-brand/20 text-brand transition-colors"
           >
             <ExternalLink className="w-3.5 h-3.5" />
             <span>Circle USDC Faucet ↗</span>
@@ -110,7 +110,7 @@ export function TokenBalanceCard({
         <div className="p-3 bg-background border border-border">
           <div className="flex items-center justify-between text-xs text-muted mb-1">
             <span>Circle Testnet USDC</span>
-            <span className="text-info ">[Canonical]</span>
+            <span className="text-brand ">(canonical)</span>
           </div>
           <div className="text-xl font-bold text-foreground" suppressHydrationWarning>
             {userUsdc.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -140,7 +140,7 @@ export function TokenBalanceCard({
         <div className="p-3 bg-background border border-border">
           <div className="flex items-center justify-between text-xs text-muted mb-1">
             <span>Your EURe Balance</span>
-            <span className="text-brand ">[6 decimals]</span>
+            <span className="text-brand ">(6 decimals)</span>
           </div>
           <div className="text-xl font-bold text-foreground" suppressHydrationWarning>
             {userEure.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -172,7 +172,7 @@ export function TokenBalanceCard({
             <span className="text-xs ml-1.5 text-muted font-normal">EURe</span>
           </div>
           <div className="mt-2 pt-2 border-t border-border text-[11px] text-muted" suppressHydrationWarning>
-            Circle USDC Escrowed: <span className="text-info font-semibold">{vaultUsdc.toFixed(2)} USDC</span>
+            Circle USDC Escrowed: <span className="text-brand font-semibold">{vaultUsdc.toFixed(2)} USDC</span>
           </div>
         </div>
       </div>

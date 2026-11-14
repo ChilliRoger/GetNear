@@ -27,7 +27,7 @@ const config: Config = {
         warn: token("warn"),
         danger: token("danger"),
         accent: {
-          blue: token("info"),
+          blue: token("brand"),
           green: token("ok"),
           amber: token("warn"),
           red: token("danger"),

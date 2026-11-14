@@ -122,7 +122,7 @@ export function WalletConnectButton() {
                     setIsOpen(false);
                     openWalletModal();
                   }}
-                  className="w-full flex items-center justify-between rounded-lg border border-accent-blue bg-accent-blue py-2 px-3 text-xs font-semibold text-white hover:bg-accent-blue/90 transition-colors"
+                  className="w-full flex items-center justify-between rounded-lg border border-accent-blue bg-accent-blue py-2 px-3 text-xs font-semibold text-background hover:bg-accent-blue/90 transition-colors"
                 >
                   <div className="flex items-center gap-2">
                     <Wallet className="h-4 w-4" />
@@ -193,7 +193,7 @@ export function WalletConnectButton() {
 
   // ──────────────── CONNECTED STATE ────────────────
   const shortName =
-    accountId.length > 22 ? `${accountId.slice(0, 10)}…${accountId.slice(-9)}` : accountId;
+    accountId.length > 30 ? `${accountId.slice(0, 10)}…${accountId.slice(-9)}` : accountId;
 
   return (
     <div className="relative " ref={dropdownRef}>

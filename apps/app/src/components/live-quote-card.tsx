@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { RefreshCw } from "lucide-react";
+import { Card } from "@/components/card";
 
 interface QuoteData {
   quote: {
@@ -42,8 +44,7 @@ export function LiveQuoteCard() {
         const errJson = await res.json().catch(() => ({}));
         throw new Error(errJson.error || `HTTP ${res.status}`);
       }
-      const json = await res.json();
-      setData(json);
+      setData(await res.json());
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -55,121 +56,72 @@ export function LiveQuoteCard() {
     fetchQuote(amount);
   }, [amount]);
 
+  const dev = data?.deviationBps ?? 0;
+  const devTone = Math.abs(dev) <= 50 ? "text-ok" : Math.abs(dev) <= 120 ? "text-warn" : "text-danger";
+
   return (
-    <div className="border border-border bg-surface p-4 text-foreground ">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-border/60 gap-2">
-        <div>
-          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted">
-            
-            <span>Live FX rate discovery</span>
-          </div>
-          <div className="text-sm font-semibold text-foreground mt-0.5 pl-3">
-            USDC / EURe Market Quote vs ECB Reference
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center bg-background p-0.5 border border-border text-xs">
+    <Card
+      title="Live FX quote"
+      subtitle="1Click dry quote vs ECB reference (indicative, simulated fill)"
+      actions={
+        <>
+          <div className="flex rounded-md border border-border-bright bg-surface-2 p-0.5">
             {[10, 50, 100].map((val) => (
               <button
                 key={val}
                 type="button"
                 onClick={() => setAmount(val)}
-                className={`px-2 py-0.5 text-[11px] transition-colors ${
-                  amount === val
-                    ? "bg-brand text-background font-bold"
-                    : "text-muted hover:text-foreground"
+                className={`num rounded px-2 py-1 text-[11px] font-semibold transition-colors ${
+                  amount === val ? "bg-border-bright text-foreground" : "text-muted hover:text-foreground"
                 }`}
               >
                 ${val}
               </button>
             ))}
           </div>
-          <span className="text-[10px] uppercase px-1.5 py-0.5 border border-border bg-background text-muted">
-            DRY QUOTE
-          </span>
           <button
+            type="button"
             onClick={() => fetchQuote(amount)}
             disabled={loading}
-            className="text-[11px] px-2.5 py-0.5 border border-border bg-surface hover:border-brand hover:text-brand transition-colors disabled:opacity-50"
+            aria-label="Refresh quote"
+            className="flex h-7 w-7 items-center justify-center rounded-md border border-border-bright text-muted transition-colors hover:text-foreground disabled:opacity-50"
           >
-            {loading ? "[...]" : "[REFRESH]"}
+            <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
           </button>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       {error ? (
-        <div className="py-4 text-xs text-red-400">
-          Failed to load live quote: {error}
-        </div>
+        <div className="py-2 text-xs text-danger">Failed to load live quote: {error}</div>
       ) : !data ? (
-        <div className="py-4 text-xs text-muted">
-          Fetching quote from 1Click and ECB...
-        </div>
+        <div className="py-2 text-xs text-muted">Fetching quote from 1Click and ECB…</div>
       ) : (
-        <div className="mt-3 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <div className="p-2.5 bg-background border border-border">
-              <div className="text-[10px] font-semibold text-muted uppercase tracking-wider">
-                1CLICK DRY QUOTE
-              </div>
-              <div className="text-lg font-bold text-foreground mt-1">
-                {data.quote.rate.toFixed(5)}
-              </div>
-              <div className="text-[10px] text-muted mt-0.5">
-                EURe per USDC ({data.quote.source})
-              </div>
-            </div>
-
-            <div className="p-2.5 bg-background border border-border">
-              <div className="text-[10px] font-semibold text-muted uppercase tracking-wider">
-                ECB OFFICIAL REF
-              </div>
-              <div className="text-lg font-bold text-foreground mt-1">
-                {data.reference.rate.toFixed(5)}
-              </div>
-              <div className="text-[10px] text-muted mt-0.5">
-                EUR per USD ({data.reference.source})
-              </div>
-            </div>
-
-            <div className="p-2.5 bg-background border border-border">
-              <div className="text-[10px] font-semibold text-muted uppercase tracking-wider">
-                SPREAD DEVIATION
-              </div>
-              <div
-                className={`text-lg font-bold mt-1 ${
-                  Math.abs(data.deviationBps) <= 50
-                    ? "text-brand"
-                    : Math.abs(data.deviationBps) <= 120
-                    ? "text-amber-400"
-                    : "text-red-400"
-                }`}
-              >
-                {data.deviationBps > 0 ? "+" : ""}
-                {data.deviationBps} bps
-              </div>
-              <div className="text-[10px] text-muted mt-0.5">
-                {data.deviationPercent} vs ECB reference
-              </div>
-            </div>
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 divide-x divide-border rounded-md border border-border bg-background/40">
+            <Cell label="1Click quote" value={data.quote.rate.toFixed(5)} sub="EURe per USDC" />
+            <Cell label="ECB reference" value={data.reference.rate.toFixed(5)} sub="EUR per USD" />
+            <Cell label="Deviation" value={`${dev > 0 ? "+" : ""}${dev} bps`} sub={`${data.deviationPercent} vs ECB`} tone={devTone} />
           </div>
-
-          <div className="flex flex-wrap items-center justify-between text-xs text-muted pt-2 border-t border-border/40 gap-2">
-            <div>
-              <span>Probe Size: </span>
-              <span className="font-semibold text-foreground">${amount}.00 USDC</span>
-              <span className="mx-2 text-border">|</span>
-              <span>Min Feasible Chunk: </span>
-              <span className="font-semibold text-brand">
-                ${data.route.recommendedMinChunkUsd}.00 USDC
-              </span>
-            </div>
-            <div className="text-[10px] text-muted/70">
-              Correlation ID: {data.quote.quoteId.slice(0, 16)}...
-            </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted">
+            <span>
+              Probe <span className="num font-medium text-foreground">${amount}.00 USDC</span>
+              <span className="mx-2 text-border-bright">|</span>
+              Min feasible chunk <span className="num font-medium text-brand">${data.route.recommendedMinChunkUsd}.00</span>
+            </span>
+            <span className="num">id {data.quote.quoteId.slice(0, 8)}…</span>
           </div>
         </div>
       )}
+    </Card>
+  );
+}
+
+function Cell({ label, value, sub, tone = "text-foreground" }: { label: string; value: string; sub: string; tone?: string }) {
+  return (
+    <div className="px-3 py-2.5">
+      <div className="text-[11px] text-muted">{label}</div>
+      <div className={`num mt-1 text-base font-semibold leading-none ${tone}`}>{value}</div>
+      <div className="mt-1.5 text-[10px] text-muted">{sub}</div>
     </div>
   );
 }

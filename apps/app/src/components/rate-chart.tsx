@@ -35,6 +35,16 @@ function bucket(points: HistoryPoint[], max: number): HistoryPoint[] {
   return out;
 }
 
+/** 3-point moving average on the quote line: removes tick noise without hiding the trend. */
+function smooth(points: HistoryPoint[]): HistoryPoint[] {
+  if (points.length < 4) return points;
+  return points.map((p, i) => {
+    const a = points[Math.max(0, i - 1)].quotePrice;
+    const c = points[Math.min(points.length - 1, i + 1)].quotePrice;
+    return { ...p, quotePrice: (a + p.quotePrice * 2 + c) / 4 };
+  });
+}
+
 /** Dependency-free SVG line chart: 1Click dry quote vs ECB reference, with last-price tag and hover crosshair. */
 export function RateChart({ height = 280, defaultHours = 24 }: { height?: number; defaultHours?: number }) {
   const [hours, setHours] = useState(defaultHours);
@@ -55,16 +65,18 @@ export function RateChart({ height = 280, defaultHours = 24 }: { height?: number
   const iw = Math.max(10, width - pad.l - pad.r);
   const ih = height - pad.t - pad.b;
 
-  const pts: HistoryPoint[] = useMemo(() => bucket(data?.points ?? [], Math.max(24, Math.floor(iw / 6))), [data, iw]);
+  const pts: HistoryPoint[] = useMemo(() => smooth(bucket(data?.points ?? [], Math.max(24, Math.floor(iw / 10)))), [data, iw]);
 
   const geo = useMemo(() => {
     if (pts.length < 2) return null;
     const vals = pts.flatMap((p) => [p.quotePrice, p.refPrice]).filter((v) => Number.isFinite(v));
     let min = Math.min(...vals);
     let max = Math.max(...vals);
-    const span = max - min || 0.0005;
-    min -= span * 0.2;
-    max += span * 0.2;
+    const MIN_SPAN = 0.002;
+    const span2 = Math.max(max - min, MIN_SPAN);
+    const mid = (max + min) / 2;
+    min = mid - span2 / 2 - span2 * 0.1;
+    max = mid + span2 / 2 + span2 * 0.1;
     const t0 = pts[0].timestamp;
     const t1 = pts[pts.length - 1].timestamp;
     const x = (t: number) => pad.l + ((t - t0) / (t1 - t0 || 1)) * iw;

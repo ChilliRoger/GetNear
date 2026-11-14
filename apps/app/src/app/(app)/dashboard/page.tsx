@@ -486,7 +486,7 @@ export default function DashboardPage() {
             className="flex items-center gap-1 text-muted hover:text-brand text-[11px] transition-colors"
           >
             <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
-            <span>[REFRESH]</span>
+            <span>Refresh</span>
           </button>
         </div>
 
@@ -1285,7 +1285,7 @@ export default function DashboardPage() {
               type="button"
               onClick={handleCreateOrder}
               disabled={submittingOrder}
-              className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-accent-blue py-2 text-xs font-semibold text-white hover:bg-accent-blue/90 disabled:opacity-50 transition-colors"
+              className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-accent-blue py-2 text-xs font-semibold text-background hover:bg-accent-blue/90 disabled:opacity-50 transition-colors"
             >
               <PlusCircle className="h-3.5 w-3.5" />
               <span>{submittingOrder ? "Submitting to NEAR Testnet..." : "Submit Order to Testnet"}</span>

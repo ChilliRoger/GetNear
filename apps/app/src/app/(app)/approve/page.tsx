@@ -105,7 +105,7 @@ export default function ApprovePage() {
                 href={explorerAccountUrl(daoId)}
                 target="_blank"
                 rel="noreferrer"
-                className="text-info hover:underline inline-flex items-center gap-0.5"
+                className="text-brand hover:underline inline-flex items-center gap-0.5"
               >
                 <span>{daoId}</span>
                 <ExternalLink className="h-2.5 w-2.5" />
@@ -120,7 +120,7 @@ export default function ApprovePage() {
               className="flex items-center gap-1 text-muted hover:text-brand text-[11px] transition-colors"
             >
               <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
-              <span>[REFRESH]</span>
+              <span>Refresh</span>
             </button>
           </div>
 
@@ -178,7 +178,7 @@ export default function ApprovePage() {
                 <div key={p.id} className="border border-border bg-background p-3 text-xs ">
                   <div className="flex items-center justify-between mb-2 pb-2 border-b border-border/60">
                     <div className="flex items-center gap-1.5">
-                      <ShieldCheck className="h-4 w-4 text-info" />
+                      <ShieldCheck className="h-4 w-4 text-brand" />
                       <span className="font-bold text-foreground">PROPOSAL #{p.id}</span>
                     </div>
                     <span
@@ -211,7 +211,7 @@ export default function ApprovePage() {
                                 : "border-red-400 text-red-400 bg-red-400/10"
                             }`}
                           >
-                            [ {voter.replace("chilliroger-", "").replace(".testnet", "")} : {v.toUpperCase()} ]
+                            {voter.replace("chilliroger-", "").replace(".testnet", "")}: {v.toUpperCase()}
                           </span>
                         ))}
                       </div>
@@ -231,7 +231,7 @@ export default function ApprovePage() {
                               <button
                                 key={acc}
                                 onClick={() => connect(acc)}
-                                className="flex-1 py-1.5 px-2 border border-info bg-info/10 text-info text-[11px] font-semibold hover:bg-info/20 transition-colors"
+                                className="flex-1 py-1.5 px-2 border border-brand bg-brand/10 text-brand text-[11px] font-semibold hover:bg-brand/20 transition-colors"
                               >
                                 Vote as council {idx + 1} &rarr;
                               </button>
@@ -270,7 +270,7 @@ export default function ApprovePage() {
                   {isApproved && (
                     <div className="pt-2 border-t border-border text-[11px] text-brand font-semibold flex items-center gap-1.5">
                       <CheckCircle2 className="h-3.5 w-3.5" />
-                      <span>SPUTNIK DAO APPROVED // ORDER ACTIVATED ON FXBUDGET CONTRACT</span>
+                      <span>Sputnik DAO approved: order activated on FxBudget</span>
                     </div>
                   )}
                 </div>
