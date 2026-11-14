@@ -1,15 +1,16 @@
 import Link from "next/link";
 
-/** Header brand: the GetNear mark (N with trade arrows) + a white/green wordmark, matching the logo file. */
+/**
+ * Header brand: the GetNear mark (N with trade arrows) + the wordmark set in Gridbox.
+ * The wordmark is an image on purpose: Gridbox is a licensed font, so only the rendered logo ships, not the font file.
+ */
 export function BrandMark() {
   return (
-    <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="GetNear home">
+    <Link href="/" className="flex shrink-0 items-center gap-3" aria-label="GetNear home">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/getnear-mark.png" alt="" width={34} height={34} className="h-[34px] w-[34px] object-contain" />
-      <span className="font-brand text-[21px] font-extrabold leading-none tracking-[-0.03em]">
-        <span className="text-foreground">Get</span>
-        <span className="text-brand">Near</span>
-      </span>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/getnear-wordmark.png" alt="GetNear" width={158} height={22} className="h-[22px] w-auto" />
       <span className="pill hidden !bg-warn/15 !text-warn sm:inline-flex">Testnet</span>
     </Link>
   );

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Space_Mono, Sora } from "next/font/google";
+import { Space_Mono } from "next/font/google";
 import "./globals.css";
 import { I18nProvider } from "@/lib/i18n";
 import { SmoothScroll } from "@/components/smooth-scroll";
@@ -10,14 +10,6 @@ const spaceMono = Space_Mono({
   subsets: ["latin"],
   weight: ["400", "700"],
   variable: "--font-space-mono",
-  display: "swap",
-});
-
-// Wordmark-only display face (the rest of the product is Space Mono).
-const brandFont = Sora({
-  subsets: ["latin"],
-  weight: ["700", "800"],
-  variable: "--font-brand",
   display: "swap",
 });
 
@@ -52,7 +44,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: extensionErrorFilter }} />
       </head>
-      <body className={`${spaceMono.variable} ${brandFont.variable} min-h-screen font-sans text-foreground antialiased`}>
+      <body className={`${spaceMono.variable} min-h-screen font-sans text-foreground antialiased`}>
         <SiteBackground />
         <SmoothScroll />
         <I18nProvider>{children}</I18nProvider>
