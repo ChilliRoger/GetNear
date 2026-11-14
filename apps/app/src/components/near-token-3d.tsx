@@ -134,7 +134,7 @@ export function NearToken3D({
 
           // Scale to fit viewport perfectly
           const maxDim = Math.max(size.x, size.y, size.z);
-          const targetScale = 2.4 / (maxDim || 1);
+          const targetScale = 3.15 / (maxDim || 1);
           modelGroup.scale.setScalar(targetScale);
           modelGroup.add(model);
 
@@ -237,9 +237,9 @@ export function NearToken3D({
 
   if (fallback) {
     return (
-      <div className={`relative flex h-[340px] w-full max-w-[520px] items-center justify-center select-none sm:h-[440px] ${className}`} style={{ perspective: 900 }}>
+      <div className={`relative flex h-[400px] w-full max-w-[620px] items-center justify-center select-none sm:h-[540px] ${className}`} style={{ perspective: 900 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/near-logo.png" alt="NEAR logo" className="near-spin h-56 w-56 drop-shadow-[0_0_40px_rgba(34,197,94,0.45)] sm:h-72 sm:w-72" />
+        <img src="/near-logo.png" alt="NEAR logo" className="near-spin h-72 w-72 drop-shadow-[0_0_40px_rgba(34,197,94,0.45)] sm:h-96 sm:w-96" />
         <div className="pointer-events-none absolute bottom-2 text-[11px] text-muted opacity-70">3D needs WebGL: shown as a flat logo</div>
       </div>
     );
@@ -250,7 +250,7 @@ export function NearToken3D({
       {/* 3D Canvas Container */}
       <div
         ref={containerRef}
-        className="flex h-[340px] w-full max-w-[520px] cursor-grab items-center justify-center active:cursor-grabbing sm:h-[440px] [&>canvas]:![touch-action:pan-y]"
+        className="flex h-[400px] w-full max-w-[620px] cursor-grab items-center justify-center active:cursor-grabbing sm:h-[540px] [&>canvas]:![touch-action:pan-y]"
       />
 
       {/* Loading Spinner */}

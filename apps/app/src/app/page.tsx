@@ -16,7 +16,7 @@ import { useOraclePrice } from "@/lib/live";
 // WebGL only runs in the browser: load the 3D token on the client.
 const NearToken3D = dynamic(() => import("@/components/near-token-3d").then((m) => m.NearToken3D), {
   ssr: false,
-  loading: () => <div className="h-[340px] w-full sm:h-[440px]" />,
+  loading: () => <div className="h-[400px] w-full sm:h-[540px]" />,
 });
 
 const REPO = "https://github.com/ChilliRoger/GetNear";
@@ -66,7 +66,9 @@ export default function LandingPage() {
       </header>
 
       {/* ── Hero ───────────────────────────────────────────── */}
-      <section className="mx-auto grid max-w-[1100px] items-center gap-8 px-4 pb-16 pt-12 md:pt-20 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+      <section className="relative isolate mx-auto grid max-w-[1180px] items-center gap-6 px-4 pb-16 pt-10 md:pt-16 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
+        {/* dark scrim so the copy never blends into the animated field */}
+        <div className="pointer-events-none absolute -inset-x-10 inset-y-0 -z-10 bg-[radial-gradient(ellipse_62%_62%_at_28%_52%,rgba(0,0,0,0.92),rgba(0,0,0,0.6)_55%,transparent_100%)]" />
         <div>
           <Reveal>
             <span className="pill">
@@ -74,12 +76,12 @@ export default function LandingPage() {
             </span>
           </Reveal>
           <Reveal delay={80}>
-            <h1 className="mt-6 text-4xl font-bold leading-[1.15] tracking-tight md:text-5xl">
+            <h1 className="mt-6 text-4xl font-bold leading-[1.15] tracking-tight md:text-5xl [text-shadow:0_1px_12px_rgb(0_0_0/0.95)]">
               GetNear: Controlled <span className="text-brand">Supplier Payments</span>
             </h1>
           </Reveal>
           <Reveal delay={160}>
-            <p className="mt-6 max-w-xl text-sm leading-7 text-muted md:text-[15px]">
+            <p className="mt-6 max-w-xl text-sm leading-7 text-foreground/90 md:text-[15px] [text-shadow:0_1px_12px_rgb(0_0_0/0.95)]">
               A treasury agent that pays euro invoices from USDC in timed chunks, with on-chain limits, DAO approval for large payments, and a
               ledger that marks an invoice paid only when the transfer really happened. Built on NEAR with 1Click quotes and ECB reference rates.
             </p>
@@ -106,8 +108,8 @@ export default function LandingPage() {
       <section className="mx-auto max-w-[1100px] px-4 pb-20">
         <Reveal>
           <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tight md:text-4xl">The Why</h2>
-            <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-muted">
+            <h2 className="text-3xl font-bold tracking-tight md:text-4xl [text-shadow:0_1px_12px_rgb(0_0_0/0.95)]">The Why</h2>
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-foreground/85 [text-shadow:0_1px_12px_rgb(0_0_0/0.95)]">
               Discover the principles behind GetNear: an agent you can let loose on a treasury because it simply cannot break the rules.
             </p>
           </div>
@@ -162,8 +164,8 @@ export default function LandingPage() {
       <section className="mx-auto max-w-[1100px] px-4 pb-20">
         <Reveal>
           <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Live, not mocked</h2>
-            <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-muted">Real agent decisions and a real on-chain order you can verify without a wallet.</p>
+            <h2 className="text-3xl font-bold tracking-tight md:text-4xl [text-shadow:0_1px_12px_rgb(0_0_0/0.95)]">Live, not mocked</h2>
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-foreground/85 [text-shadow:0_1px_12px_rgb(0_0_0/0.95)]">Real agent decisions and a real on-chain order you can verify without a wallet.</p>
           </div>
         </Reveal>
         <div className="mt-10 grid gap-6 lg:grid-cols-12">
@@ -192,7 +194,7 @@ export default function LandingPage() {
       <section className="mx-auto max-w-[1100px] px-4 pb-20">
         <Reveal>
           <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tight md:text-4xl">How a payment flows</h2>
+            <h2 className="text-3xl font-bold tracking-tight md:text-4xl [text-shadow:0_1px_12px_rgb(0_0_0/0.95)]">How a payment flows</h2>
           </div>
         </Reveal>
         <ol className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -236,8 +238,8 @@ export default function LandingPage() {
       <section className="relative isolate overflow-hidden border-t-2 border-brand/40">
         <div className="mx-auto flex max-w-[1100px] flex-col items-center px-4 py-24 text-center">
           <Reveal>
-            <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Try it on testnet</h2>
-            <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-muted">Free demo tokens, a real contract and real DAO votes. Move your pointer anywhere: the whole page reacts.</p>
+            <h2 className="text-3xl font-bold tracking-tight md:text-4xl [text-shadow:0_1px_12px_rgb(0_0_0/0.95)]">Try it on testnet</h2>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-foreground/85 [text-shadow:0_1px_12px_rgb(0_0_0/0.95)]">Free demo tokens, a real contract and real DAO votes. Move your pointer anywhere: the whole page reacts.</p>
             <div className="mt-8 flex flex-wrap justify-center gap-4">
               <Link href="/dashboard" className="btn-primary h-10 px-5">
                 Launch App <ArrowRight size={14} />
