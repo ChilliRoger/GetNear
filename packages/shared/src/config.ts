@@ -75,6 +75,28 @@ export const DEFAULT_EXPLORER_BASES = {
   mainnet: 'https://nearblocks.io',
 } as const
 
+// ── Network guard ────────────────────────────────────────────────────
+
+/**
+ * GetNear is a testnet-only prototype. Mainnet is roadmap, not shipped: no mainnet contract, DAO or
+ * vault exists and FX fills are simulated. Mainnet is therefore refused unless ALLOW_MAINNET=1.
+ */
+export function resolveNetworkId(
+  raw: string | undefined,
+  allowMainnet: string | undefined,
+): 'testnet' | 'mainnet' {
+  const id = (raw ?? '').trim() || 'testnet'
+  if (id === 'testnet') return 'testnet'
+  if (id === 'mainnet') {
+    if (allowMainnet === '1' || allowMainnet === 'true') return 'mainnet'
+    throw new Error(
+      'NEAR_NETWORK_ID=mainnet is disabled: GetNear is a testnet-only prototype (mainnet is roadmap). ' +
+        'Set ALLOW_MAINNET=1 only if you know what you are doing; nothing is deployed on mainnet.',
+    )
+  }
+  throw new Error(`NEAR_NETWORK_ID must be "testnet" or "mainnet" (got "${id}").`)
+}
+
 // ── Loader ───────────────────────────────────────────────────────────
 
 /**
@@ -83,7 +105,9 @@ export const DEFAULT_EXPLORER_BASES = {
  * Never returns AGENT_PRIVATE_KEY in logs.
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): GetnearConfig {
-  const networkId = (env.NEAR_NETWORK_ID as 'testnet' | 'mainnet') || 'testnet'
+  const networkId = (env.NEAR_NETWORK_ID && !['testnet', 'mainnet'].includes(env.NEAR_NETWORK_ID.trim())
+    ? (env.NEAR_NETWORK_ID as 'testnet')
+    : resolveNetworkId(env.NEAR_NETWORK_ID, env.ALLOW_MAINNET)) as 'testnet' | 'mainnet'
   const isMainnet = networkId === 'mainnet'
   const defaultRpcs = isMainnet
     ? DEFAULT_RPC_URLS.mainnet.join(',')

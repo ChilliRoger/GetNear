@@ -24,6 +24,7 @@ import {
   computeEuReAtomicOut,
   computeSimulatedOutput,
   planChunkAmounts,
+  resolveNetworkId,
   type QuoteSnapshot,
 } from '@getnear/shared'
 import {
@@ -181,7 +182,7 @@ export class AgentRunner {
     this.attemptLandingWindowMs =
       options?.attemptLandingWindowMs ??
       (Number(process.env.AGENT_ATTEMPT_LANDING_WINDOW_MS) || DEFAULT_ATTEMPT_LANDING_WINDOW_MS)
-    const networkId = (process.env.NEAR_NETWORK_ID || 'testnet') as 'testnet' | 'mainnet'
+    const networkId = resolveNetworkId(process.env.NEAR_NETWORK_ID, process.env.ALLOW_MAINNET)
     const isMainnet = networkId === 'mainnet'
     this.operatorId = process.env.OPERATOR_ACCOUNT_ID || (isMainnet ? 'operator.near' : 'chilliroger-operator.testnet')
     this.contractId = options?.contractId || process.env.FX_BUDGET_CONTRACT_ID || `fx-budget.${this.operatorId}`

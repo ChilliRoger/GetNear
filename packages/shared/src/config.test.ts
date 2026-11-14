@@ -4,7 +4,7 @@
  * Run with: npx tsx packages/shared/src/config.test.ts
  */
 
-import { loadConfig, configSummary } from './config.js'
+import { loadConfig, configSummary, resolveNetworkId } from './config.js'
 
 let passed = 0
 let failed = 0
@@ -72,7 +72,14 @@ assertThrows(
 // ── Network ID validation ───────────────────────────────────────────
 console.log('\n[Config: network ID validation]')
 
-const mainnetCfg = loadConfig({ GETNEAR_MODE: 'mock', NEAR_NETWORK_ID: 'mainnet' })
+assertThrows(
+  'NEAR_NETWORK_ID=mainnet refused without ALLOW_MAINNET',
+  () => loadConfig({ GETNEAR_MODE: 'mock', NEAR_NETWORK_ID: 'mainnet' }),
+  'testnet-only',
+)
+assert('resolveNetworkId defaults to testnet', resolveNetworkId(undefined, undefined), 'testnet')
+
+const mainnetCfg = loadConfig({ GETNEAR_MODE: 'mock', NEAR_NETWORK_ID: 'mainnet', ALLOW_MAINNET: '1' })
 assert('NEAR_NETWORK_ID=mainnet accepted', mainnetCfg.NEAR_NETWORK_ID, 'mainnet')
 assert('NEAR_NETWORK_ID=mainnet defaults to mainnet RPCs', mainnetCfg.NEAR_RPC_URLS, [
   'https://rpc.mainnet.near.org',

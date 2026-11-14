@@ -79,7 +79,8 @@ function getDemoToken(): string {
 const STORAGE_ACCOUNT_KEY = "getnear_connected_account";
 const STORAGE_TYPE_KEY = "getnear_connection_type";
 
-const CURRENT_NETWORK = ((process.env.NEXT_PUBLIC_NEAR_NETWORK_ID || process.env.NEAR_NETWORK_ID || "testnet") === "mainnet" ? "mainnet" : "testnet") as "testnet" | "mainnet";
+// Testnet-only prototype: mainnet needs an explicit opt-in flag (roadmap, nothing deployed on mainnet).
+const CURRENT_NETWORK = ((process.env.NEXT_PUBLIC_NEAR_NETWORK_ID || "testnet") === "mainnet" && process.env.NEXT_PUBLIC_ALLOW_MAINNET === "1" ? "mainnet" : "testnet") as "testnet" | "mainnet";
 const DEFAULT_RPCS = CURRENT_NETWORK === "mainnet"
   ? ["https://rpc.mainnet.near.org", "https://free.rpc.fastnear.com"]
   : ["https://rpc.testnet.near.org", "https://test.rpc.fastnear.com"];

@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { NearClient } from '@getnear/near-client'
+import { resolveNetworkId } from '@getnear/shared'
 import Database from 'better-sqlite3'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 
 export const dynamic = 'force-dynamic'
 
-const NETWORK_ID = (process.env.NEAR_NETWORK_ID || 'testnet') as 'testnet' | 'mainnet'
+const NETWORK_ID = resolveNetworkId(process.env.NEAR_NETWORK_ID, process.env.ALLOW_MAINNET)
 const isMainnet = NETWORK_ID === 'mainnet'
 
 const RPC_URLS = process.env.NEAR_RPC_URLS
