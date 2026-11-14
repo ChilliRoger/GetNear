@@ -210,7 +210,7 @@ export function RateChart({ height = 280, defaultHours = 24 }: { height?: number
         )}
 
         {source === "browser" && geo && (
-          <p className="absolute bottom-0 right-1 text-[10px] text-muted">Live samples from this browser (history service not connected)</p>
+          <p className="pointer-events-none absolute left-2 top-0 text-[10px] text-muted">Live samples from this browser (history service not connected)</p>
         )}
 
         {hp && geo && (
