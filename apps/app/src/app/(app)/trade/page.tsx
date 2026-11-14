@@ -21,6 +21,7 @@ export default function TradePage() {
   const [targetEure, setTargetEure] = useState("");
   const [invoiceRef, setInvoiceRef] = useState("");
   const [autoCapUsdc, setAutoCapUsdc] = useState(100);
+  const [maxChunkLimitUsdc, setMaxChunkLimitUsdc] = useState(20);
   const [usdcContractId, setUsdcContractId] = useState(
     "3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af",
   );
@@ -43,6 +44,9 @@ export default function TradePage() {
       .then((d) => {
         if (d?.contract?.limits?.auto_cap_in) {
           setAutoCapUsdc(Number(d.contract.limits.auto_cap_in) / 1e6);
+        }
+        if (d?.contract?.limits?.max_chunk_in) {
+          setMaxChunkLimitUsdc(Number(d.contract.limits.max_chunk_in) / 1e6);
         }
         if (d?.tokens?.usdcId) {
           setUsdcContractId(d.tokens.usdcId);
