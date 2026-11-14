@@ -5,22 +5,6 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
-/**
- * True if the browser can create a WebGL context at all. Deliberately does NOT compare pixels: privacy
- * browsers (Brave Shields) perturb readbacks while still rendering fine, so a pixel test gives false negatives.
- */
-function webglUsable(): boolean {
-  try {
-    const c = document.createElement("canvas");
-    const gl = c.getContext("webgl2") || c.getContext("webgl");
-    if (!gl) return false;
-    (gl as WebGLRenderingContext).getExtension("WEBGL_lose_context")?.loseContext();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 interface NearToken3DProps {
   className?: string;
   modelUrl?: string;
@@ -37,11 +21,6 @@ export function NearToken3D({
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    if (!webglUsable()) {
-      setFallback(true);
-      setIsLoading(false);
-      return;
-    }
 
     let animationFrameId: number;
     let isDisposed = false;
@@ -59,6 +38,18 @@ export function NearToken3D({
       const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
       camera.position.set(0, 0, 5);
 
+      // Keep the whole model inside the frame however it is rotated or resized: place the camera so the
+      // model's bounding sphere (plus margin) fits the limiting dimension of the viewport.
+      let sphereRadius = 1.6;
+      const fitCamera = () => {
+        const halfV = (camera.fov * Math.PI) / 180 / 2;
+        const half = Math.atan(Math.tan(halfV) * Math.min(1, camera.aspect));
+        const dist = (sphereRadius * 1.14) / Math.sin(half);
+        camera.position.setLength(dist);
+        camera.updateProjectionMatrix();
+      };
+      fitCamera();
+
       // 2. WebGL Renderer
       renderer = new THREE.WebGLRenderer({
         alpha: true,
@@ -71,11 +62,15 @@ export function NearToken3D({
       container.appendChild(renderer.domElement);
 
       // Handle context lost/restored to prevent browser blocking
+      let lostTimer: ReturnType<typeof setTimeout> | undefined;
       const handleContextLost = (e: Event) => {
         e.preventDefault();
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        // If the browser does not give the context back quickly, show the flat logo instead of a blank box.
+        if (!isDisposed) lostTimer = setTimeout(() => setFallback(true), 1500);
       };
       const handleContextRestored = () => {
+        if (lostTimer) clearTimeout(lostTimer);
         animate();
       };
       renderer.domElement.addEventListener("webglcontextlost", handleContextLost, false);
@@ -134,6 +129,8 @@ export function NearToken3D({
           const maxDim = Math.max(size.x, size.y, size.z);
           const targetScale = 3.15 / (maxDim || 1);
           modelGroup.scale.setScalar(targetScale);
+          sphereRadius = (Math.max(size.x, size.y) / 2) * targetScale * 1.04;
+          fitCamera();
           modelGroup.add(model);
 
           // Enhance 3D metallic materials
@@ -172,7 +169,7 @@ export function NearToken3D({
         const newHeight = container.clientHeight;
         if (newWidth === 0 || newHeight === 0) return;
         camera.aspect = newWidth / newHeight;
-        camera.updateProjectionMatrix();
+        fitCamera();
         renderer.setSize(newWidth, newHeight);
       };
 
@@ -197,6 +194,7 @@ export function NearToken3D({
       // 8. Cleanup & Context Release
       return () => {
         isDisposed = true;
+        if (lostTimer) clearTimeout(lostTimer);
         cancelAnimationFrame(animationFrameId);
         if (resizeObserver) resizeObserver.disconnect();
         if (controls) controls.dispose();
@@ -244,7 +242,7 @@ export function NearToken3D({
   }
 
   return (
-    <div className={`relative flex items-center justify-center select-none ${className}`}>
+    <div className={`relative flex w-full items-center justify-center select-none ${className}`}>
       {/* 3D Canvas Container */}
       <div
         ref={containerRef}
