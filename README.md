@@ -1,206 +1,226 @@
-# GetNear — Controlled Supplier Payments on NEAR Testnet
+# GetNear
 
-**The problem.** A treasury owes a euro supplier an invoice but holds USDC. Paying it safely means: a human-governed
-approval for large payments, an automated agent that can *only* pay that supplier up to the invoice amount, retries that
-never pay twice, and a ledger that marks the invoice paid **only when the transfer really happened**.
+**Controlled supplier payments on NEAR testnet: an autonomous treasury agent that can only do what an on-chain contract allows.**
 
-**What GetNear does (testnet only).** An invoice order is created and funded with Circle testnet USDC, approved by a
-Sputnik DAO (2-of-3) when above the auto-cap, and paid in chunks by an agent holding a restricted `FunctionCall` key.
-The Rust `FxBudget` contract reserves each chunk in flight, sends demo EURe to the supplier from a prefunded vault with a
-cross-contract `ft_transfer`, and reduces the amount due **only inside the `#[private] on_chunk_settled` callback**.
-A failed transfer leaves the invoice due unchanged and the chunk retryable; refunds return unspent escrow.
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![Network: NEAR testnet](https://img.shields.io/badge/network-NEAR%20testnet-blue)
+![Contract: Rust + near-sdk 5](https://img.shields.io/badge/contract-Rust%20%2B%20near--sdk%205-orange)
+![Dashboard: Next.js 14](https://img.shields.io/badge/dashboard-Next.js%2014-black)
 
-> Testnet-only hackathon prototype. No mainnet funds. Mainnet is **roadmap, not shipped**: no mainnet contract, DAO or vault exists, and the code refuses `NEAR_NETWORK_ID=mainnet` unless `ALLOW_MAINNET=1`. See [what is real vs simulated](#what-is-real-vs-simulated).
+| | |
+| :-- | :-- |
+| **Live demo** | https://getnear-psi.vercel.app (testnet; read-only without a wallet) |
+| **Repository** | https://github.com/ChilliRoger/GetNear |
+| **Built for** | NEAR HACKATHON. Tracks: Real-World Money (`realworld`), Autonomous Business (`business`), AI Security & Defense (`security`) |
+| **Status** | Testnet only. No mainnet funds, no mainnet deployment. The USDC to EUR conversion is simulated (see [What is real vs simulated](#what-is-real-vs-simulated)). |
 
-**When does the agent pay?** By default (`AGENT_STRATEGY=score`) a 0-100 timing score (price vs rolling average 40%, quote vs ECB reference 20%, deadline urgency 40%) gates every chunk: ≥85 pays a 2x chunk, 70-85 a normal chunk, below 70 it waits (deadline pressure can force execution). Hard guards (deviation limit, interval, on-chain caps) always apply. `AGENT_STRATEGY=immediate` skips the score for short demos. The score is a heuristic, not a claim of better rates.
+![GetNear landing page](docs/images/landing.jpg)
 
----
+## Contents
+1. [The problem](#the-problem) · 2. [What GetNear does](#what-getnear-does) · 3. [Try it in 2 minutes](#try-it-in-2-minutes) · 4. [How NEAR is used](#how-near-is-used)
+5. [Architecture](#architecture) · 6. [What is real vs simulated](#what-is-real-vs-simulated) · 7. [How a payment flows](#how-a-payment-flows) · 8. [Evidence](#evidence-on-testnet)
+9. [Run it locally](#run-it-locally) · 10. [Repository layout](#repository-layout) · 11. [Hackathon disclosures](#hackathon-disclosures) · 12. [Security and limitations](#security-and-limitations) · 13. [Documentation](#documentation) · 14. [License](#license-and-credits)
 
-## Fastest way to verify (no wallet, no credentials, ~2 minutes)
+## The problem
+A treasury owes a euro supplier an invoice but holds USDC. Doing this safely needs four things at once:
+1. human, multi-signer approval for large payments;
+2. an automated agent that can pay **only that supplier, only up to the invoice amount, only inside limits it cannot change**;
+3. retries that can never pay twice;
+4. a ledger that marks the invoice paid **only when the transfer really happened**.
 
-```bash
-# Node 20.19+, 22 or 24, and pnpm 12 (see Prerequisites)
-pnpm install --frozen-lockfile
-pnpm verify:readonly      # read-only testnet queries; prints expected vs observed for Orders #8, #11, #12
+Today teams either convert manually, convert everything in one trade at whatever rate is live, or hand an agent too much authority.
+
+## What GetNear does
+- **Invoice orders.** An order carries a supplier account, an invoice target in EURe (`target_out`), a USDC budget, a max chunk size, a deadline and a max price deviation.
+- **On-chain limits.** The Rust `FxBudget` contract enforces max chunk, total budget, deadline, minimum interval and a payout bound (the invoice target). The agent cannot exceed them.
+- **DAO approval.** Orders above the auto-cap ($100) stay `Pending` until a Sputnik DAO council approves them (2 of 3). The DAO also owns the contract (limits, agent, pause).
+- **Restricted agent key.** The agent signs with a function-call access key limited to the single method `execute_chunk`. It cannot approve, expire, change limits or call other contracts.
+- **Callback-verified settlement.** `execute_chunk` reserves the chunk, sends demo EURe to the supplier with a cross-contract `ft_transfer`, and reduces the amount due **only inside the `#[private] on_chunk_settled` callback** after the transfer succeeded. A failed transfer leaves the invoice due unchanged and the chunk retryable. An on-chain idempotency record (`InFlight | Settled | Failed`) means a retry can never pay twice.
+- **Timed chunks.** The agent scores live 1Click dry quotes against the ECB reference rate and the deadline (price vs average 40%, quote vs ECB 20%, deadline urgency 40%). Score 70+ pays a chunk, 85+ pays double, below 70 it waits. Hard guards (deviation limit, interval, contract caps) always apply. This is a timing heuristic, not a claim of better rates.
+- **Escrow and refunds.** Orders can be funded with Circle testnet USDC via `ft_transfer_call`; unspent escrow is refundable. The final chunk is sized so the USDC charged matches the amount actually paid.
+- **Dashboard.** Live rate vs ECB, rate history, an agent decision feed, on-chain orders, DAO proposals and voting, natural-language order intake (optional), every transaction linked on NEARBlocks.
+
+| Dashboard | Analytics |
+| :-- | :-- |
+| ![Dashboard](docs/images/dashboard.jpg) | ![Analytics](docs/images/analytics.jpg) |
+
+## Try it in 2 minutes
+No wallet, key or account is needed for steps 1 to 4.
+
+1. **Open the live app:** https://getnear-psi.vercel.app. The rate bar shows the live USDC/EURe 1Click dry quote next to the ECB reference rate and their deviation in bps.
+2. **See an on-chain invoice settle:** on the landing page open *Live, not mocked → Order #13*. It links the three NEARBlocks transactions: escrow funding, the final `execute_chunk` (+€5.00 demo EURe), and the refund of unspent escrow.
+3. **Read the contract state:** open `/dashboard`. *Active & Recent Orders* is read straight from the `FxBudget` contract over RPC (16 orders, with invoice targets, settled amounts, chunk counts and statuses). `/approve` lists the Sputnik DAO proposals and their votes.
+4. **Verify the evidence yourself against the chain** (read-only, ~1 minute, Node 20.19+/22/24, pnpm 12):
+   ```bash
+   pnpm install --frozen-lockfile
+   pnpm verify:readonly
+   ```
+   Expected: `PASS 86  FAIL 0  RPC_ERROR 0`, exit code `0`. It checks the deployed contract code hash against the bundled artifact, Orders #8, #11, #12 (historical, previous build), the Order #12 escrow reconciliation and the fresh invoice Order #13 (`--expect-upgraded --expect-fresh` makes the upgraded build mandatory).
+5. **Run the contract tests** (needs Rust): `cd contracts/fx-budget && cargo test --locked --lib` runs 15 unit tests in near-sdk's mock VM (payout bounds, adjusted escrow debit, failed-callback accounting, idempotent retry, refund rollback, state migration).
+6. **Run everything locally** (dashboard, oracle, agent): see [Run it locally](#run-it-locally).
+
+> **Creating an order with your own wallet** requires your account to be an authorized requester on the contract (the DAO runs `add_requester`). Orders are deliberately not open to arbitrary wallets: without authorization the escrow is refunded and no order is created. The captured orders above are the demonstration; they were created by the team's authorized accounts.
+
+## How NEAR is used
+| NEAR feature | Where |
+| :-- | :-- |
+| Rust smart contract (near-sdk 5) | `contracts/fx-budget`: orders, limits, escrow, idempotent chunk records, refunds, events (NEP-297) |
+| Sputnik DAO v2 (2-of-3) | Contract owner: approves large orders, sets limits and the agent, can pause |
+| Function-call access keys | The agent's key is restricted to `execute_chunk` with no deposit allowance |
+| NEP-141 + cross-contract calls + callbacks | `ft_transfer` payout and `#[private] on_chunk_settled`; `ft_on_transfer` receiver for Circle USDC escrow |
+| JSON-RPC | `packages/near-client` (failover across public RPCs); dashboard reads contract views |
+| near-cli-rs | The agent signs `execute_chunk` with the restricted key file |
+| NEAR wallet selector | Meteor, Here, MyNearWallet and Sender sign orders and DAO votes |
+| NEAR Intents / 1Click API | Read-only `dry: true` quotes (no execution). NEAR Intents has no testnet. |
+| NEAR AI Cloud (optional) | Natural-language order intake, with Gemini / Groq fallbacks. The form works without any key. No private-inference claim is made. |
+
+## Architecture
+```mermaid
+flowchart LR
+  OP["Operator wallet"] -->|"ft_transfer_call / create_order"| FX["FxBudget contract (Rust, NEAR testnet)"]
+  DAO["Sputnik DAO 2-of-3"] -->|"approve_order, set_limits, set_agent"| FX
+  AG["Agent runner"] -->|"execute_chunk (restricted key)"| FX
+  FX -->|"ft_transfer then on_chunk_settled"| EURE["EURe NEP-141 vault"]
+  EURE --> SUP["Supplier account"]
+  AG -->|"dry quote"| ONE["1Click API"]
+  AG -->|"reference rate"| ECB["ECB via Frankfurter"]
+  ORA["Oracle recorder"] --> ONE
+  ORA --> ECB
+  UI["Dashboard (Next.js)"] -->|"RPC views"| FX
+  UI --> ORA
+  UI --> AG
 ```
 
-Expected: `PASS 86  FAIL 0  RPC_ERROR 0` and exit code `0`. Exit `1` means the live chain does not match the documented
-evidence; exit `2` means the RPC could not answer (retry or pass `--rpc <url>`): RPC failures are reported separately
-from assertion failures. It checks, read-only: the deployed code hash against the bundled artifacts, Orders #8, #11, #12 (labelled
-**historical, previous build**), the Order #12 escrow reconciliation, and the **fresh upgraded-build invoice** (Order #13).
-Strict modes `--expect-upgraded` (the upgraded contract must be live) and `--expect-fresh` (the fresh invoice must be captured)
-both pass on the current testnet state.
+**Trust model (what is enforced by what):**
 
-Optional local checks:
-
-```bash
-pnpm test                          # shared, near-client, oracle, faucet(live RPC), agent, app security tests, script-argument tests
-pnpm lint                          # non-interactive
-pnpm --filter @getnear/app build   # dashboard production build
-```
-
----
+| Property | Enforced by | Strength |
+| :-- | :-- | :-- |
+| Only the DAO approves large orders or changes limits | Contract owner check | On-chain, hard |
+| Agent can call only `execute_chunk` | Access-key restriction | Protocol, hard |
+| Max chunk, total, deadline, minimum interval, payout bound | Contract | On-chain, hard |
+| Invoice balance reduction | Cross-contract `ft_transfer` + `on_chunk_settled` callback | On-chain, hard |
+| Chunk retry cannot double-pay | On-chain idempotency record | On-chain, hard |
+| Price deviation limit | Agent-reported `deviation_bps` | Policy check, **not** oracle-verified |
+| Quote authenticity | Nothing | Not verified |
+| USDC to EUR conversion | 1Click `dry: true` accounting | **Simulated** |
 
 ## What is real vs simulated
-
-Every chunk shown in the dashboard separates four facts:
-
 | # | Fact | Status |
-| :-: | :--- | :--- |
-| 1 | **Live 1Click dry quote** (`dry: true`, `https://1click.chaindefuser.com/v0/quote`) next to the ECB / Frankfurter reference rate | Real, **indicative only**: nothing is executed and it is a mainnet price feed. |
-| 2 | **FX conversion** | **Simulated.** No cross-chain swap happens; the contract checks `max_dev_bps` against an **agent-reported** deviation. |
-| 3 | **Circle testnet USDC escrow** (`3e2210e1…b8af`) for orders funded with `ft_transfer_call` | **Real testnet tokens** locked in `FxBudget`; unspent USDC is refundable. Accounting-only orders (`create_order`) move no USDC. |
-| 4 | **Demo EURe payout** from the prefunded vault (`eure.chilliroger-operator.testnet`) to the supplier | **Real NEP-141 transfer on testnet**, confirmed by the callback. The EURe is a **team-minted demo token**, and the "supplier" is a sub-account of the operator. |
+| :-: | :-- | :-- |
+| 1 | Live 1Click dry quote (`dry: true`) next to the ECB / Frankfurter reference rate | Real data, **indicative only**: nothing is executed |
+| 2 | USDC to EUR conversion | **Simulated.** No cross-chain swap happens; NEAR Intents has no testnet |
+| 3 | Circle testnet USDC escrow (`3e2210e1…b8af`) funded with `ft_transfer_call` | Real testnet tokens locked in `FxBudget`; unspent USDC is refundable |
+| 4 | Demo EURe payout from a prefunded vault (`eure.chilliroger-operator.testnet`) to the supplier | Real NEP-141 transfer on testnet, confirmed by the callback. EURe is a **team-minted demo token** and the "supplier" is a sub-account of the operator |
+
+The README, UI and agent logs label simulated parts as simulated. GetNear makes no savings, mainnet or privacy claims.
 
 ## How a payment flows
+1. **Create and fund.** `ft_transfer_call` of Circle USDC (or accounting-only `create_order`). Every order carries an invoice target that bounds its payouts on-chain.
+2. **Approve.** Above the $100 auto-cap the order is `Pending` until the DAO approves (2 of 3).
+3. **Quote.** The agent reads a live dry quote and the ECB rate and applies the deviation policy and the timing score.
+4. **Size.** If the remaining invoice is below the quoted output, the payout is clamped and the USDC charged is reduced to `ceil(remainingOut × quotedIn / quotedOut)`.
+5. **Persist, then broadcast.** The attempt is stored in SQLite, then `execute_chunk` is sent with the restricted key.
+6. **Callback.** `FxBudget` transfers demo EURe; `on_chunk_settled` updates `settled_out` and `executed_in` only on success.
+7. **Reconcile.** The agent verifies on-chain state (at startup and for closed orders); the dashboard reads the contract.
+8. **Refund.** After `Completed`, `Cancelled` or `Expired`, `refund_unused_escrow` returns unspent USDC (a requester-signed call).
 
-1. **Create + fund** — wallet `ft_transfer_call` of Circle USDC (or accounting-only `create_order`). Every order needs an invoice target (`target_out`) which bounds its payouts on-chain.
-2. **Approve** — above the auto-cap ($100) the order is `Pending` until the DAO approves (2-of-3).
-3. **Quote** — the agent fetches a live dry quote + reference rate and applies the deviation policy.
-4. **Size** — if the remaining invoice amount is below the quoted output, the payout is clamped **and the USDC charged is reduced** to `ceil(remainingOut × quotedIn / quotedOut)`.
-5. **Persist, then broadcast** — the attempt is stored in SQLite, then `execute_chunk` is sent with the restricted key.
-6. **Callback** — `FxBudget` transfers demo EURe; `on_chunk_settled` updates `settled_out`/`executed_in` only on success.
-7. **Reconcile** — the agent verifies on-chain state (also at startup and for closed orders); the dashboard reads the contract.
-8. **Refund** — after `Completed`/`Cancelled`/`Expired`, `refund_unused_escrow` returns unspent USDC (a manual, requester-signed call).
+"Paid" means the amount due is **zero**. If the USDC budget runs out first the dashboard shows "Budget exhausted · €X still due".
 
-"Paid" means the amount due is **zero**. If the USDC budget runs out first the dashboard shows *"Budget exhausted · €X still due"*.
+## Evidence on testnet
+| Item | Link |
+| :-- | :-- |
+| FxBudget contract (upgraded build, code sha256 `0bd18830…7d2fec`) | [`fx-budget.chilliroger-operator.testnet`](https://testnet.nearblocks.io/address/fx-budget.chilliroger-operator.testnet) |
+| Sputnik DAO (owner, 2-of-3) | [`chilliroger-dao.sputnik-v2.testnet`](https://testnet.nearblocks.io/address/chilliroger-dao.sputnik-v2.testnet) |
+| Agent account (restricted `execute_chunk` key) | `chilliroger-agent.testnet` |
+| **Order #13** funding (`ft_transfer_call`, $10 Circle USDC) | [tx](https://testnet.nearblocks.io/txns/ZnaHzUsMawWiTTAa5RrbfqTeQQqyhn8vY6tb41b7nMd) |
+| Order #13 final `execute_chunk` (+€5.00 demo EURe, USDC charge recalculated to $5.541224) | [tx](https://testnet.nearblocks.io/txns/6eAGwbnBR8X5Q72J8kf8tPMPaChHSJ5Ma9zmBmzLM7of) |
+| Order #13 `refund_unused_escrow` ($4.458776 returned) | [tx](https://testnet.nearblocks.io/txns/63pmWkCcViJShmXwgwELG5uUTbn5TBCRAHjv7Di2pFha) |
 
----
+Full tables (Orders #8, #11, #12, the changes since them, and what each verification layer proves): **[docs/EVIDENCE.md](docs/EVIDENCE.md)**.
 
-## Evidence
-
-### Fresh invoice from the upgraded build: Order #13 (captured 2026-11-13)
-
-One escrowed supplier invoice (`INV-FINAL-CHUNK-1794586331`: canonical Circle testnet USDC escrow, demo EURe payout, simulated FX) whose final
-quoted chunk exceeded the amount due, so the upgraded build **capped the payout at the remaining balance (€5.00), recalculated the USDC debit
-at full quote precision ($5.541224 charged) and refunded the unused escrow ($4.458776)**. Recorded in
-[`docs/evidence/fresh-invoice.json`](docs/evidence/fresh-invoice.json) and checked live by `pnpm verify:readonly --expect-upgraded --expect-fresh`.
-
-| Step | Parent transaction |
-| :--- | :--- |
-| Escrow funding (`ft_transfer_call`, $10 Circle USDC) | [ZnaHzUsM…](https://testnet.nearblocks.io/txns/ZnaHzUsMawWiTTAa5RrbfqTeQQqyhn8vY6tb41b7nMd) |
-| Final `execute_chunk` (+€5.00 demo EURe, restricted agent key) | [6eAGwbnB…](https://testnet.nearblocks.io/txns/6eAGwbnBR8X5Q72J8kf8tPMPaChHSJ5Ma9zmBmzLM7of) |
-| `refund_unused_escrow` ($4.458776 back to the operator) | [63pmWkCc…](https://testnet.nearblocks.io/txns/63pmWkCcViJShmXwgwELG5uUTbn5TBCRAHjv7Di2pFha) |
-
-### Orders #8, #11, #12 — historical evidence from the PREVIOUS build
-
-> **Evidence from the previous version (commit `ca4eab1`).** These transactions came from the contract and agent *before*
-> the payout-bound and final-chunk fixes in this checkout. They do not prove the new behaviour until the new build is
-> deployed (a separate task). All links are **parent transactions**; the EURe `ft_transfer` and `on_chunk_settled`
-> receipts are inside each transaction's receipt tree.
-
-| Order | What it shows | Parent transaction |
-| :--- | :--- | :--- |
-| **#8** `INV-2026-1000` (accounting-only, drill auto-cap) | Create → `Pending`; DAO prop #8 → `Active` | [create](https://testnet.nearblocks.io/txns/28AjjbNGGHyYEwWD8sAWoMAQTZGVpGLSDShvNgwBfRze) · [approve](https://testnet.nearblocks.io/txns/9eHYwHCZVPLvECUbJ8E3q9LMgiAXAuEE5SzWgnPxezVq) |
-| #8 chunk 1 | `+€582.76` demo EURe, due `€417.24` | [execute_chunk](https://testnet.nearblocks.io/txns/EATGRqzgJF4Y5KyC7RKQuQ5wC5b21JVYNycGkYyvAC1m) |
-| #8 replay / failed / retry | Replay moves `0`; failed `ft_transfer` leaves due unchanged; retry pays `€417.24` → `Completed` | [replay](https://testnet.nearblocks.io/txns/5aAovDnuWo7gE877m6jb1PYraZWcWm2HpZEbz3ie9z8Y) · [failed](https://testnet.nearblocks.io/txns/Dq2WdyNTou6jFQ2rDHAuXcgwpK4xqTJJFQXy8ZotNSrf) · [retry](https://testnet.nearblocks.io/txns/7D78yZ4FPtqYc4cpsFYid3JKarV1cZj578aFcerbXMoZ) |
-| **#11** `INV-EXPIRY-DEMO` | **Scripted** partial chunk: `+€8.70` (hard-coded; `quote_ref` is a hand-written string, not a live quote) → `€16.30` due | [execute_chunk](https://testnet.nearblocks.io/txns/5V8BxTDbR6oF4SJoBMsLjH2X2yRD2d1UY4FwLyLRcWv6) |
-| #11 bounds + expiry | Over-cap and over-target calls rejected on-chain; `expire_order` → `Expired` with `€16.30` unpaid | [chunk cap](https://testnet.nearblocks.io/txns/EHaHo7BbwZ9hAz9A5v3BzD5zrRBjFuQYbUJKGvUefrUD) · [target](https://testnet.nearblocks.io/txns/9N1nChTVXpkW2Y4Gjnuub4NmZPk1G8rbHaLEQWsKp685) · [expire](https://testnet.nearblocks.io/txns/F12SPGcE3fS8GWFuA3qJmL5qSaRn6xEUHzCeJTGPnAUn) |
-| **#12** Circle USDC escrow | **$15.00** real Circle testnet USDC `ft_transfer_call` → escrow | [escrow funding](https://testnet.nearblocks.io/txns/5NnWXU3krRhoezmRtWsbPm23zYmesuDSNwn91gqEvcdZ) |
-| #12 chunk | `$10.00` consumed → `+€8.00` demo EURe from the prefunded vault (`Completed`) | [execute_chunk](https://testnet.nearblocks.io/txns/6QV6ZUsCEheaiYhYCXSG5RGEMugAupRift1psAthJphL) |
-| #12 refund | `$5.00` returned by a **manually triggered** `refund_unused_escrow` signed by the operator | [refund](https://testnet.nearblocks.io/txns/nyUHd7uwsfYBq9Nk7sivdHzCNHHatKfQRG9RryE4nU1) |
-
-**Order #12 accounting** (verified live by `pnpm verify:readonly`): $15 funded, $10 consumed, $5 refunded, $10 retained by
-`FxBudget`; `€8.00` paid from the vault. **Known flaw of the previous version:** the chunk charged the full `$10` although the
-quote implied `€8.9645` for `$10` (≈ `$8.92` for `€8.00`), an over-charge of `$1.075889` retained by the contract. The fixed agent
-charges the adjusted input; this is covered by local tests, **not** by testnet evidence yet.
-
-## What changed since Orders #8, #11, #12 (now live on testnet; code hash `0bd18830…7d2fec`)
-
-| Area | Change | Where |
-| :--- | :--- | :--- |
-| Final chunk | USDC charged is reduced with the payout (integer, rounded up) | `packages/shared/src/chunk-sizing.ts`, `apps/agent/src/runner.ts` |
-| Payout bound | New orders require `target_out`; legacy orders need an owner-set cap | `contracts/fx-budget/src/lib.rs` — **code-only redeploy, no state migration** |
-| Recovery | Attempt persisted before broadcast; bounded CLI timeout; evidence-based retry; startup + closed-order reconciliation; no downgrade of confirmed fills | `apps/agent/src/{runner,db}.ts`, `scripts/near/near-runner.ts` |
-| Access | Demo signer / faucet / trigger disabled by default, authenticated, allow-listed; agent binds to loopback | `apps/app/src/lib/demo-guard.ts`, `apps/agent/src/server.ts`; see [docs/SECURITY.md](docs/SECURITY.md) |
-| Judge path | Node 20/22/24 import fix, non-interactive lint, `pnpm verify:readonly` | `scripts/package.json`, `apps/faucet/.eslintrc.json`, `scripts/verify-readonly.ts` |
-| Demo scripts | Order creation passes the required atomic-unit `target_out`; escrow drill asserts the adjusted final chunk; correct recipient/order lookup | `scripts/near/{demo-approval-flow,test-real-settlement,verify-circle-usdc-escrow}.ts`, `scripts/near/order-args.ts` |
-| Upgrade tooling | Code-only deploy with plan/confirm gate, pre-upgrade snapshot, post-upgrade verification, evidence capture | `scripts/near/deploy-fx-budget.ts`, `scripts/upgrade-checks.ts`, `scripts/capture-invoice-evidence.ts`, [docs/UPGRADE_AND_FRESH_INVOICE.md](docs/UPGRADE_AND_FRESH_INVOICE.md) |
-| Rust build | `Cargo.lock` committed, toolchain pinned, path-remapped reproducible build recorded in `res/artifacts.json` | `contracts/fx-budget/`, `scripts/build-contract.ts` |
-
----
-
-## Verification layers (what each check actually proves)
-
-| Layer | Command | Proves |
-| :--- | :--- | :--- |
-| Live read-only verification | `pnpm verify:readonly` | The live chain matches the documented evidence; deployed bytes equal the bundled `.wasm` (**binary comparison only** — not that the `.wasm` was built from `lib.rs`). |
-| Rust unit tests (execute contract logic) | `cd contracts/fx-budget && cargo test --locked --lib` | Payout bounds, adjusted escrow debit, failed-callback accounting, refund rollback, idempotency, migration, in near-sdk's mock VM. **Executed locally: 15 passed** (Windows/GNU toolchain, rustc 1.99.1). Also defined in CI (`.github/workflows/ci.yml`), **not yet run there**. |
-| WASM artifact inspection | `pnpm test:contract` (first block) | The `.wasm` exports the expected method names. Does not execute code. |
-| TypeScript models | `pnpm test:contract` (second block) | Documents intended rules. **Never calls the contract**; not proof. |
-| Agent / app / shared tests | `pnpm test` | Agent sizing, recovery and access boundaries against a local JSON-RPC stub; dashboard server-side access rules. |
-| Script arguments | `pnpm test:scripts` | Order-creation scripts build atomic-unit arguments that always carry `target_out`; all scripts target testnet and the documented accounts/tokens. |
-| Upgrade verification | `pnpm upgrade:verify` | **After** the upgrade: deployed hash == artifact, new view callable, every pre-upgrade order/chunk/escrow unchanged, legacy cap policy. |
-| Live write drills | `scripts/near/verify-*.ts` | End-to-end settlement on testnet. **Need local credentials and DAO rights; they send transactions.** |
-
-A green build establishes that the code compiles and tests pass; end-to-end settlement is evidenced separately by the live transactions above.
-
----
-
-## Prerequisites & supported versions
-
-* **Node.js 20.19+, 22, or 24** (verified locally for the agent suite; a CI matrix is defined in `.github/workflows/ci.yml` but has not been run yet). `better-sqlite3` is pinned to `~12.9.0`, the newest release with prebuilt Windows binaries for Node 20, 22 and 24.
-* **pnpm 12** (`packageManager` is pinned; `npm i -g pnpm@12.18.0` if corepack cannot fetch it).
-* For the **optional** pieces only: Rust + `wasm32-unknown-unknown` (contract build/tests), `near-cli-rs` (write drills, the opt-in demo signer; set `NEAR_CLI_PATH` if not on `PATH`).
-
-## Optional: try it with your own wallet
-
-| Need | Where | Notes |
-| :--- | :--- | :--- |
-| Demo tokens (optional) | **[GetNear Faucet](https://getnear-faucet.vercel.app/)** | Dispenses the team's **demo USDC** (`usdc.chilliroger-operator.testnet`) and **demo EURe**, up to 500 per claim (balance cap 2,500), registers NEP-145 storage on those tokens, and sends ≈ 0.45 NEAR to empty wallets. **Demo USDC cannot fund escrow.** Its own operator wallet holds little NEAR, so it can run dry. |
-| **Canonical Circle testnet USDC** (required for escrow) | **<https://faucet.circle.com/>** (choose NEAR testnet) | Token `3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af`. The demo escrow uses 15 USDC. |
-
-**A fresh wallet is not ready to create an order. It needs all of:**
-
-1. A NEAR testnet account with a little NEAR for gas.
-2. Circle testnet USDC (above), with the account registered (NEP-145 `storage_deposit`, 0.00125 NEAR) on the Circle USDC contract.
-3. **Authorization as a requester on FxBudget** (the DAO runs `add_requester(<account>)`). Orders are not open to arbitrary wallets: without this,
-   funding is refunded by the token and no order is created. Judges therefore verify the captured demo order with `pnpm verify:readonly`.
-4. For a recipient other than `supplier-eu.chilliroger-operator.testnet`: registration on the demo EURe token (claiming EURe from the GetNear Faucet does this).
-5. An invoice target (EURe due) on every order, and the agent running with its restricted key for payouts.
-
-## Run the dashboard and agent locally (optional)
+## Run it locally
+Requirements: **Node 20.19+, 22 or 24** and **pnpm 12.18** (`npm i -g pnpm@12.18.0`). Rust and `near-cli-rs` are only needed for contract tests and for the agent to sign.
 
 ```bash
-cp .env.example .env
-pnpm --filter @getnear/app dev     # dashboard on http://localhost:3100  (sign with your own NEAR wallet)
-pnpm agent:start                   # agent loop + HTTP service on 127.0.0.1:38175 (needs the restricted key file to submit)
+git clone https://github.com/ChilliRoger/GetNear.git && cd GetNear
+pnpm install --frozen-lockfile
+cp .env.example .env                       # testnet defaults; no secrets needed to read
+
+pnpm --filter @getnear/oracle dev          # 1) price recorder      http://localhost:38174
+pnpm agent:start                           # 2) agent loop + API    http://127.0.0.1:38175 (submitting needs the restricted key file)
+pnpm --filter @getnear/app dev             # 3) dashboard           http://localhost:3100
+```
+The dashboard works read-only without any credentials. If the oracle or agent is not running it says so instead of inventing data (the headline rate still loads live; the chart then builds from live samples in your browser).
+
+```bash
+pnpm lint            # ESLint + type checks across the workspace
+pnpm test            # shared, near-client, agent, dashboard security, script-argument tests
+pnpm --filter @getnear/app build
+pnpm test:contract:rust    # Rust unit tests (needs Rust)
+```
+Optional: `AGENT_STRATEGY=immediate` makes the agent pay as soon as guards pass (handy for short demos); the default `score` mode gates every chunk by the timing score. Mainnet is refused unless `ALLOW_MAINNET=1` (nothing is deployed on mainnet). Configuration reference: [docs/CONFIG.md](docs/CONFIG.md). Deployment (Vercel, Oracle Cloud VM, Cloudflare Tunnel): [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+## Repository layout
+```
+contracts/fx-budget/   Rust FxBudget contract, unit tests, reproducible WASM artifacts
+apps/app/              Next.js 14 dashboard (landing, dashboard, analytics, trade, approve, settings)
+apps/agent/            Agent runner: attempt persistence, reconciliation, read-only HTTP API (SQLite)
+apps/oracle/           Read-only market recorder (1Click dry quotes + ECB) and market-score endpoint
+apps/faucet/           Demo-token faucet (separate Next.js app)
+packages/shared/       Domain types, strategy engine, chunk sizing, 1Click and Frankfurter sources, config
+packages/near-client/  JSON-RPC client with failover
+scripts/               Deployment, verification and drill scripts (testnet), read-only verifier
+deploy/vm/             systemd + setup script for hosting the oracle and agent on a small VM
+docs/                  Contract spec, security model, strategy, evidence, deployment, audit
 ```
 
-The dashboard works read-only without any credentials. To **create orders** with your own wallet, your account must be an authorized
-requester on the contract (the DAO runs `add_requester`); otherwise the escrow is refunded and no order is created — the UI warns about this.
-The server-side *demo signer*, demo faucet and agent trigger are **off by default** and must be explicitly enabled; see `.env.example` and [docs/SECURITY.md](docs/SECURITY.md).
-Circle testnet USDC comes from [faucet.circle.com](https://faucet.circle.com/).
+## Hackathon disclosures
+**Built during the hackathon window (2026-11-01 to 2026-11-14).** The first commit in this repository is from 2026-11-06.
 
----
+**Baseline / existing project on another chain.** The repository started from an imported upstream project, **Meridian FX** by Team Ippo, built for ETHGlobal Cannes 2026 on Base, Arc, Uniswap, Chainlink CRE, World ID and Unlink. Its imported state is tagged **`pre-hackathon`** (commit `75e48c2`, upstream moved to the repository root, unmodified). Everything after it is the NEAR work. Diff: https://github.com/ChilliRoger/GetNear/compare/pre-hackathon...hackathon-submission
 
-## Deployed testnet infrastructure
+| Kept from the upstream baseline (adapted) | Written for this hackathon |
+| :-- | :-- |
+| Monorepo scaffold (pnpm + Turborepo), Next.js app skeleton, Hono + SQLite oracle skeleton | The `FxBudget` Rust contract (orders, limits, escrow, callback-verified settlement, idempotency, refunds, migrations) and its tests |
+| Timing-score and adaptive-TWAP strategy concept (re-implemented against 1Click + ECB and shared by the oracle and agent) | The agent runner (restricted key, durable attempts, reconciliation, recovery drills) |
+| | Sputnik DAO deployment, bootstrap and voting flow; NEAR RPC client; wallet integration |
+| | Invoice model, escrow with Circle USDC, final-chunk sizing, demo EURe/USDC tokens, verifier and evidence tooling |
+| | The complete redesigned dashboard, natural-language intake, security guards and tests |
 
-- **FxBudget:** [`fx-budget.chilliroger-operator.testnet`](https://testnet.nearblocks.io/address/fx-budget.chilliroger-operator.testnet) (the **upgraded build**, code sha256 `0bd18830…7d2fec`; V2 `migrate` [tx](https://testnet.nearblocks.io/txns/EKfuns36z7MM6tAUxZYTmHbgP4uYxMGa457zEWXowATD), V3 `migrate_v3` [tx](https://testnet.nearblocks.io/txns/AsvHD4dd3U9uALori1hVwd8ihBYunBjrqSRskgBwb7fo))
-- **Sputnik DAO v2 (owner, 2-of-3):** [`chilliroger-dao.sputnik-v2.testnet`](https://testnet.nearblocks.io/address/chilliroger-dao.sputnik-v2.testnet)
-- **Escrow input token (Circle Native NEAR testnet USDC):** [`3e2210e1…b8af`](https://testnet.nearblocks.io/token/3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af)
-- **Demo settlement token:** [`eure.chilliroger-operator.testnet`](https://testnet.nearblocks.io/address/eure.chilliroger-operator.testnet) · **Demo faucet USDC:** `usdc.chilliroger-operator.testnet`
-- **Agent account:** `chilliroger-agent.testnet` (restricted `execute_chunk` key; also holds a separate full-access key — see [docs/SECURITY.md](docs/SECURITY.md)) · **Supplier:** `supplier-eu.chilliroger-operator.testnet`
+All EVM code (Solidity contracts, Chainlink CRE, World ID, Unlink, Arc and Base configuration) was removed; see [docs/AUDIT.md](docs/AUDIT.md).
 
-Full archive: [docs/DEMO_LOG.md](docs/DEMO_LOG.md).
+**Libraries, templates and AI-written code.**
+- *Frontend:* Next.js 14, React 18, Tailwind CSS, lucide-react, `@near-wallet-selector/*` (core, modal-ui, meteor-wallet, here-wallet, my-near-wallet, sender), three.js (3D NEAR token), Lenis (smooth scroll), `ascii-magic-art` (MIT, hero animation).
+- *Services:* Hono, `@hono/node-server`, `better-sqlite3`, zod, tsx, Turborepo, TypeScript.
+- *Contract:* Rust, `near-sdk` 5.7, `serde`.
+- *External services (read-only):* 1Click API (`dry: true`), Frankfurter (ECB rates), public NEAR RPC endpoints, optional NEAR AI Cloud / Google Gemini / Groq for intake.
+- *Fonts and assets:* Space Mono (Google Fonts, OFL); the "GetNear" wordmark is rendered with a licensed font and shipped as an image; the NEAR 3D model is the team's own GLB.
+- **AI-assisted development.** Most of the code, tests and documentation in this repository were written with **Claude Code** (Anthropic) under the developer's direction and review, including the Rust contract, the agent, the dashboard and this README. Tests, linting, a production build and the read-only on-chain verifier were run to check it.
 
----
+**Other disclosures.** No NEAR Intents JWT is used (quotes are `dry: true`). The only contact with a mainnet service is read-only HTTPS to the 1Click quote API. No mainnet account, key or funds are used.
 
-## Architecture & Technical Implementation
+## Security and limitations
+Trust model and key inventory: [docs/SECURITY.md](docs/SECURITY.md). Pre-deployment audit: [docs/AUDIT.md](docs/AUDIT.md).
+- The USDC to EUR conversion is simulated; `deviation_bps` is **agent-reported**, not oracle-verified; quote authenticity is not verified.
+- `FullAccess` keys still exist on the contract and agent accounts (a testnet shortcut); remove or DAO-gate upgrades before anything beyond a demo.
+- Retained input USDC has no withdrawal path; never-approved `Pending` escrow orders are not auto-expired; refunds are a manual, requester-signed call.
+- `settlement_out` is not tied to `amount_in` on-chain: a compromised agent key could over-charge USDC within the chunk cap and budget, and pay at most the invoice target.
+- Public RPC endpoints can rate-limit (HTTP 429); the clients retry and fail over.
+- The hosted dashboard shows recorded history and the agent feed only while the oracle and agent services are reachable (they run outside Vercel).
 
-| Layer | Implementation details |
-| :--- | :--- |
-| Strategy & rate reference | Adaptive TWAP / timing-score heuristic with ECB (Frankfurter) reference rates, 1Click `dry:true` quote source, 18→6 decimal conversion, SQLite audit schema, integer final-chunk sizing (`packages/shared`, `apps/oracle`) |
-| Frontend | Next.js 14 dashboard (`apps/app`), live NEAR RPC views, natural language AI invoice intake, DAO voting UI, provenance/fill panels, wallet selector |
-| Settlement contract | `contracts/fx-budget` (Rust, `near-sdk`): invoice payables, DAO owner, in-flight lock, idempotent chunk records, cross-contract `ft_transfer` + `#[private]` callback, Circle USDC escrow + refunds, expiry, payout bounds |
-| Governance & keys | Sputnik DAO 2-of-3 approval, restricted `FunctionCall` agent key, opt-in/authenticated demo surfaces |
-| Agent | `apps/agent`: attempt persistence, uncertain-outcome reconciliation, no-downgrade receipts, authenticated local API |
-| Chain client & tooling | `packages/near-client`, token deployment and verification scripts (`scripts/near/*`), read-only verifier |
+**Roadmap (not shipped):** mainnet deployment with real stablecoin rails, an on-chain price oracle for the deviation check, supplier allow-lists, owner-only withdrawal of retained input, removal of `FullAccess` keys.
 
-## Known limitations
+## Documentation
+| Doc | What it covers |
+| :-- | :-- |
+| [docs/CONTRACT.md](docs/CONTRACT.md) | `FxBudget` state, methods, events, upgrade and migration notes |
+| [docs/STRATEGY.md](docs/STRATEGY.md) | Timing score, adaptive TWAP, guards and honest limitations |
+| [docs/SECURITY.md](docs/SECURITY.md) | Who controls what, server-side surfaces, recovery guarantees |
+| [docs/EVIDENCE.md](docs/EVIDENCE.md) | Testnet transactions and what each check proves |
+| [docs/CONFIG.md](docs/CONFIG.md) | Environment variables |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/ORACLE_CLOUD.md](docs/ORACLE_CLOUD.md) | Vercel, hosting the oracle and agent |
+| [docs/AUDIT.md](docs/AUDIT.md) | Pre-deployment audit |
+| [docs/FAILURE_DRILLS.md](docs/FAILURE_DRILLS.md), [docs/UPGRADE_AND_FRESH_INVOICE.md](docs/UPGRADE_AND_FRESH_INVOICE.md) | Failure drills and the upgrade runbook |
 
-* Retained input USDC has no withdrawal path (see [docs/SECURITY.md](docs/SECURITY.md)); `settlement_out` is not tied to `amount_in` on-chain.
-* Pending (never-approved) escrowed orders are not auto-expired; someone must call `expire_order`. Refunds are a manual call.
-* The upgrade was a code-only redeploy; orders #8, #11 and #12 predate it and are labelled historical. Re-running the live write drills needs signing credentials.
-* `rpc.testnet.near.org` can rate-limit; the verifier and apps fall back to `test.rpc.fastnear.com`.
-* Release-WASM hashes depend on the rustc version and host OS. The committed artifact's hash and build environment are in `contracts/fx-budget/res/artifacts.json`; the deployed bytes, not a rebuild, are what `verify:readonly` compares.
+## License and credits
+MIT, see [LICENSE](LICENSE). Credits and upstream attribution: [NOTICE.md](NOTICE.md). Meridian FX by Team Ippo (ETHGlobal Cannes 2026) is the upstream baseline described above. ASCII art by [ASCII Magic](https://www.ascii-magic.com/ascii) (MIT).

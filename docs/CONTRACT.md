@@ -1,11 +1,10 @@
 # GetNear — FxBudget Smart Contract Specification
 
 > **Build status.** This document describes the contract source in this checkout (`contracts/fx-budget/src/lib.rs`).
-> The contract currently deployed on testnet (`fx-budget.chilliroger-operator.testnet`) is the **previous build**.
-> The payout-bound change below (mandatory `target_out`, `set_order_payout_cap`) is a **code-only upgrade**: the
-> borsh state layout is unchanged, so **no state migration is required**, but it must be **redeployed** to take effect.
-> Until then, Orders #8, #11 and #12 are historical evidence of the previous build only
-> (`pnpm verify:readonly` reports whether the newer build is deployed).
+> The upgraded build is **live on testnet** (`fx-budget.chilliroger-operator.testnet`, code sha256 `0bd18830…7d2fec`,
+> deployed 2026-11-13 as a code-only upgrade: the borsh state layout is unchanged, so no state migration was needed).
+> Orders #8, #11 and #12 were executed by the previous build and are historical evidence; Order #13 is the evidence of
+> the current build. `pnpm verify:readonly --expect-upgraded --expect-fresh` checks this against the chain.
 
 The `FxBudget` smart contract (`contracts/fx-budget`) is an on-chain governance, budget-limit, and callback-verified settlement contract for corporate treasury FX payables on NEAR Testnet. It is implemented in Rust using `near-sdk` v5.7.0.
 

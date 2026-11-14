@@ -26,7 +26,7 @@ Verify the key facts yourself: `pnpm verify:readonly` prints the agent's restric
 ## 2. Money-movement bounds (contract)
 
 * Every new order must carry `target_out > 0`; payouts are bounded by it. Legacy orders (`target_out == 0`) cannot pay
-  until the DAO sets an explicit `set_order_payout_cap`. *(New build — needs redeploy; see `docs/CONTRACT.md`.)*
+  until the DAO sets an explicit `set_order_payout_cap`. *(Live since the 2026-11-13 upgrade; see `docs/CONTRACT.md`.)*
 * Orders above `auto_cap_in` (default $100) are `Pending` until the DAO approves; the **recipient is chosen by the
   requester** and is only reviewed by the DAO for above-cap orders. There is no supplier allow-list.
 * `settlement_out` is **not** tied to `amount_in` on-chain. The agent sizes `amount_in`; a compromised agent key can

@@ -1,10 +1,9 @@
 # Upgrade FxBudget and capture one fresh escrowed invoice (operator runbook)
 
-**Status: NOT EXECUTED.** The signing steps below need local credentials (the `fx-budget` deployment key, a funded
-wallet) that were not available when this was prepared. Everything up to the signing step has been checked locally
-and against read-only testnet RPC. Nothing here has been deployed or signed.
-
-Until it is executed, testnet runs the **previous build** and Orders #8, #11, #12 are evidence of that build only.
+**Status: EXECUTED on 2026-11-13.** The `fx-budget` contract was upgraded (code sha256 `0bd18830…7d2fec`) and one fresh
+escrowed invoice was captured (Order #13, see `docs/evidence/fresh-invoice.json` and `docs/EVIDENCE.md`).
+`pnpm verify:readonly --expect-upgraded --expect-fresh` passes against testnet. The sections below are kept as the
+runbook for repeating the upgrade; wording such as "currently deployed" describes the state *before* it ran.
 
 ## 0. What is being deployed
 
