@@ -17,7 +17,25 @@ const fmtTime = (ts: number, hours: number) => {
     : d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
 };
 
-/** Dependency-free SVG line chart: 1Click dry quote vs ECB reference, with a hover crosshair. */
+/** Average samples into at most `max` buckets so one noisy quote never draws a spike. */
+function bucket(points: HistoryPoint[], max: number): HistoryPoint[] {
+  if (points.length <= max) return points;
+  const size = Math.ceil(points.length / max);
+  const out: HistoryPoint[] = [];
+  for (let i = 0; i < points.length; i += size) {
+    const chunk = points.slice(i, i + size);
+    const avg = (f: (p: HistoryPoint) => number) => chunk.reduce((a, p) => a + f(p), 0) / chunk.length;
+    out.push({
+      timestamp: Math.round(avg((p) => p.timestamp)),
+      quotePrice: avg((p) => p.quotePrice),
+      refPrice: avg((p) => p.refPrice),
+      deviationBps: Math.round(avg((p) => p.deviationBps ?? 0)),
+    });
+  }
+  return out;
+}
+
+/** Dependency-free SVG line chart: 1Click dry quote vs ECB reference, with last-price tag and hover crosshair. */
 export function RateChart({ height = 280, defaultHours = 24 }: { height?: number; defaultHours?: number }) {
   const [hours, setHours] = useState(defaultHours);
   const { data, error, loading } = useHistory(hours);
@@ -33,10 +51,11 @@ export function RateChart({ height = 280, defaultHours = 24 }: { height?: number
     return () => ro.disconnect();
   }, []);
 
-  const pts: HistoryPoint[] = useMemo(() => data?.points ?? [], [data]);
-  const pad = { l: 58, r: 14, t: 12, b: 26 };
+  const pad = { l: 8, r: 64, t: 10, b: 24 };
   const iw = Math.max(10, width - pad.l - pad.r);
   const ih = height - pad.t - pad.b;
+
+  const pts: HistoryPoint[] = useMemo(() => bucket(data?.points ?? [], Math.max(24, Math.floor(iw / 6))), [data, iw]);
 
   const geo = useMemo(() => {
     if (pts.length < 2) return null;
@@ -44,8 +63,8 @@ export function RateChart({ height = 280, defaultHours = 24 }: { height?: number
     let min = Math.min(...vals);
     let max = Math.max(...vals);
     const span = max - min || 0.0005;
-    min -= span * 0.15;
-    max += span * 0.15;
+    min -= span * 0.2;
+    max += span * 0.2;
     const t0 = pts[0].timestamp;
     const t1 = pts[pts.length - 1].timestamp;
     const x = (t: number) => pad.l + ((t - t0) / (t1 - t0 || 1)) * iw;
@@ -59,11 +78,12 @@ export function RateChart({ height = 280, defaultHours = 24 }: { height?: number
 
   const hp = hover !== null && pts[hover] ? pts[hover] : null;
   const last = pts[pts.length - 1];
+  const first = pts[0];
+  const change = last && first ? ((last.quotePrice - first.quotePrice) / first.quotePrice) * 100 : 0;
 
   const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
     if (!geo || !pts.length) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const px = e.clientX - rect.left;
+    const px = e.clientX - e.currentTarget.getBoundingClientRect().left;
     let best = 0;
     let bd = Infinity;
     for (let i = 0; i < pts.length; i++) {
@@ -79,22 +99,28 @@ export function RateChart({ height = 280, defaultHours = 24 }: { height?: number
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-4 text-[11px] uppercase tracking-[0.14em] text-muted">
-          <span className="inline-flex items-center gap-2">
-            <span className="inline-block h-[2px] w-5 bg-brand" /> 1Click dry quote
+        <div className="flex items-baseline gap-3">
+          <span className="num text-2xl font-semibold leading-none">{last ? last.quotePrice.toFixed(4) : "--"}</span>
+          <span className={`num text-xs font-medium ${change >= 0 ? "text-ok" : "text-danger"}`}>
+            {last ? `${change >= 0 ? "+" : ""}${change.toFixed(3)}%` : ""}
           </span>
-          <span className="inline-flex items-center gap-2">
-            <span className="inline-block w-5 border-t-2 border-dashed border-info" /> ECB reference
+          <span className="hidden items-center gap-3 text-[11px] text-muted sm:flex">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block h-0.5 w-4 bg-brand" /> 1Click dry quote
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block w-4 border-t border-dashed border-info" /> ECB reference
+            </span>
           </span>
         </div>
-        <div className="flex border border-border-bright">
+        <div className="flex rounded-md border border-border-bright bg-surface-2 p-0.5">
           {RANGES.map((r) => (
             <button
               key={r.label}
               type="button"
               onClick={() => setHours(r.hours)}
-              className={`px-3 py-1.5 text-[11px] font-semibold tracking-[0.14em] transition-colors ${
-                hours === r.hours ? "bg-brand text-background" : "text-muted hover:text-foreground"
+              className={`rounded px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                hours === r.hours ? "bg-border-bright text-foreground" : "text-muted hover:text-foreground"
               }`}
             >
               {r.label}
@@ -116,78 +142,75 @@ export function RateChart({ height = 280, defaultHours = 24 }: { height?: number
           >
             <defs>
               <linearGradient id="rc-fill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="rgb(63 230 255)" stopOpacity="0.28" />
-                <stop offset="100%" stopColor="rgb(63 230 255)" stopOpacity="0" />
+                <stop offset="0%" stopColor="rgb(56 204 230)" stopOpacity="0.2" />
+                <stop offset="100%" stopColor="rgb(56 204 230)" stopOpacity="0" />
               </linearGradient>
             </defs>
 
-            {/* dashed grid + y labels */}
             {[0, 0.25, 0.5, 0.75, 1].map((f) => {
               const v = geo.max - f * (geo.max - geo.min);
               const yy = pad.t + f * ih;
               return (
                 <g key={f}>
-                  <line x1={pad.l} x2={width - pad.r} y1={yy} y2={yy} stroke="rgb(66 72 112)" strokeDasharray="3 5" strokeOpacity="0.7" />
-                  <text x={pad.l - 8} y={yy + 4} textAnchor="end" fontSize="10" fill="rgb(143 148 184)">
+                  <line x1={pad.l} x2={width - pad.r} y1={yy} y2={yy} stroke="rgb(30 36 47)" />
+                  <text x={width - pad.r + 8} y={yy + 3.5} fontSize="10" fill="rgb(122 133 152)" className="num">
                     {v.toFixed(4)}
                   </text>
                 </g>
               );
             })}
-            {/* x labels */}
             {[0, 0.25, 0.5, 0.75, 1].map((f) => {
               const t = geo.t0 + f * (geo.t1 - geo.t0);
               return (
-                <text key={f} x={geo.x(t)} y={height - 6} textAnchor={f === 0 ? "start" : f === 1 ? "end" : "middle"} fontSize="10" fill="rgb(143 148 184)">
+                <text key={f} x={geo.x(t)} y={height - 6} textAnchor={f === 0 ? "start" : f === 1 ? "end" : "middle"} fontSize="10" fill="rgb(122 133 152)" className="num">
                   {fmtTime(t, hours)}
                 </text>
               );
             })}
 
             <path d={geo.area} fill="url(#rc-fill)" />
-            <path d={geo.r} fill="none" stroke="rgb(138 150 255)" strokeWidth="1.5" strokeDasharray="5 4" />
-            <path d={geo.q} fill="none" stroke="rgb(63 230 255)" strokeWidth="2" strokeLinejoin="round" />
+            <path d={geo.r} fill="none" stroke="rgb(125 140 255)" strokeWidth="1" strokeDasharray="4 4" strokeOpacity="0.8" />
+            <path d={geo.q} fill="none" stroke="rgb(56 204 230)" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
 
-            {/* latest marker */}
+            {/* last-price tag on the right axis */}
             {last && (
               <g>
-                <circle cx={geo.x(last.timestamp)} cy={geo.y(last.quotePrice)} r="8" fill="rgb(63 230 255)" opacity="0.18">
-                  <animate attributeName="r" values="4;11;4" dur="2.2s" repeatCount="indefinite" />
-                </circle>
-                <circle cx={geo.x(last.timestamp)} cy={geo.y(last.quotePrice)} r="3.5" fill="rgb(63 230 255)" />
+                <line x1={pad.l} x2={width - pad.r} y1={geo.y(last.quotePrice)} y2={geo.y(last.quotePrice)} stroke="rgb(56 204 230)" strokeOpacity="0.45" strokeDasharray="2 3" />
+                <rect x={width - pad.r + 2} y={geo.y(last.quotePrice) - 9} width={pad.r - 4} height="18" rx="3" fill="rgb(56 204 230)" />
+                <text x={width - pad.r + 8} y={geo.y(last.quotePrice) + 3.5} fontSize="10" fontWeight="600" fill="rgb(9 11 15)" className="num">
+                  {last.quotePrice.toFixed(4)}
+                </text>
               </g>
             )}
 
-            {/* hover crosshair */}
             {hp && (
               <g>
-                <line x1={geo.x(hp.timestamp)} x2={geo.x(hp.timestamp)} y1={pad.t} y2={pad.t + ih} stroke="rgb(232 232 242)" strokeOpacity="0.5" strokeDasharray="2 3" />
-                <circle cx={geo.x(hp.timestamp)} cy={geo.y(hp.quotePrice)} r="4" fill="rgb(5 6 15)" stroke="rgb(63 230 255)" strokeWidth="2" />
-                <circle cx={geo.x(hp.timestamp)} cy={geo.y(hp.refPrice)} r="4" fill="rgb(5 6 15)" stroke="rgb(138 150 255)" strokeWidth="2" />
+                <line x1={geo.x(hp.timestamp)} x2={geo.x(hp.timestamp)} y1={pad.t} y2={pad.t + ih} stroke="rgb(228 232 239)" strokeOpacity="0.35" strokeDasharray="2 3" />
+                <circle cx={geo.x(hp.timestamp)} cy={geo.y(hp.quotePrice)} r="3.5" fill="rgb(9 11 15)" stroke="rgb(56 204 230)" strokeWidth="1.5" />
+                <circle cx={geo.x(hp.timestamp)} cy={geo.y(hp.refPrice)} r="3.5" fill="rgb(9 11 15)" stroke="rgb(125 140 255)" strokeWidth="1.5" />
               </g>
             )}
           </svg>
         ) : (
-          <div className="flex h-full items-center justify-center border border-dashed border-border-bright text-xs uppercase tracking-[0.18em] text-muted">
+          <div className="flex h-full items-center justify-center rounded-md border border-dashed border-border-bright text-xs text-muted">
             {loading ? "Loading rate history…" : error ? "Oracle offline: no history" : "Collecting samples…"}
           </div>
         )}
 
-        {/* tooltip */}
         {hp && geo && (
           <div
-            className="pointer-events-none absolute z-10 border border-border-bright bg-background/95 px-3 py-2 text-[11px] leading-5 shadow-pop"
-            style={{ left: Math.min(Math.max(geo.x(hp.timestamp) + 12, 4), width - 190), top: 8 }}
+            className="pointer-events-none absolute z-10 rounded-md border border-border-bright bg-background/95 px-3 py-2 text-[11px] leading-5 shadow-pop"
+            style={{ left: Math.min(Math.max(geo.x(hp.timestamp) + 12, 4), width - pad.r - 168), top: 6 }}
           >
             <div className="text-muted">{new Date(hp.timestamp * 1000).toLocaleString()}</div>
-            <div>
-              <span className="text-brand">QUOTE</span> {hp.quotePrice.toFixed(5)}
+            <div className="num flex justify-between gap-6">
+              <span className="text-brand">Quote</span> {hp.quotePrice.toFixed(5)}
             </div>
-            <div>
-              <span className="text-info">ECB&nbsp;&nbsp;</span> {hp.refPrice.toFixed(5)}
+            <div className="num flex justify-between gap-6">
+              <span className="text-info">ECB</span> {hp.refPrice.toFixed(5)}
             </div>
-            <div className={hp.deviationBps !== null && Math.abs(hp.deviationBps) > 120 ? "text-warn" : "text-ok"}>
-              DEV&nbsp;&nbsp; {hp.deviationBps ?? 0} bps
+            <div className={`num flex justify-between gap-6 ${Math.abs(hp.deviationBps ?? 0) > 120 ? "text-warn" : "text-ok"}`}>
+              <span>Deviation</span> {hp.deviationBps ?? 0} bps
             </div>
           </div>
         )}

@@ -3,18 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 import { useFeed, type FeedEvent } from "@/lib/live";
 
-const TAG_STYLE: Record<FeedEvent["tag"], string> = {
-  WAIT: "text-warn",
-  EXECUTE: "text-brand",
-  SETTLED: "text-ok",
-  FAILED: "text-danger",
-  INFO: "text-muted",
-  SCORE: "text-info",
+const TAG: Record<FeedEvent["tag"], string> = {
+  WAIT: "bg-warn/10 text-warn",
+  EXECUTE: "bg-brand/10 text-brand",
+  SETTLED: "bg-ok/10 text-ok",
+  FAILED: "bg-danger/10 text-danger",
+  INFO: "bg-border text-muted",
+  SCORE: "bg-info/10 text-info",
 };
 
 const hhmmss = (ms: number) => new Date(ms).toLocaleTimeString(undefined, { hour12: false });
 
-/** Streaming decision log: agent + strategy events, newest first, new rows flash in. */
+/** Streaming decision log: agent + strategy events, newest first; new rows flash in. */
 export function LiveFeed({ rows = 10 }: { rows?: number }) {
   const { data, error, loading } = useFeed();
   const seen = useRef<Set<string>>(new Set());
@@ -40,37 +40,36 @@ export function LiveFeed({ rows = 10 }: { rows?: number }) {
   }, [events]);
 
   const online = Boolean(data?.online);
+  const agentLine = data?.agent
+    ? `${data.agent.strategyMode ?? "score"} mode · ${data.agent.totalChunksExecuted ?? 0} settled · ${String(data.agent.lastStatus ?? "").slice(0, 44)}`
+    : "Start the agent: pnpm agent:start";
 
   return (
-    <div>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[11px] uppercase tracking-[0.14em]">
-        <span className="inline-flex items-center gap-2">
-          {online ? <span className="live-dot" /> : <span className="inline-block h-[7px] w-[7px] border border-muted" />}
-          <span className={online ? "text-ok" : "text-muted"}>{online ? "Agent online" : error ? "Agent offline" : loading ? "Connecting" : "Agent offline"}</span>
+    <div className="flex h-full flex-col">
+      <div className="mb-2 flex items-center justify-between gap-3 text-[11px]">
+        <span className="inline-flex shrink-0 items-center gap-2 font-medium">
+          {online ? <span className="live-dot" /> : <span className="inline-block h-1.5 w-1.5 rounded-full bg-muted" />}
+          <span className={online ? "text-ok" : "text-muted"}>{online ? "Agent online" : loading ? "Connecting…" : error ? "Agent offline" : "Agent offline"}</span>
         </span>
-        <span className="text-muted">
-          {data?.agent ? `${data.agent.strategyMode ?? "score"} mode · ${data.agent.totalChunksExecuted ?? 0} chunks this session · ${data.agent.lastStatus ?? "…"}` : "start the agent: pnpm agent:start"}
+        <span className="min-w-0 truncate text-muted" title={agentLine}>
+          {agentLine}
         </span>
       </div>
 
-      <ol className="divide-y divide-dashed divide-border border-y border-dashed border-border text-xs">
+      <ol className="-mx-4 divide-y divide-border border-t border-border text-xs">
         {events.slice(0, rows).map((e) => (
-          <li
-            key={e.id}
-            className={`grid grid-cols-[64px_70px_1fr] items-baseline gap-3 px-1 py-2 ${fresh.has(e.id) ? "flash-in" : ""}`}
-          >
-            <time className="text-muted">{hhmmss(e.ts)}</time>
-            <span className={`font-semibold tracking-wider ${TAG_STYLE[e.tag]}`}>{e.tag}</span>
-            <span className="min-w-0 break-words text-foreground/90">
+          <li key={e.id} className={`grid grid-cols-[60px_64px_1fr_auto] items-center gap-3 px-4 py-2 ${fresh.has(e.id) ? "flash-in" : ""}`}>
+            <time className="num text-muted">{hhmmss(e.ts)}</time>
+            <span className={`rounded-sm px-1.5 py-0.5 text-center text-[10px] font-semibold ${TAG[e.tag]}`}>{e.tag}</span>
+            <span className="min-w-0 truncate text-foreground/90" title={e.text}>
               {e.text}
-              {typeof e.score === "number" && e.tag !== "SETTLED" ? <span className="ml-2 text-muted">[{e.score}]</span> : null}
             </span>
+            {typeof e.score === "number" && e.tag !== "SETTLED" ? <span className="num text-muted">{e.score}</span> : <span />}
           </li>
         ))}
         {events.length === 0 && (
-          <li className="px-1 py-6 text-center text-muted">
-            {loading ? "Listening…" : "No decisions yet. Create an order and the agent's reasoning will stream here."}
-            <span className="blink ml-1">▮</span>
+          <li className="px-4 py-8 text-center text-muted">
+            {loading ? "Listening…" : "No decisions yet. Create an order and the agent's reasoning streams here."}
           </li>
         )}
       </ol>

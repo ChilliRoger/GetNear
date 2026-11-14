@@ -67,7 +67,7 @@ export function WalletConnectButton() {
       <div className="relative " ref={dropdownRef}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-1.5 border border-info bg-info/10 px-3 py-1.5 text-xs font-semibold text-info transition-colors hover:bg-info/20"
+          className="btn-primary h-9 gap-2 px-4"
         >
           <Wallet className="h-3.5 w-3.5" />
           <span>Connect wallet</span>
@@ -193,22 +193,20 @@ export function WalletConnectButton() {
 
   // ──────────────── CONNECTED STATE ────────────────
   const shortName =
-    accountId.length > 20 ? `${accountId.slice(0, 16)}...` : accountId;
+    accountId.length > 22 ? `${accountId.slice(0, 10)}…${accountId.slice(-9)}` : accountId;
 
   return (
     <div className="relative " ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-brand"
+        className="flex h-9 items-center gap-2.5 whitespace-nowrap rounded-md border border-border-bright bg-surface-2 px-3 text-xs font-medium text-foreground transition-colors hover:border-muted/60"
       >
-        <span className="h-1.5 w-1.5 bg-brand" />
-        <span className="border border-border bg-background px-1 py-0.5 text-[9px] uppercase text-muted">
+        <span className="h-1.5 w-1.5 rounded-full bg-ok" />
+        <span className="num text-[12px] font-semibold">{shortName}</span>
+        {balance && <span className="num border-l border-border-bright pl-2.5 text-[12px] text-muted">{balance}</span>}
+        <span className="hidden rounded-sm bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted lg:inline">
           {getWalletBadge()}
         </span>
-        <span className="text-[11px] font-semibold text-foreground">{shortName}</span>
-        {balance && (
-          <span className="text-[10px] text-brand">({balance})</span>
-        )}
         <ChevronDown
           className={`h-3 w-3 text-muted transition-transform ${isOpen ? "rotate-180" : ""}`}
         />

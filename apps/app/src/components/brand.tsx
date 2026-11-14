@@ -1,16 +1,14 @@
 import Link from "next/link";
 import { GetNearLogo } from "@/components/getnear-logo";
 
-export function BrandMark({ sub = "Treasury FX agent · NEAR testnet" }: { sub?: string }) {
+export function BrandMark() {
   return (
-    <Link href="/" className="group flex items-center gap-3" aria-label="GetNear home">
-      <GetNearLogo size={32} cropped />
-      <div className="leading-tight">
-        <div className="text-sm font-bold uppercase tracking-[0.28em] text-foreground transition-colors group-hover:text-brand">
-          GetNear
-        </div>
-        <div className="hidden text-[10px] uppercase tracking-[0.16em] text-muted sm:block">{sub}</div>
-      </div>
+    <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="GetNear home">
+      <GetNearLogo size={28} cropped />
+      <span className="text-[15px] font-bold tracking-tight text-foreground">GetNear</span>
+      <span className="hidden rounded-sm border border-warn/40 bg-warn/10 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wider text-warn sm:inline">
+        Testnet
+      </span>
     </Link>
   );
 }

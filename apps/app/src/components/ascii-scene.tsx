@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const CELL_W = 0.6; // glyph width as a fraction of font size in the ascii-magic player (square-cell pieces)
+const CELL_W = 0.602; // glyph width as a fraction of font size in the ascii-magic player (square-cell pieces)
 const COLS = 192; // harbour-neon-skyline is 192 x 108 cells
 
 /**
  * The "Neon Harbour Ferry" piece from ASCII Magic (MIT, github.com/kailashsr38/ascii-magic-art), bundled locally.
  * It plays only while on screen and holds its first frame for reduced-motion users (handled by the player).
- * The art is decoration: keep real text next to it.
+ * The art is decoration: keep real text next to it. The caller positions this element (e.g. `absolute inset-0`).
  */
 export function AsciiScene({ className = "", speed = 1 }: { className?: string; speed?: number }) {
   const wrap = useRef<HTMLDivElement>(null);
@@ -39,7 +39,8 @@ export function AsciiScene({ className = "", speed = 1 }: { className?: string; 
         stop = play(pre.current, piece, { speed });
         ro = new ResizeObserver(fit);
         ro.observe(wrap.current);
-      } catch {
+      } catch (err) {
+        console.warn("[AsciiScene] could not start the harbour piece:", err);
         if (!cancelled) setFailed(true);
       }
     })();
@@ -55,7 +56,7 @@ export function AsciiScene({ className = "", speed = 1 }: { className?: string; 
     <div
       ref={wrap}
       aria-hidden="true"
-      className={`relative overflow-hidden [&>canvas]:absolute [&>canvas]:bottom-0 [&>canvas]:left-0 [&>canvas]:!max-w-none ${className}`}
+      className={`overflow-hidden [&>canvas]:absolute [&>canvas]:left-0 [&>canvas]:top-1/2 [&>canvas]:-translate-y-[56%] [&>canvas]:!max-w-none ${className}`}
     >
       <pre ref={pre} className="m-0 text-foreground" style={{ display: "none" }} />
       {failed && <div className="absolute inset-0 bg-gradient-to-b from-info/10 via-pink/10 to-background" />}

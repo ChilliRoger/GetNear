@@ -3,8 +3,6 @@ import type { Config } from "tailwindcss";
 // Semantic colour tokens live in globals.css as "R G B" triplets so Tailwind opacity modifiers keep working.
 const token = (name: string) => `rgb(var(--${name}) / <alpha-value>)`;
 
-const mono = ["var(--font-geist-mono)", "ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"];
-
 const config: Config = {
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -35,13 +33,15 @@ const config: Config = {
           red: token("danger"),
         },
       },
-      // The whole product is set in one monospace family: it is the ASCII grid.
-      fontFamily: { sans: mono, mono },
-      boxShadow: {
-        card: "0 0 0 1px rgb(var(--border) / 0.4)",
-        pop: "0 20px 60px -20px rgb(0 0 0 / 0.8)",
+      fontFamily: {
+        sans: ["var(--font-geist-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["var(--font-geist-mono)", "ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
       },
-      borderRadius: { DEFAULT: "2px", sm: "2px", md: "2px", lg: "3px", xl: "3px", "2xl": "4px" },
+      boxShadow: {
+        card: "0 0 0 1px rgb(var(--border) / 0.6)",
+        pop: "0 16px 48px -16px rgb(0 0 0 / 0.7)",
+      },
+      borderRadius: { DEFAULT: "6px", sm: "4px", md: "6px", lg: "8px", xl: "10px", "2xl": "12px" },
     },
   },
   plugins: [],

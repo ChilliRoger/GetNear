@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { Card } from "@/components/card";
 import { RateChart } from "@/components/rate-chart";
 import { LiveFeed } from "@/components/live-feed";
-import { Meter, Spark, Stat } from "@/components/ascii-viz";
+import { KpiStrip, Meter, Spark } from "@/components/ascii-viz";
 import { Reveal } from "@/components/reveal";
 import { useHistory, useLiveJson, useOraclePrice } from "@/lib/live";
 
@@ -18,7 +18,6 @@ interface StrategyRow {
   price_score: number | null;
   divergence_score: number | null;
   urgency_score: number | null;
-  chunk_amount: string | null;
   deviation_bps: number | null;
 }
 
@@ -33,94 +32,115 @@ export default function AnalyticsPage() {
   const devStats = useMemo(() => {
     const d = pts.map((x) => x.deviationBps).filter((v): v is number => typeof v === "number");
     if (!d.length) return null;
-    return { min: Math.min(...d), max: Math.max(...d), avg: d.reduce((a, b) => a + b, 0) / d.length, series: d.slice(-48) };
+    return { min: Math.min(...d), max: Math.max(...d), avg: d.reduce((a, b) => a + b, 0) / d.length, series: d.slice(-60) };
   }, [pts]);
 
-  const scored = (rows ?? []).filter((r) => r.order_id !== null);
-  const latest = scored[0] ?? (rows ?? [])[0];
-  const scoreSeries = [...(rows ?? [])].reverse().map((r) => r.score);
+  const all = rows ?? [];
+  const latest = all.find((r) => r.order_id !== null) ?? all[0];
   const score = latest?.score ?? 0;
+  const scoreSeries = [...all].reverse().map((r) => r.score);
 
   return (
-    <div className="space-y-10">
-      <Reveal>
-        <p className="eyebrow">Analytics</p>
-        <h1 className="mt-2 text-2xl font-bold uppercase tracking-tight md:text-3xl">Market &amp; strategy</h1>
-        <p className="mt-2 max-w-2xl text-xs leading-6 text-muted">
-          Live 1Click dry quotes against the ECB reference, and the timing score the agent uses to decide when to pay a chunk. All quotes are
-          indicative; the FX leg is simulated.
-        </p>
-      </Reveal>
-
-      <Reveal>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Stat label="1Click quote" value={p ? p.quotePrice.toFixed(4) : "--"} caption="EURe per USDC" tone="brand" />
-          <Stat label="ECB reference" value={p ? p.refPrice.toFixed(4) : "--"} caption="EUR per USD" />
-          <Stat
-            label="Deviation now"
-            value={typeof p?.deviationBps === "number" ? `${p.deviationBps > 0 ? "+" : ""}${p.deviationBps} bps` : "--"}
-            caption="negative = quote below ECB"
-            tone={typeof p?.deviationBps === "number" && Math.abs(p.deviationBps) > 120 ? "warn" : "ok"}
-          />
-          <Stat
-            label="24h average dev."
-            value={devStats ? `${devStats.avg.toFixed(1)} bps` : "--"}
-            caption={devStats ? `range ${devStats.min} … ${devStats.max} bps` : "collecting samples"}
-          />
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Analytics</h1>
+          <p className="text-xs text-muted">Live 1Click dry quotes against the ECB reference, and the timing score that gates each chunk. Indicative only; the FX leg is simulated.</p>
         </div>
-      </Reveal>
+      </div>
 
-      <Reveal>
-        <Card title="USDC → EURe price history" subtitle="Dry quote (cyan) vs ECB reference (dashed). Hover for exact values.">
-          <RateChart height={340} />
-        </Card>
-      </Reveal>
+      <KpiStrip
+        items={[
+          { label: "1Click quote", value: p ? p.quotePrice.toFixed(4) : "--", sub: "EURe per USDC", tone: "brand" },
+          { label: "ECB reference", value: p ? p.refPrice.toFixed(4) : "--", sub: "EUR per USD" },
+          {
+            label: "Deviation now",
+            value: typeof p?.deviationBps === "number" ? `${p.deviationBps > 0 ? "+" : ""}${p.deviationBps} bps` : "--",
+            sub: "negative = quote below ECB",
+            tone: typeof p?.deviationBps === "number" && Math.abs(p.deviationBps) > 120 ? "warn" : "ok",
+          },
+          { label: "24h avg deviation", value: devStats ? `${devStats.avg.toFixed(1)} bps` : "--", sub: devStats ? `range ${devStats.min} to ${devStats.max}` : "collecting samples" },
+          { label: "Timing score", value: score, sub: latest?.action === "EXECUTE" ? "executing" : "holding capital", tone: score >= 70 ? "ok" : "warn" },
+        ]}
+      />
 
-      <div className="grid gap-10 lg:grid-cols-2">
-        <Reveal>
-          <Card title="Timing score" subtitle="40% price vs average · 20% quote vs ECB · 40% deadline urgency. ≥70 pays a chunk, ≥85 pays double." badge={{ label: latest?.action ?? "WAIT", color: latest?.action === "EXECUTE" ? "green" : "amber" }}>
-            <div className="space-y-5 text-sm">
-              <div>
-                <div className="mb-2 flex items-baseline justify-between">
-                  <span className="text-[11px] uppercase tracking-[0.16em] text-muted">Composite</span>
-                  <span className="text-3xl font-bold text-foreground">{score}</span>
-                </div>
-                <Meter value={score} width={34} threshold={70} tone={score >= 70 ? "ok" : "warn"} />
-              </div>
-              <div className="space-y-3 border-t border-dashed border-border-bright pt-4 text-xs">
-                {[
-                  ["Price vs avg", latest?.price_score],
-                  ["Quote vs ECB", latest?.divergence_score],
-                  ["Urgency", latest?.urgency_score],
-                ].map(([label, v]) => (
-                  <div key={label as string} className="flex items-center justify-between gap-3">
-                    <span className="w-28 text-muted">{label}</span>
-                    <Meter value={typeof v === "number" ? v : 0} width={22} />
-                    <span className="w-8 text-right">{typeof v === "number" ? v : "--"}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="border-t border-dashed border-border-bright pt-4">
-                <div className="mb-1 text-[11px] uppercase tracking-[0.16em] text-muted">Score history</div>
-                <Spark values={scoreSeries} className="text-lg text-brand" />
-              </div>
-              <p className="text-xs leading-6 text-muted">{latest?.reason ?? "Waiting for the first strategy evaluation."}</p>
-            </div>
+      <div className="grid gap-4 lg:grid-cols-12">
+        <Reveal className="lg:col-span-8">
+          <Card title="USDC → EURe" subtitle="1Click dry quote vs ECB reference · hover for exact values" className="h-full">
+            <RateChart height={320} />
           </Card>
         </Reveal>
 
-        <Reveal delay={120}>
-          <Card title="Live agent feed" subtitle="On-chain agent decisions and strategy evaluations, newest first.">
-            <LiveFeed rows={11} />
+        <Reveal delay={80} className="lg:col-span-4">
+          <Card title="Timing score" subtitle="≥70 pays a chunk · ≥85 pays double" badge={{ label: latest?.action ?? "WAIT", color: latest?.action === "EXECUTE" ? "green" : "amber" }} className="h-full">
+            <div className="space-y-5">
+              <div>
+                <div className="mb-2 flex items-baseline justify-between">
+                  <span className="text-xs text-muted">Composite</span>
+                  <span className="num text-3xl font-semibold leading-none">{score}</span>
+                </div>
+                <Meter value={score} threshold={70} tone={score >= 70 ? "ok" : "warn"} />
+                <div className="mt-1 flex justify-between text-[10px] text-muted">
+                  <span>0</span>
+                  <span>70 execute</span>
+                  <span>100</span>
+                </div>
+              </div>
+
+              <div className="space-y-3 border-t border-border pt-4 text-xs">
+                {(
+                  [
+                    ["Price vs average", "40%", latest?.price_score],
+                    ["Quote vs ECB", "20%", latest?.divergence_score],
+                    ["Deadline urgency", "40%", latest?.urgency_score],
+                  ] as const
+                ).map(([label, weight, v]) => (
+                  <div key={label}>
+                    <div className="mb-1 flex justify-between">
+                      <span className="text-muted">
+                        {label} <span className="text-border-bright">· {weight}</span>
+                      </span>
+                      <span className="num font-medium">{typeof v === "number" ? v : "--"}</span>
+                    </div>
+                    <Meter value={typeof v === "number" ? v : 0} />
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-t border-border pt-4">
+                <div className="mb-1.5 text-xs text-muted">Score history</div>
+                <Spark values={scoreSeries} color="rgb(56 204 230)" />
+              </div>
+              <p className="text-xs leading-5 text-muted">{latest?.reason ?? "Waiting for the first strategy evaluation."}</p>
+            </div>
           </Card>
         </Reveal>
       </div>
 
-      <Reveal>
-        <Card title="Deviation, last 48 samples" subtitle="Absolute distance between quote and ECB. Shorter bars = tighter quotes.">
-          <Spark values={(devStats?.series ?? []).map((v) => Math.abs(v))} className="block text-3xl text-info" />
-        </Card>
-      </Reveal>
+      <div className="grid gap-4 lg:grid-cols-12">
+        <Reveal className="lg:col-span-7">
+          <Card title="Live agent feed" subtitle="On-chain agent decisions and strategy evaluations" className="h-full">
+            <LiveFeed rows={10} />
+          </Card>
+        </Reveal>
+        <Reveal delay={80} className="lg:col-span-5">
+          <Card title="Deviation, last 60 samples" subtitle="Absolute distance between quote and ECB: shorter is tighter" className="h-full">
+            <Spark values={(devStats?.series ?? []).map((v) => Math.abs(v))} height={120} color="rgb(125 140 255)" />
+            <dl className="mt-4 grid grid-cols-3 divide-x divide-border border-t border-border pt-3 text-xs">
+              {[
+                ["Min", devStats ? `${devStats.min} bps` : "--"],
+                ["Average", devStats ? `${devStats.avg.toFixed(1)} bps` : "--"],
+                ["Max", devStats ? `${devStats.max} bps` : "--"],
+              ].map(([l, v]) => (
+                <div key={l} className="px-3 first:pl-0">
+                  <dt className="text-muted">{l}</dt>
+                  <dd className="num mt-0.5 font-semibold">{v}</dd>
+                </div>
+              ))}
+            </dl>
+          </Card>
+        </Reveal>
+      </div>
     </div>
   );
 }
