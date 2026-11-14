@@ -69,19 +69,24 @@ assertThrows(
   () => loadConfig({ ...baseEnv, GETNEAR_MODE: 'mainnet' }),
 )
 
-// ── Testnet-only guard ───────────────────────────────────────────────
-console.log('\n[Config: testnet-only guard]')
+// ── Network ID validation ───────────────────────────────────────────
+console.log('\n[Config: network ID validation]')
+
+const mainnetCfg = loadConfig({ GETNEAR_MODE: 'mock', NEAR_NETWORK_ID: 'mainnet' })
+assert('NEAR_NETWORK_ID=mainnet accepted', mainnetCfg.NEAR_NETWORK_ID, 'mainnet')
+assert('NEAR_NETWORK_ID=mainnet defaults to mainnet RPCs', mainnetCfg.NEAR_RPC_URLS, [
+  'https://rpc.mainnet.near.org',
+  'https://free.rpc.fastnear.com',
+])
+assert('NEAR_NETWORK_ID=mainnet defaults to mainnet explorer', mainnetCfg.NEAR_EXPLORER_BASE, 'https://nearblocks.io')
+
+const defaultCfg = loadConfig({ ...baseEnv, NEAR_NETWORK_ID: undefined })
+assert('NEAR_NETWORK_ID missing defaults to testnet', defaultCfg.NEAR_NETWORK_ID, 'testnet')
 
 assertThrows(
-  'NEAR_NETWORK_ID=mainnet throws',
-  () => loadConfig({ ...baseEnv, NEAR_NETWORK_ID: 'mainnet' }),
-  'TESTNET ONLY',
-)
-
-assertThrows(
-  'NEAR_NETWORK_ID missing throws',
-  () => loadConfig({ ...baseEnv, NEAR_NETWORK_ID: undefined }),
-  'TESTNET ONLY',
+  'NEAR_NETWORK_ID=polygon throws',
+  () => loadConfig({ ...baseEnv, NEAR_NETWORK_ID: 'polygon' as any }),
+  'testnet" or "mainnet"',
 )
 
 // ── DEMO_MODE parsing ────────────────────────────────────────────────

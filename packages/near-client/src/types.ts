@@ -117,7 +117,7 @@ export interface TxStatusResponse {
 
 export interface NearClientConfig {
   networkId?: string
-  rpcUrls: string[]
+  rpcUrls?: string[]
   timeoutMs?: number
   maxRetries?: number
 }

@@ -13,9 +13,9 @@ import { z } from 'zod'
 
 // ── Validators ───────────────────────────────────────────────────────
 
-const NetworkIdSchema = z.literal('testnet', {
-  message: 'NEAR_NETWORK_ID must be "testnet". GetNear is TESTNET ONLY.',
-})
+const NetworkIdSchema = z.enum(['testnet', 'mainnet'], {
+  message: 'NEAR_NETWORK_ID must be "testnet" or "mainnet".',
+}).default('testnet')
 
 const CommaSeparatedUrls = z
   .string()
@@ -58,6 +58,23 @@ export const ConfigSchema = z.object({
 
 export type GetnearConfig = z.output<typeof ConfigSchema>
 
+// ── Network Constants ───────────────────────────────────────────────
+
+export const CIRCLE_USDC_CONTRACT_IDS = {
+  testnet: '3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af',
+  mainnet: '17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1',
+} as const
+
+export const DEFAULT_RPC_URLS = {
+  testnet: ['https://rpc.testnet.near.org', 'https://test.rpc.fastnear.com'],
+  mainnet: ['https://rpc.mainnet.near.org', 'https://free.rpc.fastnear.com'],
+} as const
+
+export const DEFAULT_EXPLORER_BASES = {
+  testnet: 'https://testnet.nearblocks.io',
+  mainnet: 'https://nearblocks.io',
+} as const
+
 // ── Loader ───────────────────────────────────────────────────────────
 
 /**
@@ -66,10 +83,19 @@ export type GetnearConfig = z.output<typeof ConfigSchema>
  * Never returns AGENT_PRIVATE_KEY in logs.
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): GetnearConfig {
+  const networkId = (env.NEAR_NETWORK_ID as 'testnet' | 'mainnet') || 'testnet'
+  const isMainnet = networkId === 'mainnet'
+  const defaultRpcs = isMainnet
+    ? DEFAULT_RPC_URLS.mainnet.join(',')
+    : DEFAULT_RPC_URLS.testnet.join(',')
+  const defaultExplorer = isMainnet
+    ? DEFAULT_EXPLORER_BASES.mainnet
+    : DEFAULT_EXPLORER_BASES.testnet
+
   const result = ConfigSchema.safeParse({
-    NEAR_NETWORK_ID: env.NEAR_NETWORK_ID,
-    NEAR_RPC_URLS: env.NEAR_RPC_URLS ?? 'https://rpc.testnet.near.org,https://test.rpc.fastnear.com',
-    NEAR_EXPLORER_BASE: env.NEAR_EXPLORER_BASE,
+    NEAR_NETWORK_ID: env.NEAR_NETWORK_ID ?? 'testnet',
+    NEAR_RPC_URLS: env.NEAR_RPC_URLS ?? defaultRpcs,
+    NEAR_EXPLORER_BASE: env.NEAR_EXPLORER_BASE ?? defaultExplorer,
     ONECLICK_BASE_URL: env.ONECLICK_BASE_URL,
     ONECLICK_JWT: env.ONECLICK_JWT,
     FX_BUDGET_CONTRACT_ID: env.FX_BUDGET_CONTRACT_ID,

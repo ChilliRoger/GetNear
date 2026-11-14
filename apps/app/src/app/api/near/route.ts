@@ -6,21 +6,29 @@ import * as fs from 'node:fs'
 
 export const dynamic = 'force-dynamic'
 
-const RPC_URLS = [
-  process.env.NEAR_RPC_URL || 'https://rpc.testnet.near.org',
-  'https://test.rpc.fastnear.com',
-]
+const NETWORK_ID = (process.env.NEAR_NETWORK_ID || 'testnet') as 'testnet' | 'mainnet'
+const isMainnet = NETWORK_ID === 'mainnet'
+
+const RPC_URLS = process.env.NEAR_RPC_URLS
+  ? process.env.NEAR_RPC_URLS.split(',').map((s) => s.trim())
+  : isMainnet
+    ? ['https://rpc.mainnet.near.org', 'https://free.rpc.fastnear.com']
+    : [
+        process.env.NEAR_RPC_URL || 'https://rpc.testnet.near.org',
+        'https://test.rpc.fastnear.com',
+      ]
 
 const nearClient = new NearClient({
-  networkId: 'testnet',
+  networkId: NETWORK_ID,
   rpcUrls: RPC_URLS,
 })
 
+const CIRCLE_NEAR_MAINNET_USDC = '17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1'
 const CIRCLE_NEAR_TESTNET_USDC = '3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af'
-const OPERATOR = process.env.OPERATOR_ACCOUNT_ID || 'chilliroger-operator.testnet'
+const OPERATOR = process.env.OPERATOR_ACCOUNT_ID || (isMainnet ? 'operator.near' : 'chilliroger-operator.testnet')
 const FX_BUDGET_ID = process.env.FX_BUDGET_CONTRACT_ID || `fx-budget.${OPERATOR}`
-const DAO_ID = process.env.SPUTNIK_DAO_ACCOUNT_ID || 'chilliroger-dao.sputnik-v2.testnet'
-const USDC_ID = process.env.USDC_CONTRACT_ID || CIRCLE_NEAR_TESTNET_USDC
+const DAO_ID = process.env.SPUTNIK_DAO_ACCOUNT_ID || process.env.DAO_ACCOUNT_ID || (isMainnet ? 'sputnik-v2.near' : 'chilliroger-dao.sputnik-v2.testnet')
+const USDC_ID = process.env.USDC_CONTRACT_ID || (isMainnet ? CIRCLE_NEAR_MAINNET_USDC : CIRCLE_NEAR_TESTNET_USDC)
 const FAUCET_USDC_ID = process.env.FAUCET_USDC_CONTRACT_ID || `usdc.${OPERATOR}`
 const EURE_ID = process.env.EURE_CONTRACT_ID || `eure.${OPERATOR}`
 

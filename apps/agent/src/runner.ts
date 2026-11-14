@@ -181,17 +181,23 @@ export class AgentRunner {
     this.attemptLandingWindowMs =
       options?.attemptLandingWindowMs ??
       (Number(process.env.AGENT_ATTEMPT_LANDING_WINDOW_MS) || DEFAULT_ATTEMPT_LANDING_WINDOW_MS)
-    this.operatorId = process.env.OPERATOR_ACCOUNT_ID || 'chilliroger-operator.testnet'
+    const networkId = (process.env.NEAR_NETWORK_ID || 'testnet') as 'testnet' | 'mainnet'
+    const isMainnet = networkId === 'mainnet'
+    this.operatorId = process.env.OPERATOR_ACCOUNT_ID || (isMainnet ? 'operator.near' : 'chilliroger-operator.testnet')
     this.contractId = options?.contractId || process.env.FX_BUDGET_CONTRACT_ID || `fx-budget.${this.operatorId}`
-    this.agentId = options?.agentId || process.env.AGENT_ACCOUNT_ID || 'chilliroger-agent.testnet'
+    this.agentId = options?.agentId || process.env.AGENT_ACCOUNT_ID || (isMainnet ? 'agent.near' : 'chilliroger-agent.testnet')
     this.eureId = process.env.EURE_CONTRACT_ID || `eure.${this.operatorId}`
     // expire_order is permissionless. The restricted agent key cannot call it, so the agent only signs it
     // when an operator explicitly opts in with a separate signer; otherwise expiry is a manual/anyone call.
     this.expireSignerId = process.env.AGENT_EXPIRE_SIGNER_ID?.trim() || undefined
 
+    const defaultRpcs = isMainnet
+      ? ['https://rpc.mainnet.near.org', 'https://free.rpc.fastnear.com']
+      : ['https://rpc.testnet.near.org', 'https://test.rpc.fastnear.com']
+
     this.client = new NearClient({
-      networkId: 'testnet',
-      rpcUrls: options?.rpcUrls || ['https://rpc.testnet.near.org', 'https://test.rpc.fastnear.com'],
+      networkId,
+      rpcUrls: options?.rpcUrls || (process.env.NEAR_RPC_URLS ? process.env.NEAR_RPC_URLS.split(',').map((s) => s.trim()) : defaultRpcs),
     })
 
     this.quoteSource = options?.quoteSource || new OneClickQuoteSource()

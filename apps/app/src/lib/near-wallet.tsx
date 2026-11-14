@@ -79,12 +79,14 @@ function getDemoToken(): string {
 const STORAGE_ACCOUNT_KEY = "getnear_connected_account";
 const STORAGE_TYPE_KEY = "getnear_connection_type";
 
+const CURRENT_NETWORK = ((process.env.NEXT_PUBLIC_NEAR_NETWORK_ID || process.env.NEAR_NETWORK_ID || "testnet") === "mainnet" ? "mainnet" : "testnet") as "testnet" | "mainnet";
+const DEFAULT_RPCS = CURRENT_NETWORK === "mainnet"
+  ? ["https://rpc.mainnet.near.org", "https://free.rpc.fastnear.com"]
+  : ["https://rpc.testnet.near.org", "https://test.rpc.fastnear.com"];
+
 const defaultNearClient = new NearClient({
-  networkId: "testnet",
-  rpcUrls: [
-    "https://rpc.testnet.near.org",
-    "https://test.rpc.fastnear.com",
-  ],
+  networkId: CURRENT_NETWORK,
+  rpcUrls: DEFAULT_RPCS,
 });
 
 const NearWalletContext = createContext<NearWalletContextValue | null>(null);
@@ -124,7 +126,7 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
         const { setupSender } = await import("@near-wallet-selector/sender");
 
         const _selector = await setupWalletSelector({
-          network: "testnet",
+          network: CURRENT_NETWORK,
           modules: [
             setupMeteorWallet(),
             setupHereWallet(),
@@ -133,8 +135,12 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
           ],
         });
 
+        const defaultContract = CURRENT_NETWORK === "mainnet"
+          ? "fx-budget.near"
+          : "fx-budget.chilliroger-operator.testnet";
+
         const _modal = setupModal(_selector, {
-          contractId: "fx-budget.chilliroger-operator.testnet",
+          contractId: process.env.NEXT_PUBLIC_FX_BUDGET_CONTRACT_ID || process.env.FX_BUDGET_CONTRACT_ID || defaultContract,
           description: "Connect your NEAR wallet to manage Treasury FX goals and approvals.",
         });
 
@@ -320,17 +326,18 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      const explorerBase = CURRENT_NETWORK === "mainnet" ? "https://nearblocks.io" : "https://testnet.nearblocks.io";
       return {
         txHash: txHash || "tx_confirmed",
         explorerUrl: txHash
-          ? explorerTxUrl(txHash)
-          : `https://testnet.nearblocks.io/address/${params.receiverId}`,
+          ? explorerTxUrl(txHash, explorerBase)
+          : `${explorerBase}/address/${params.receiverId}`,
       };
     }
 
     // Route B (opt-in, team demo only): allow-listed testnet role signed by the local server keychain.
     if (!DEMO_SIGNER_ENABLED) {
-      throw new Error("No wallet connected. Connect your own NEAR testnet wallet to sign.");
+      throw new Error(`No wallet connected. Connect your own NEAR ${CURRENT_NETWORK} wallet to sign.`);
     }
     const res = await fetch("/api/near/tx", {
       method: "POST",
@@ -347,12 +354,13 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
 
     const data = await res.json();
     if (!res.ok || !data.success) {
-      throw new Error(data.error || "Transaction execution failed on NEAR testnet");
+      throw new Error(data.error || `Transaction execution failed on NEAR ${CURRENT_NETWORK}`);
     }
 
+    const explorerBase = CURRENT_NETWORK === "mainnet" ? "https://nearblocks.io" : "https://testnet.nearblocks.io";
     return {
       txHash: data.txHash,
-      explorerUrl: data.explorerUrl || explorerTxUrl(data.txHash),
+      explorerUrl: data.explorerUrl || explorerTxUrl(data.txHash, explorerBase),
     };
   };
 
@@ -362,7 +370,7 @@ export function NearWalletProvider({ children }: { children: ReactNode }) {
         accountId,
         isConnected: Boolean(accountId),
         balance,
-        networkId: "testnet",
+        networkId: CURRENT_NETWORK,
         isConnecting,
         connectionType,
         walletName,

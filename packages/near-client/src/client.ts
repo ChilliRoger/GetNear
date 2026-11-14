@@ -38,12 +38,16 @@ export class NearClient {
   private maxRetries: number
   public readonly networkId: string
 
-  constructor(config: NearClientConfig) {
-    if (!config.rpcUrls || config.rpcUrls.length === 0) {
+  constructor(config: NearClientConfig = {}) {
+    this.networkId = config.networkId ?? 'testnet'
+    const defaultRpcs = this.networkId === 'mainnet'
+      ? ['https://rpc.mainnet.near.org', 'https://free.rpc.fastnear.com']
+      : ['https://rpc.testnet.near.org', 'https://test.rpc.fastnear.com']
+    const urls = config.rpcUrls && config.rpcUrls.length > 0 ? config.rpcUrls : defaultRpcs
+    if (!urls || urls.length === 0) {
       throw new Error('NearClient requires at least one RPC URL')
     }
-    this.networkId = config.networkId ?? 'testnet'
-    this.rpcUrls = [...config.rpcUrls]
+    this.rpcUrls = [...urls]
     this.timeoutMs = config.timeoutMs ?? 10_000
     this.maxRetries = config.maxRetries ?? 2
   }
