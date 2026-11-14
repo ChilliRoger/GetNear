@@ -30,6 +30,10 @@ export const metadata: Metadata = {
   },
 };
 
+// Browser extensions (MetaMask, etc.) inject scripts that throw unhandled errors on every page. They are not ours,
+// and the Next.js dev overlay would otherwise cover the whole site. Runs first, in the capture phase.
+const extensionErrorFilter = `(function(){function ext(x){var s=(x&&(x.stack||x.message))||(typeof x==="string"?x:"")||"";return s.indexOf("chrome-extension://")>-1||s.indexOf("moz-extension://")>-1||s.indexOf("safari-extension://")>-1||/MetaMask/i.test(s)}window.addEventListener("unhandledrejection",function(e){if(ext(e.reason)){e.preventDefault();e.stopImmediatePropagation()}},true);window.addEventListener("error",function(e){var f=String(e.filename||"");if(f.indexOf("extension://")>-1||ext(e.error)){e.preventDefault();e.stopImmediatePropagation()}},true)})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -37,6 +41,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: extensionErrorFilter }} />
+      </head>
       <body className={`${spaceMono.variable} min-h-screen font-sans text-foreground antialiased`}>
         <SiteBackground />
         <SmoothScroll />
