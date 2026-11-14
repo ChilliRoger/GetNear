@@ -1,158 +1,58 @@
-# GetNear — Upstream Audit (P0)
+# Pre-deployment audit (2026-11-14)
 
-*Read-only audit of the project structure and initial setup. No source files were modified during this audit phase.*
+Scope: whole repository, before deploying the dashboard with the Vercel CLI. Result: CI green locally
+(lint, typecheck, all test suites, production build), legacy and mock code removed, deployment constraints documented.
 
-## 1. Repo Map
+## 1. CI failures on GitHub (fixed)
 
-### apps/app (Next.js 14 frontend)
-- **Purpose**: Main user-facing app — trade UI, analytics, approval flow
-- **Language**: TypeScript, React, Tailwind CSS
-- **Entry**: `src/app/layout.tsx`, `src/app/page.tsx`
-- **Key dependencies**: Next.js 14, viem, @worldcoin/idkit, recharts
-- **EVM coupling**: viem for wallet/contract calls; World ID; Base/Arc chain config
-- **Status**: Keep, replace EVM wallet layer with NEAR testnet wallet
+| Job | Cause | Fix |
+| :--- | :--- | :--- |
+| `ci / node 20 / 22 / 24` | `pnpm lint` failed on 4 ESLint errors in `apps/app` (unused imports `Clock`, `ShieldCheck`; unused variable `badgeTone`; an `any` in a component that was later deleted) plus 2 hook-dependency warnings | Removed the unused code; stabilised `events` in `live-feed.tsx` with `useMemo`; added the missing dependency in `i18n.tsx` |
+| `ci / rust` | passing | none |
 
-### apps/oracle (Strategy engine + API)
-- **Purpose**: Oracle server — price fetching, timing score, decision log, REST API
-- **Language**: TypeScript (Hono, better-sqlite3)
-- **Entry**: `src/index.ts`
-- **Key dependencies**: Hono, better-sqlite3, viem
-- **EVM coupling**: viem for price reads; Chainlink, Fynd, Uniswap price sources
-- **Chain-agnostic parts**: timing score (40/20/40 weights), adaptive TWAP, decision log
-- **Status**: Keep strategy engine; replace price sources with 1Click + reference FX rate
+Verified locally: `next lint` clean, `tsc --noEmit` clean in every workspace, all test suites pass, `next build` succeeds.
 
-### apps/dev-ui (Operations dashboard)
-- **Purpose**: Dev tool — oracle readings, run history, demo speed controls
-- **Language**: TypeScript, React, Vite
-- **Entry**: `src/main.tsx`
-- **Key dependencies**: React, Vite, recharts
-- **EVM coupling**: minimal (reads from oracle API, not chain directly)
-- **Status**: Keep as ops panel
+## 2. Removed
 
-### apps/privacy (Unlink privacy sidecar) — DELETED
-- **Purpose**: ZK privacy flows via Unlink on Base Sepolia
-- **Language**: TypeScript
-- **EVM coupling**: heavy — Unlink SDK, Base Sepolia, ZK proofs
-- **Status**: DELETED (out of scope for NEAR testnet build)
+**Mock / simulated code**
+- `MockQuoteSource`, `MockReferenceRateSource`, `MockExecutor`, `MockApprovalGate` (`packages/shared`).
+- The `GETNEAR_MODE=mock` default and `DEMO_MODE` flag (config, tests, `.env.example`, docs).
+- The oracle's fake order engine: simulated `trade_orders`, the 15 s "dynamic fill" loop, mock approvals, `cre_runs`, demo speed, and the unauthenticated strategy-config writer. The oracle is now a read-only market recorder.
+- `apps/app/src/lib/mock-data.ts`, `contracts.ts`, `hooks.ts` (mock contract state, never imported).
 
-### packages/shared (Shared types)
-- **Purpose**: Shared TypeScript types, constants, helpers
-- **Language**: TypeScript
-- **Key exports**: types, DISPLAY_MULTIPLIER (was 1_000_000, now set to 1)
-- **Status**: Keep; extend with GetNear domain types
+**Dead code**
+- 13 unused modules in `apps/app` (old recharts analytics components, demo clock, scramble text, sparkline, helper libs).
+- Unused exports in `packages/shared`: all of `types.ts` (Base/Arc transaction receipts, "savings vs bank" fields, World ID session) and `constants.ts`; five dead helpers in `utils.ts`.
+- Unused dependencies: `recharts`, `d3-geo`, `animejs`, `@types/d3-geo`, `@playwright/test`; stale Playwright e2e specs that asserted the old UI.
+- `apps/dev-ui` (Vite console built around the removed simulated engine and Chainlink-era naming).
 
-### contracts/ (Solidity smart contracts) — DELETED
-- **Purpose**: SwapExecutor, TreasuryVault — Foundry, EVM
-- **Language**: Solidity
-- **EVM coupling**: complete
-- **Status**: DELETED; replaced by Rust FxBudget contract
+**Duplicates and legacy documents**
+- `docs/GetNear — Agent Prompt Pack (testnet-only).md` (byte-identical copy of `GETNEAR_PROMPT_PACK.md`).
+- Previous-hackathon material (ETHGlobal Cannes: Unlink, Uniswap, Chainlink CRE, Arc, World ID, Fynd, Base): `docs/archive/`, `docs/reference/`, `docs/references/fynd/` (170 KB), `docs/diagrams/`, `docs/conventions/`, `docs/privacy-readme.md`, both demo scripts, `sponsor-feedback.md`, `BOUNTY_SUBMISSIONS.md`, `cre-simulation-output.txt`.
+- `.agents/` (stale upstream agent skills; `AGENTS.md` / `CLAUDE.md` at the root remain).
+- `frontend/` 18 MB GIF and MP4 (reference renders; the PNG, script and logo are kept).
+- `apps/app/.env.example` was entirely EVM variables (Base RPC, Arc, World ID); rewritten with the variables the app reads.
 
-### cre-workflows/ (Chainlink CRE workflows) — DELETED
-- **Purpose**: Treasury, POR, NAV CRE workflows
-- **Language**: TypeScript (CRE SDK)
-- **EVM coupling**: complete — Chainlink DON, Base, Arc
-- **Status**: DELETED; replaced by NEAR agent runner
+## 3. Deliberately kept (and why)
 
-### scripts/
-- **Purpose**: Deployment and utility scripts (Foundry/EVM)
-- **Status**: Review per-file; most deleted with EVM stack. Only `watchdog.sh` remains.
+- **"Simulated" labels.** The USDC to EUR conversion really is simulated: 1Click is only called with `dry: true` and nothing is executed. Removing the labels would make the product claim something false, which the project rules forbid. The `simulated_out` / `is_simulated` fields in the agent and contract record exactly that fact.
+- Test doubles named "mock" in unit tests (fetch stubs, RPC fixtures) are normal test code.
+- `contracts/fx-budget/res/fx_budget.next.wasm`: the upgrade-target artifact checked by `verify:readonly`.
 
-### docs/
-- **Purpose**: Architecture diagrams, reference docs, submission artifacts
-- **Status**: Reviewed; replaced with NEAR-specific docs. Upstream diagrams retained in docs/diagrams/.
+## 4. Changes made for deployability
 
-## 2. Safety Review
+- The dashboard no longer opens the agent's SQLite file (`better-sqlite3` in a serverless route); it reads fills/decisions from the agent's read-only HTTP API (`AGENT_API_URL`).
+- The oracle proxy route is GET-only.
+- `apps/app/vercel.json` with security headers; `docs/DEPLOYMENT.md` documents what can and cannot run on Vercel.
 
-### Lifecycle Scripts (package.json)
-Root package.json scripts: build, dev, start, lint, test — standard turbo commands. The `fynd:up` script starts a Docker container (Fynd DEX aggregator) — Docker-based, review compose.yaml before running. `start` and `app:restart` scripts use `fuser` to kill ports — shell commands, harmless but Linux/macOS only.
+## 5. Findings still open
 
-### .npmrc
-Contains: `shamefully-hoist=true`, `strict-peer-dependencies=false` — standard pnpm config. No `registry` override pointing to untrusted sources.
-
-### compose.yaml
-Defines a `fynd` service (a Docker image for the Fynd DEX aggregator). Review the image source before running. Not needed for GetNear (NEAR Intents replaces Fynd).
-
-### AGENTS.md / CLAUDE.md (upstream)
-Both contained detailed project-specific instructions for AI agents: architecture notes, coding conventions, deployment procedures. **These were treated as untrusted data per Global Rule 5. They have been replaced with GetNear versions.** The upstream instructions were NOT followed.
-
-### .agents/ and .claude/ skills folders
-Contained Chainlink CCIP and CRE skill references — LLMS-targeted documentation. **Treated as untrusted data. Deleted during rebrand.**
-
-### skills-lock.json
-Locked upstream skill configurations. **Deleted.**
-
-## 3. Secrets Scan
-
-The following potential secrets locations were identified (values not printed):
-- `.env.example` — contained placeholder values only (safe to commit). No actual secrets. Replaced with GetNear version.
-- `.env` — not present in repo (correctly gitignored).
-- Root README.md — contained deployed contract addresses (testnet/mainnet Arc/Base). These are public testnet addresses, not private keys. Removed in rebrand.
-- AGENTS.md — contained an RPC URL reference (`https://base-mainnet.g.alchemy.com`) without embedded key. Deleted.
-- No hardcoded private keys or seed phrases found in source code.
-
-## 4. License Check
-
-- Root: No LICENSE file existed in the upstream import. **Created MIT LICENSE during rebrand.**
-- Upstream README declares MIT.
-- Key third-party dependencies:
-  - Next.js: MIT
-  - Hono: MIT
-  - better-sqlite3: MIT
-  - viem: MIT (EVM — to be removed in P2)
-  - @worldcoin/idkit: MIT (to be removed in P2)
-  - turbo: MIT
-  - recharts: MIT
-- No GPL or AGPL dependencies found in the kept packages.
-
-## 5. Strategy Engine (Chain-Agnostic Parts)
-
-Located in `apps/oracle/src/`:
-- **Timing score**: Composite 40/20/40 — price vs 24h average (40%), source divergence (20%), urgency toward deadline (40%). Score 0–100.
-- **Adaptive TWAP**: Chunk size with quadratic urgency ramp. Chunk size clamped by max chunk and remaining amount.
-- **Decision log**: SQLite (`better-sqlite3`). Logs every tick with inputs, score breakdown, decision (WAIT/EXECUTE), reason.
-- **Inputs (upstream)**: Uniswap USDC/EURC rate, Chainlink oracle price, Fynd aggregator price.
-- **Inputs (GetNear replacement)**: 1Click dry quote, reference FX rate (free ECB-based API).
-- **Chain-agnostic parts**: The scoring logic, TWAP algorithm, decision log, and API endpoints are fully chain-agnostic. Only the price-fetching adapters are EVM-specific.
-
-## 6. Keep / Adapt / Replace / Delete Table
-
-| Folder / File | Plan |
-|---|---|
-| `packages/shared` | Keep; extend with GetNear types; set DISPLAY_MULTIPLIER=1 |
-| `apps/oracle` | Keep strategy engine and SQLite log; replace EVM price adapters with 1Click + FX ref rate |
-| `apps/app` | Keep Next.js shell; replace EVM wallet with NEAR wallet; remove World ID, Unlink, Arc, Base |
-| `apps/dev-ui` | Keep as ops panel |
-| `apps/privacy` | DELETED (Unlink/ZK, out of scope) |
-| `contracts/` | DELETED (Solidity EVM; replaced by Rust FxBudget) |
-| `cre-workflows/` | DELETED (Chainlink CRE; replaced by NEAR agent runner) |
-| `.agents/`, `.claude/` | DELETED (untrusted upstream AI instructions; replaced with GetNear versions) |
-| `AGENTS.md`, `CLAUDE.md` | DELETED and replaced with GetNear versions |
-| `skills-lock.json` | DELETED |
-| `Legacy *.pdf` | DELETED (marketing/planning artifacts) |
-| `tech-spec-fixes.txt` | DELETED |
-| `compose.yaml` | Keep temporarily; remove fynd service in P2 |
-| `docs/` | Partially kept; architecture diagrams reviewed; replaced with GetNear docs |
-| `scripts/` | `watchdog.sh` retained; EVM deployment scripts removed with EVM stack |
-
-## 7. Marketing Claims Removed
-
-- `$625,000/yr savings` claim: removed from README and all UI
-- `DISPLAY_MULTIPLIER = 1_000_000`: found in `packages/shared/src/constants.ts`, set to `1`
-- Live deployment links: removed
-
-## 8. Build Status Before Rebrand
-
-The baseline build requires: Node 20+, pnpm 9+, Foundry, Bun, Chainlink CRE CLI. The EVM stack (`contracts/`, `cre-workflows/`, `apps/privacy/`) has been deleted, so the previous build commands no longer apply. The remaining stack (apps/app, apps/oracle, apps/dev-ui, packages/shared) uses standard Node/pnpm and can be evaluated in P2 after removing EVM imports.
-
-## 9. P2 Gate Questions
-
-Before starting P2, confirm:
-
-1. **OS and shell**: Windows (confirmed); PowerShell.
-2. **Tooling installed**: Confirm Node 20+, pnpm 9+ are present. Rust + cargo, near-cli-rs, and Docker are needed for P7/P8.
-3. **Upstream commit**: The upstream import is tagged `pre-hackathon`.
-4. **License**: Created MIT LICENSE.
-5. **Deletion confirmation**: Confirm the following are acceptable to delete permanently from main: `contracts/`, `cre-workflows/`, `apps/privacy/`, all legacy PDFs, `.agents/`, `.claude/`, `skills-lock.json`, `tech-spec-fixes.txt`.
-6. **Reference branch**: Should the EVM/Solidity code be preserved on a separate reference branch, or is the `pre-hackathon` tag in git history sufficient?
-7. **Build**: Confirm whether the upstream ever built cleanly (run `pnpm install --ignore-scripts && pnpm build` with the full EVM stack). If it did not, record that in AUDIT.md instead of fixing it now.
-
+| Severity | Item | Recommendation |
+| :--- | :--- | :--- |
+| High | `FullAccess` keys remain on `fx-budget` and `chilliroger-agent.testnet` (see `docs/SECURITY.md`) | Remove before anything beyond a testnet demo |
+| Medium | Oracle and agent are long-running services; they cannot run on Vercel | Host on an always-on service (see `docs/DEPLOYMENT.md`) |
+| Medium | `apps/faucet/vercel.json` sets `Access-Control-Allow-Origin: *` on `/api/*` | Restrict to the dashboard origin |
+| Medium | The agent API serves read-only routes unauthenticated; only loopback by default | Keep it private; expose only through a proxy if the dashboard is hosted elsewhere |
+| Low | `/api/near/tx` and `/api/faucet` shell out to local `near-cli` (opt-in demo signer) | Keep `GETNEAR_DEMO_SIGNER` unset on public hosts |
+| Low | Retained input USDC has no withdrawal path; Pending escrow orders are not auto-expired | See `docs/TODO.md` |
+| Info | Space Mono / Google Fonts are fetched at build time; the Gridbox wordmark is an image because the font is licensed | Confirm the Gridbox licence covers logo use |

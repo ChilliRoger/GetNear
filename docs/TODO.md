@@ -36,6 +36,8 @@ Items noted during P0–P2 for later blocks.
 ## 2026-11-14 hardening pass
 - [x] Mainnet refused unless `ALLOW_MAINNET=1` (testnet-only claim restored; mainnet = roadmap).
 - [x] Agent: timing-score + adaptive TWAP gate (`AGENT_STRATEGY`), all orders paginated, async signing.
-- [x] Oracle: `/api/demo/speed`, case-insensitive status filter, validated config updates, read-only dashboard proxy.
+- [x] Oracle reduced to a read-only market recorder (simulated order engine, mock adapters and demo speed removed).
 - [x] Removed the 1,000,000x display inflation and the savings calculator.
 - [ ] UI redesign (clean fintech style).
+- [x] Pre-deployment audit (`docs/AUDIT.md`): CI green, legacy and mock code removed, `docs/DEPLOYMENT.md` added.
+- [ ] Deploy the dashboard with the Vercel CLI; host oracle and agent on an always-on service.
