@@ -470,9 +470,9 @@ export default function DashboardPage() {
       <div className="border border-border bg-surface p-3 text-xs ">
         <div className="flex items-center justify-between pb-2 mb-2 border-b border-border">
           <div className="flex items-center gap-2">
-            <span className="text-brand">┌─</span>
+            
             <span className="font-semibold text-foreground uppercase tracking-wider">
-              [ NEAR TESTNET FX TREASURY AGENT ]
+              NEAR testnet FX treasury agent
             </span>
           </div>
           <button

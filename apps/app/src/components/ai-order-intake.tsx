@@ -93,7 +93,7 @@ export function AiOrderIntake({ onApply }: AiOrderIntakeProps) {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 font-semibold text-foreground">
           <MessageSquareText className="h-3.5 w-3.5 text-info" />
-          <span>[ NATURAL-LANGUAGE ORDER INTAKE // NO AUTO-SIGN ]</span>
+          <span>Natural-language order intake · no auto-sign</span>
         </div>
 
         {status && (

@@ -70,7 +70,7 @@ export function WalletConnectButton() {
           className="flex items-center gap-1.5 border border-info bg-info/10 px-3 py-1.5 text-xs font-semibold text-info transition-colors hover:bg-info/20"
         >
           <Wallet className="h-3.5 w-3.5" />
-          <span>[ CONNECT WALLET ]</span>
+          <span>Connect wallet</span>
           <ChevronDown
             className={`h-3 w-3 transition-transform ${isOpen ? "rotate-180" : ""}`}
           />

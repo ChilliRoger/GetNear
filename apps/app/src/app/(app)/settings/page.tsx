@@ -56,7 +56,7 @@ export default function SettingsPage() {
       {/* Header */}
       <div>
         <h2 className="text-base font-bold uppercase tracking-wider text-foreground">
-          [ OPERATIONS &amp; SECURITY AUDIT // TESTNET ]
+          Operations &amp; security audit · testnet
         </h2>
         <p className="text-[11px] text-muted">
           Verifiable on-chain parameters, restricted agent keys, and multisig governance rules on NEAR testnet.

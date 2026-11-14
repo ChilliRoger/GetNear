@@ -141,7 +141,7 @@ export default function ApprovePage() {
                         : "border-border bg-background text-muted hover:text-foreground hover:border-zinc-700"
                     }`}
                   >
-                    <span>[ SEAT {idx + 1} ]</span>
+                    <span>Seat {idx + 1}</span>
                     {isCurrent && <span className="block text-[9px] text-brand">ACTIVE VOTER</span>}
                   </button>
                 );
@@ -233,7 +233,7 @@ export default function ApprovePage() {
                                 onClick={() => connect(acc)}
                                 className="flex-1 py-1.5 px-2 border border-info bg-info/10 text-info text-[11px] font-semibold hover:bg-info/20 transition-colors"
                               >
-                                [ VOTE AS COUNCIL {idx + 1} &rarr; ]
+                                Vote as council {idx + 1} &rarr;
                               </button>
                             ))}
                           </div>
@@ -250,17 +250,17 @@ export default function ApprovePage() {
                             className="flex-1 py-2 bg-brand text-background border border-brand font-bold hover:bg-brand/90 disabled:opacity-50 transition-colors text-xs"
                           >
                             {isProcessing
-                              ? "[ CASTING VOTE... ]"
+                              ? "Casting vote..."
                               : approveVotes === 1
-                              ? "[ 01 CAST 2ND APPROVAL VOTE (ACTIVATES ORDER) → ]"
-                              : "[ 01 CAST APPROVAL VOTE → ]"}
+                              ? "Cast 2nd approval vote (activates order) →"
+                              : "Cast approval vote →"}
                           </button>
                           <button
                             onClick={() => handleVote(p.id, "VoteReject")}
                             disabled={isProcessing}
                             className="py-2 px-4 bg-red-500/10 text-red-400 border border-red-500/30 font-bold hover:bg-red-500/20 disabled:opacity-50 transition-colors text-xs"
                           >
-                            [ REJECT ]
+                            Reject
                           </button>
                         </div>
                       )}

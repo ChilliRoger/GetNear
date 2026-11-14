@@ -429,7 +429,7 @@ export default function TradePage() {
             className="w-full flex items-center justify-center gap-2 border border-info bg-info/10 py-3 text-xs font-bold text-info hover:bg-info/20 transition-colors tracking-wider"
           >
             <PlusCircle className="h-4 w-4" />
-            <span>[ CONNECT TESTNET WALLET TO CREATE ORDER ]</span>
+            <span>Connect testnet wallet to create order</span>
           </button>
         ) : (
           <button
@@ -438,7 +438,7 @@ export default function TradePage() {
             className="w-full flex items-center justify-center gap-2 border border-brand bg-brand py-3 text-xs font-bold text-background hover:bg-brand/90 disabled:opacity-50 transition-colors tracking-wider"
           >
             <PlusCircle className="h-4 w-4" />
-            <span>{submitting ? "[ SIGNING & SUBMITTING TO NEAR TESTNET... ]" : "[ 01 SIGN & CREATE ORDER ON NEAR TESTNET → ]"}</span>
+            <span>{submitting ? "Signing & submitting to NEAR testnet..." : "Sign & create order on NEAR testnet →"}</span>
           </button>
         )}
       </form>

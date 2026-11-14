@@ -60,8 +60,8 @@ export function LiveQuoteCard() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-border/60 gap-2">
         <div>
           <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted">
-            <span className="text-brand">┌─</span>
-            <span>[ LIVE FX RATE DISCOVERY ]</span>
+            
+            <span>Live FX rate discovery</span>
           </div>
           <div className="text-sm font-semibold text-foreground mt-0.5 pl-3">
             USDC / EURe Market Quote vs ECB Reference

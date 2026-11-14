@@ -101,7 +101,7 @@ export function TokenBalanceCard({
             className="flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-semibold bg-brand hover:bg-brand/90 disabled:opacity-50 disabled:cursor-not-allowed text-background transition-colors"
           >
             <Droplets className="w-3.5 h-3.5" />
-            {isClaiming ? "Dispensing Demo USDC..." : "[ CLAIM 500 DEMO USDC ]"}
+            {isClaiming ? "Dispensing Demo USDC..." : "Claim 500 demo USDC"}
           </button>
         </div>
       </div>
