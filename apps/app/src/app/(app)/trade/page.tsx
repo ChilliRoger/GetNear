@@ -233,7 +233,7 @@ export default function TradePage() {
               </div>
               <div className="text-right">
                 <div className="text-[10px] text-muted uppercase tracking-wider">Rate Reference</div>
-                <div className="font-mono text-xs text-accent-blue">1Click Dry-Quote + ECB</div>
+                <div className="text-xs text-accent-blue">1Click Dry-Quote + ECB</div>
               </div>
             </div>
 
@@ -241,14 +241,14 @@ export default function TradePage() {
             <div>
               <div className="flex justify-between items-center mb-1">
                 <label className="text-[11px] font-medium text-foreground">Total Input Amount (USDC)</label>
-                <span className="text-[10px] text-muted font-mono">Auto-Cap: {autoCapUsdc.toFixed(2)} USDC</span>
+                <span className="text-[10px] text-muted ">Auto-Cap: {autoCapUsdc.toFixed(2)} USDC</span>
               </div>
               <input
                 type="number"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 required
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm text-foreground focus:border-accent-blue focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-accent-blue focus:outline-none"
                 placeholder="50"
               />
             </div>
@@ -260,7 +260,7 @@ export default function TradePage() {
                   key={preset}
                   type="button"
                   onClick={() => setAmount(preset)}
-                  className={`py-1 rounded border text-xs font-mono transition-colors ${
+                  className={`py-1 rounded border text-xs transition-colors ${
                     amount === preset
                       ? "border-accent-blue bg-accent-blue/15 text-accent-blue font-bold"
                       : "border-border bg-surface text-muted hover:text-foreground"
@@ -299,13 +299,13 @@ export default function TradePage() {
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <label className="text-[11px] text-muted block">Max Chunk Size (USDC)</label>
-                  <span className="text-[10px] text-muted font-mono">Limit: ${maxChunkLimitUsdc} USDC</span>
+                  <span className="text-[10px] text-muted ">Limit: ${maxChunkLimitUsdc} USDC</span>
                 </div>
                 <input
                   type="number"
                   value={maxChunk}
                   onChange={(e) => setMaxChunk(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                  className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
                   placeholder="20"
                 />
               </div>
@@ -315,7 +315,7 @@ export default function TradePage() {
                   type="number"
                   value={maxDevBps}
                   onChange={(e) => setMaxDevBps(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                  className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
                   placeholder="120"
                 />
               </div>
@@ -330,7 +330,7 @@ export default function TradePage() {
                     key={h}
                     type="button"
                     onClick={() => setDeadlineHours(h)}
-                    className={`py-1 rounded border text-xs font-mono transition-colors ${
+                    className={`py-1 rounded border text-xs transition-colors ${
                       deadlineHours === h
                         ? "border-accent-blue bg-accent-blue/15 text-accent-blue font-bold"
                         : "border-border bg-surface text-muted hover:text-foreground"
@@ -354,7 +354,7 @@ export default function TradePage() {
                     type="text"
                     value={recipientAccount}
                     onChange={(e) => setRecipientAccount(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                    className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
                     placeholder={accountId || "supplier.testnet"}
                   />
                 </div>
@@ -364,7 +364,7 @@ export default function TradePage() {
                     type="number"
                     value={targetEure}
                     onChange={(e) => setTargetEure(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                    className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
                     placeholder="1000"
                   />
                 </div>
@@ -375,7 +375,7 @@ export default function TradePage() {
                   type="text"
                   value={invoiceRef}
                   onChange={(e) => setInvoiceRef(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                  className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
                   placeholder="INV-2026-001"
                 />
               </div>
@@ -392,7 +392,7 @@ export default function TradePage() {
                 <div className="font-medium text-foreground">
                   Lock Real Circle Native USDC Escrow (ft_transfer_call)
                 </div>
-                <div className="text-[10px] font-mono text-muted">
+                <div className="text-[10px] text-muted">
                   Connected balance: {userCircleUsdc.toFixed(2)} Circle USDC (auto-refunds unspent balance on cancel/expiry)
                 </div>
               </div>
@@ -407,15 +407,15 @@ export default function TradePage() {
               <div className="text-[11px] text-muted">
                 {fundWithCircleEscrow ? "Circle USDC Escrow Input" : "FX Budget Input (Simulated Swap)"}
               </div>
-              <div className="font-mono text-sm font-semibold text-foreground">{numAmount} USDC</div>
+              <div className="text-sm font-semibold text-foreground">{numAmount} USDC</div>
             </div>
             <div>
               <div className="text-[11px] text-muted">Est. On-Chain Payout (EURe)</div>
-              <div className="font-mono text-sm font-semibold text-green-400">
+              <div className="text-sm font-semibold text-green-400">
                 {quoteLoading ? "Fetching quote..." : `~${estimatedOut} EURe`}
               </div>
             </div>
-            <div className="col-span-2 text-[10px] text-muted font-mono pt-1 border-t border-border flex justify-between">
+            <div className="col-span-2 text-[10px] text-muted pt-1 border-t border-border flex justify-between">
               <span>Indicative Quote Rate: {quoteRate ? quoteRate.toFixed(4) : "—"}</span>
               <span>ECB Ref Rate: {refRate ? refRate.toFixed(4) : "—"}</span>
             </div>
@@ -426,7 +426,7 @@ export default function TradePage() {
           <button
             type="button"
             onClick={() => connect()}
-            className="w-full flex items-center justify-center gap-2 border border-[#38bdf8] bg-[#38bdf8]/10 py-3 text-xs font-bold text-[#38bdf8] hover:bg-[#38bdf8]/20 transition-colors tracking-wider"
+            className="w-full flex items-center justify-center gap-2 border border-info bg-info/10 py-3 text-xs font-bold text-info hover:bg-info/20 transition-colors tracking-wider"
           >
             <PlusCircle className="h-4 w-4" />
             <span>[ CONNECT TESTNET WALLET TO CREATE ORDER ]</span>
@@ -435,7 +435,7 @@ export default function TradePage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full flex items-center justify-center gap-2 border border-[#00ec97] bg-[#00ec97] py-3 text-xs font-bold text-[#090a0f] hover:bg-[#00ec97]/90 disabled:opacity-50 transition-colors tracking-wider"
+            className="w-full flex items-center justify-center gap-2 border border-brand bg-brand py-3 text-xs font-bold text-background hover:bg-brand/90 disabled:opacity-50 transition-colors tracking-wider"
           >
             <PlusCircle className="h-4 w-4" />
             <span>{submitting ? "[ SIGNING & SUBMITTING TO NEAR TESTNET... ]" : "[ 01 SIGN & CREATE ORDER ON NEAR TESTNET → ]"}</span>

@@ -77,7 +77,7 @@ export function DemoClock() {
         </svg>
       )}
       <span
-        className={`font-mono text-xs ${
+        className={`text-xs ${
           is10x ? "text-accent-green" : "text-muted"
         }`}
       >

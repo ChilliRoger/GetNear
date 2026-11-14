@@ -467,10 +467,10 @@ export default function DashboardPage() {
   return (
     <div className="space-y-4">
       {/* 1. Terminal System Status & Security Bar */}
-      <div className="border border-border bg-surface p-3 text-xs font-mono">
+      <div className="border border-border bg-surface p-3 text-xs ">
         <div className="flex items-center justify-between pb-2 mb-2 border-b border-border">
           <div className="flex items-center gap-2">
-            <span className="text-[#00ec97]">┌─</span>
+            <span className="text-brand">┌─</span>
             <span className="font-semibold text-foreground uppercase tracking-wider">
               [ NEAR TESTNET FX TREASURY AGENT ]
             </span>
@@ -481,7 +481,7 @@ export default function DashboardPage() {
               loadData();
             }}
             disabled={refreshing}
-            className="flex items-center gap-1 text-muted hover:text-[#00ec97] text-[11px] transition-colors"
+            className="flex items-center gap-1 text-muted hover:text-brand text-[11px] transition-colors"
           >
             <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
             <span>[REFRESH]</span>
@@ -495,7 +495,7 @@ export default function DashboardPage() {
               href={explorerAccountUrl(contractId)}
               target="_blank"
               rel="noreferrer"
-              className="text-[#38bdf8] hover:underline inline-flex items-center gap-0.5"
+              className="text-info hover:underline inline-flex items-center gap-0.5"
             >
               <span>{contractId.slice(0, 16)}...</span>
               <ExternalLink className="h-2.5 w-2.5" />
@@ -507,7 +507,7 @@ export default function DashboardPage() {
               href={explorerAccountUrl(daoId)}
               target="_blank"
               rel="noreferrer"
-              className="text-[#38bdf8] hover:underline inline-flex items-center gap-0.5"
+              className="text-info hover:underline inline-flex items-center gap-0.5"
             >
               <span>{daoId.slice(0, 16)}...</span>
               <ExternalLink className="h-2.5 w-2.5" />
@@ -519,7 +519,7 @@ export default function DashboardPage() {
           </div>
           <div>
             <span className="text-muted">Max Chunk: </span>
-            <span className="font-medium text-[#00ec97]">{maxChunkLimitUsdc.toFixed(2)} USDC</span>
+            <span className="font-medium text-brand">{maxChunkLimitUsdc.toFixed(2)} USDC</span>
           </div>
         </div>
       </div>
@@ -615,20 +615,20 @@ export default function DashboardPage() {
                 type="number"
                 value={orderAmount}
                 onChange={(e) => setOrderAmount(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
                 placeholder="50"
               />
             </div>
             <div>
               <div className="flex justify-between items-center mb-1">
                 <label className="text-[11px] text-muted block">Max Chunk (USDC)</label>
-                <span className="text-[10px] text-muted font-mono">Limit: ${maxChunkLimitUsdc}</span>
+                <span className="text-[10px] text-muted ">Limit: ${maxChunkLimitUsdc}</span>
               </div>
               <input
                 type="number"
                 value={maxChunk}
                 onChange={(e) => setMaxChunk(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
                 placeholder="20"
               />
             </div>
@@ -638,7 +638,7 @@ export default function DashboardPage() {
                 type="number"
                 value={maxDevBps}
                 onChange={(e) => setMaxDevBps(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
                 placeholder="120"
               />
             </div>
@@ -648,7 +648,7 @@ export default function DashboardPage() {
                 type="number"
                 value={deadlineHours}
                 onChange={(e) => setDeadlineHours(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
                 placeholder="4"
               />
             </div>
@@ -666,7 +666,7 @@ export default function DashboardPage() {
                   type="text"
                   value={recipientAccount}
                   onChange={(e) => setRecipientAccount(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                  className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
                   placeholder={accountId || "supplier.testnet"}
                 />
               </div>
@@ -676,7 +676,7 @@ export default function DashboardPage() {
                   type="number"
                   value={targetEure}
                   onChange={(e) => setTargetEure(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                  className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
                   placeholder="1000"
                 />
               </div>
@@ -687,7 +687,7 @@ export default function DashboardPage() {
                 type="text"
                 value={invoiceRef}
                 onChange={(e) => setInvoiceRef(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
                 placeholder="INV-2026-001"
               />
             </div>
@@ -705,7 +705,7 @@ export default function DashboardPage() {
               <div className="font-medium text-foreground">
                 Lock Real Circle Native USDC Escrow (ft_transfer_call)
               </div>
-              <div className="text-[10px] font-mono text-muted">
+              <div className="text-[10px] text-muted">
                 Wallet Circle USDC balance: {tokens.userUsdc.toFixed(2)} USDC (refunds unspent USDC on cancel/expiry)
               </div>
             </div>
@@ -725,7 +725,7 @@ export default function DashboardPage() {
                 {isAboveCap ? "Requires Sputnik DAO Approval" : "Auto-Active Order"}
               </span>
             </div>
-            <span className="text-[10px] font-mono opacity-80">
+            <span className="text-[10px] opacity-80">
               {isAboveCap ? `> $${autoCapUsdc} Auto-Cap` : `<= $${autoCapUsdc} Auto-Cap`}
             </span>
           </div>
@@ -786,13 +786,13 @@ export default function DashboardPage() {
                   : "bg-zinc-800 text-zinc-400";
 
               return (
-                <div key={o.id} className="border border-border bg-[#090a0f] p-3 text-xs font-mono">
+                <div key={o.id} className="border border-border bg-background p-3 text-xs ">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-foreground">ORDER #{o.id}</span>
                       <span className="text-[11px] text-muted">{o.pair_label}</span>
                       {o.invoice_ref && (
-                        <span className="border border-border bg-[#11131b] px-1.5 py-0.5 text-[10px] text-zinc-300">
+                        <span className="border border-border bg-surface-2 px-1.5 py-0.5 text-[10px] text-zinc-300">
                           {o.invoice_ref}
                         </span>
                       )}
@@ -801,10 +801,10 @@ export default function DashboardPage() {
                       data-testid={`order-${o.id}-status`}
                       className={`border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
                         display.kind === "paid" || isActive
-                          ? "border-[#00ec97] bg-[#00ec97]/10 text-[#00ec97]"
+                          ? "border-brand bg-brand/10 text-brand"
                           : isPending || display.kind === "pending_approval"
                           ? "border-amber-400 bg-amber-400/10 text-amber-400"
-                          : "border-border bg-[#11131b] text-muted"
+                          : "border-border bg-surface-2 text-muted"
                       }`}
                     >
                       [{display.label}]
@@ -813,7 +813,7 @@ export default function DashboardPage() {
 
                   {/* Callback-Confirmed Invoice Balance Panel */}
                   {targetOutEur > 0 && (
-                    <div className="mb-2.5 border border-border bg-[#11131b] p-2 space-y-1.5">
+                    <div className="mb-2.5 border border-border bg-surface-2 p-2 space-y-1.5">
                       <div className="flex items-center justify-between text-[10px] text-muted">
                         <span>
                           Supplier:{" "}
@@ -828,7 +828,7 @@ export default function DashboardPage() {
                         </div>
                         <div>
                           <div className="text-[10px] text-muted">Confirmed Paid</div>
-                          <div className="font-semibold text-[#00ec97]">{settledOutEur.toFixed(2)} EURe</div>
+                          <div className="font-semibold text-brand">{settledOutEur.toFixed(2)} EURe</div>
                         </div>
                         <div>
                           <div className="text-[10px] text-muted">Amount Due</div>
@@ -836,7 +836,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       {pendingOutEur > 0 && (
-                        <div className="text-[10px] text-[#38bdf8]">
+                        <div className="text-[10px] text-info">
                           In-Flight Settlement Callback: {pendingOutEur.toFixed(2)} EURe
                         </div>
                       )}
@@ -854,7 +854,7 @@ export default function DashboardPage() {
                     <div className="h-1.5 w-full bg-[#181b26] overflow-hidden">
                       <div
                         className={`h-full transition-all duration-300 ${
-                          pct === 100 ? "bg-[#00ec97]" : "bg-[#38bdf8]"
+                          pct === 100 ? "bg-brand" : "bg-info"
                         }`}
                         style={{ width: `${pct}%` }}
                       />
@@ -877,7 +877,7 @@ export default function DashboardPage() {
                       remainingEscrow > 0 &&
                       (o.status === "Completed" || o.status === "Cancelled" || o.status === "Expired");
                     return (
-                      <div className="mt-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-1.5 text-[10px] font-mono text-blue-300 flex items-center justify-between gap-2">
+                      <div className="mt-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-1.5 text-[10px] text-blue-300 flex items-center justify-between gap-2">
                         <span>
                           Circle USDC Escrow: {escrowed.toFixed(2)} funded | {remainingEscrow.toFixed(2)} locked | {refunded.toFixed(2)} refunded
                         </span>
@@ -897,7 +897,7 @@ export default function DashboardPage() {
 
                   {/* Closed-but-unpaid notice: the amount due stays visible until it reaches zero */}
                   {(o.status === "Expired" || o.status === "Cancelled" || o.status === "Completed") && (
-                    <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-mono text-amber-300">
+                    <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-300">
                       {display.showDue
                         ? o.status === "Completed"
                           ? `Budget exhausted - ${formatEure(display.dueAtomic)} still due to ${o.recipient || o.requester}. The USDC budget is used up; this invoice is NOT paid in full.`
@@ -926,7 +926,7 @@ export default function DashboardPage() {
                             ? "bg-accent-blue/15 text-accent-blue"
                             : "bg-red-500/15 text-red-400";
                         return (
-                          <div key={c.key} className="rounded border border-border/70 bg-surface px-2 py-1 text-[10px] font-mono">
+                          <div key={c.key} className="rounded border border-border/70 bg-surface px-2 py-1 text-[10px] ">
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-zinc-300 truncate">{c.key}</span>
                               <div className="flex items-center gap-1.5 shrink-0">
@@ -968,7 +968,7 @@ export default function DashboardPage() {
                                 Requires Sputnik DAO 2-of-3 Approval
                               </span>
                               {relatedProp && (
-                                <span className="text-[10px] font-mono text-zinc-300">
+                                <span className="text-[10px] text-zinc-300">
                                   Proposal #{relatedProp.id}: {relatedProp.status} ({approveVotes}/2 votes)
                                 </span>
                               )}
@@ -996,7 +996,7 @@ export default function DashboardPage() {
                                         <button
                                           key={acc}
                                           onClick={() => connect(acc)}
-                                          className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold transition-colors border ${
+                                          className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors border ${
                                             isCurrent
                                               ? "bg-accent-blue/20 border-accent-blue text-accent-blue"
                                               : hasVotedThis
@@ -1032,7 +1032,7 @@ export default function DashboardPage() {
                                         <button
                                           key={acc}
                                           onClick={() => connect(acc)}
-                                          className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/30 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors font-mono"
+                                          className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/30 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors "
                                         >
                                           Switch to Council {idx + 1} &rarr;
                                         </button>
@@ -1043,7 +1043,7 @@ export default function DashboardPage() {
                                   <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-2 space-y-1.5">
                                     <div className="text-xs text-green-400 font-medium flex items-center justify-between">
                                       <span>Council {councilAccounts.indexOf(accountId) + 1} voted Approve ✓</span>
-                                      <span className="text-[10px] text-muted font-mono">{approveVotes}/2 votes</span>
+                                      <span className="text-[10px] text-muted ">{approveVotes}/2 votes</span>
                                     </div>
                                     <div className="text-[11px] text-zinc-300">
                                       Switch to the next Council member to cast the 2nd approval vote:
@@ -1057,7 +1057,7 @@ export default function DashboardPage() {
                                             <button
                                               key={acc}
                                               onClick={() => connect(acc)}
-                                              className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/40 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors font-mono"
+                                              className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/40 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors "
                                             >
                                               Switch to Council {idx + 1} & Vote &rarr;
                                             </button>
@@ -1111,14 +1111,14 @@ export default function DashboardPage() {
         subtitle="2-of-3 multisig votes required for orders above $100 auto-cap"
       >
         <div className="mb-3 pb-2 border-b border-border flex items-center justify-between text-xs">
-          <span className="text-muted">Active Signer: <strong className="text-accent-blue font-mono">{accountId}</strong></span>
+          <span className="text-muted">Active Signer: <strong className="text-accent-blue ">{accountId}</strong></span>
           <div className="flex items-center gap-1">
             <span className="text-[11px] text-muted mr-1">Switch:</span>
             {councilAccounts.map((acc, idx) => (
               <button
                 key={acc}
                 onClick={() => connect(acc)}
-                className={`px-1.5 py-0.5 rounded text-[10px] font-mono border ${
+                className={`px-1.5 py-0.5 rounded text-[10px] border ${
                   acc === accountId
                     ? "bg-accent-blue/20 border-accent-blue text-accent-blue font-bold"
                     : "bg-surface border-border text-muted hover:text-foreground"
@@ -1151,7 +1151,7 @@ export default function DashboardPage() {
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">
                         <Vote className="h-3.5 w-3.5 text-accent-blue" />
-                        <span className="font-mono font-semibold text-foreground">Proposal #{p.id}</span>
+                        <span className="font-semibold text-foreground">Proposal #{p.id}</span>
                       </div>
                       <span
                         className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
@@ -1162,7 +1162,7 @@ export default function DashboardPage() {
                       </span>
                     </div>
 
-                    <p className="text-[11px] text-muted mb-2 font-mono break-all">{p.description}</p>
+                    <p className="text-[11px] text-muted mb-2 break-all">{p.description}</p>
 
                     <div className="text-[10px] text-muted mb-2">
                       Votes cast:{" "}
@@ -1170,7 +1170,7 @@ export default function DashboardPage() {
                         <span>None yet</span>
                       ) : (
                         Object.entries(p.votes).map(([voter, vote]) => (
-                          <span key={voter} className="inline-block mr-2 text-foreground font-mono">
+                          <span key={voter} className="inline-block mr-2 text-foreground ">
                             {voter.slice(0, 15)}... ({vote})
                           </span>
                         ))
@@ -1200,7 +1200,7 @@ export default function DashboardPage() {
                                 <button
                                   key={acc}
                                   onClick={() => connect(acc)}
-                                  className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/30 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors font-mono"
+                                  className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/30 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors "
                                 >
                                   Switch to Council {idx + 1} &rarr;
                                 </button>
@@ -1211,7 +1211,7 @@ export default function DashboardPage() {
                           <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-2 space-y-1.5">
                             <div className="text-xs text-green-400 font-medium flex items-center justify-between">
                               <span>Council {councilAccounts.indexOf(accountId) + 1} voted Approve ✓</span>
-                              <span className="text-[10px] text-muted font-mono">{approveVotes}/2 votes</span>
+                              <span className="text-[10px] text-muted ">{approveVotes}/2 votes</span>
                             </div>
                             <div className="text-[11px] text-zinc-300">
                               Switch to the next Council member to cast the 2nd approval vote:
@@ -1225,7 +1225,7 @@ export default function DashboardPage() {
                                     <button
                                       key={acc}
                                       onClick={() => connect(acc)}
-                                      className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/40 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors font-mono"
+                                      className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/40 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors "
                                     >
                                       Switch to Council {idx + 1} & Vote &rarr;
                                     </button>
@@ -1374,7 +1374,7 @@ export default function DashboardPage() {
                             target="_blank"
                             rel="noreferrer"
                             title="Parent execute_chunk transaction. Its receipt tree contains the EURe ft_transfer and the on_chunk_settled callback."
-                            className="flex items-center gap-1 text-[11px] font-mono text-accent-blue hover:underline"
+                            className="flex items-center gap-1 text-[11px] text-accent-blue hover:underline"
                           >
                             <span>execute_chunk tx (parent · includes EURe transfer receipt)</span>
                             <ExternalLink className="h-3 w-3" />
@@ -1384,7 +1384,7 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Three explicitly separated provenance facts */}
-                    <div className="grid grid-cols-1 gap-0.5 text-[10px] font-mono text-zinc-400 pl-2 border-l border-border">
+                    <div className="grid grid-cols-1 gap-0.5 text-[10px] text-zinc-400 pl-2 border-l border-border">
                       <div>
                         <span className="text-zinc-500">1. Live 1Click dry quote (indicative, not executed): </span>
                         <span className="text-zinc-300">{f.quote_ref}</span>
@@ -1413,7 +1413,7 @@ export default function DashboardPage() {
                     </div>
 
                     {f.failure_reason && (
-                      <div className="text-[10px] text-red-400 font-mono truncate">
+                      <div className="text-[10px] text-red-400 truncate">
                         {f.failure_reason}
                       </div>
                     )}
@@ -1434,7 +1434,7 @@ export default function DashboardPage() {
               {decisions.slice(0, 4).map((d) => (
                 <div
                   key={d.id}
-                  className="flex items-center justify-between text-[11px] font-mono text-zinc-400 py-0.5 gap-2"
+                  className="flex items-center justify-between text-[11px] text-zinc-400 py-0.5 gap-2"
                 >
                   <span
                     className={

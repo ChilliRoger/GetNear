@@ -53,7 +53,7 @@ export function Toast({
           href={item.explorerUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1 text-xs underline font-mono opacity-80 hover:opacity-100"
+          className="flex items-center gap-1 text-xs underline opacity-80 hover:opacity-100"
         >
           <span>Explorer</span>
           <ExternalLink className="h-3 w-3" />

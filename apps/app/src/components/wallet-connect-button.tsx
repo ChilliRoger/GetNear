@@ -64,10 +64,10 @@ export function WalletConnectButton() {
   // ──────────────── DISCONNECTED STATE ────────────────
   if (!isConnected || !accountId) {
     return (
-      <div className="relative font-mono" ref={dropdownRef}>
+      <div className="relative " ref={dropdownRef}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-1.5 border border-[#38bdf8] bg-[#38bdf8]/10 px-3 py-1.5 text-xs font-semibold text-[#38bdf8] transition-colors hover:bg-[#38bdf8]/20"
+          className="flex items-center gap-1.5 border border-info bg-info/10 px-3 py-1.5 text-xs font-semibold text-info transition-colors hover:bg-info/20"
         >
           <Wallet className="h-3.5 w-3.5" />
           <span>[ CONNECT WALLET ]</span>
@@ -133,7 +133,7 @@ export function WalletConnectButton() {
 
                 <div className="rounded-lg border border-border bg-background/60 p-2 text-[10px] space-y-1 text-muted">
                   <div className="font-semibold text-zinc-300">Supported Wallets:</div>
-                  <div className="grid grid-cols-2 gap-1 text-[11px] font-mono text-zinc-400">
+                  <div className="grid grid-cols-2 gap-1 text-[11px] text-zinc-400">
                     <div>• Meteor Wallet</div>
                     <div>• Here Wallet</div>
                     <div>• MyNearWallet</div>
@@ -171,7 +171,7 @@ export function WalletConnectButton() {
                         className="flex w-full items-start justify-between rounded-lg p-2 text-left text-xs border border-border bg-background hover:bg-surface-hover hover:border-zinc-700 transition-colors"
                       >
                         <div>
-                          <div className="font-mono text-[11px] font-semibold text-foreground">
+                          <div className="text-[11px] font-semibold text-foreground">
                             {acc}
                           </div>
                           <div className="text-[10px] text-muted">{roleLabel}</div>
@@ -196,18 +196,18 @@ export function WalletConnectButton() {
     accountId.length > 20 ? `${accountId.slice(0, 16)}...` : accountId;
 
   return (
-    <div className="relative font-mono" ref={dropdownRef}>
+    <div className="relative " ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-[#00ec97]"
+        className="flex items-center gap-2 border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-brand"
       >
-        <span className="h-1.5 w-1.5 bg-[#00ec97]" />
-        <span className="border border-border bg-[#090a0f] px-1 py-0.5 text-[9px] uppercase text-muted">
+        <span className="h-1.5 w-1.5 bg-brand" />
+        <span className="border border-border bg-background px-1 py-0.5 text-[9px] uppercase text-muted">
           {getWalletBadge()}
         </span>
         <span className="text-[11px] font-semibold text-foreground">{shortName}</span>
         {balance && (
-          <span className="text-[10px] text-[#00ec97]">({balance})</span>
+          <span className="text-[10px] text-brand">({balance})</span>
         )}
         <ChevronDown
           className={`h-3 w-3 text-muted transition-transform ${isOpen ? "rotate-180" : ""}`}
@@ -220,9 +220,9 @@ export function WalletConnectButton() {
           <div className="mb-2.5 pb-2.5 border-b border-border">
             <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted font-medium">
               <span>Connected Account</span>
-              <span className="font-mono text-accent-green">{getWalletBadge()}</span>
+              <span className="text-accent-green">{getWalletBadge()}</span>
             </div>
-            <div className="mt-1 font-mono text-xs font-semibold text-foreground break-all">
+            <div className="mt-1 text-xs font-semibold text-foreground break-all">
               {accountId}
             </div>
             {balance && (
@@ -275,7 +275,7 @@ export function WalletConnectButton() {
                           : "text-muted hover:bg-surface-hover hover:text-foreground"
                       }`}
                     >
-                      <span className="font-mono text-[11px] truncate">{acc}</span>
+                      <span className="text-[11px] truncate">{acc}</span>
                       {acc === accountId && <Check className="h-3 w-3 text-accent-blue" />}
                     </button>
                   ))}

@@ -91,7 +91,7 @@ export default function ApprovePage() {
   const isCouncil = Boolean(accountId && councilAccounts.includes(accountId));
 
   return (
-    <div className="space-y-4 font-mono">
+    <div className="space-y-4 ">
       {/* 1. Header & Council Switcher */}
       <Card
         title="SPUTNIK DAO MULTISIG GOVERNANCE (2-OF-3)"
@@ -105,7 +105,7 @@ export default function ApprovePage() {
                 href={explorerAccountUrl(daoId)}
                 target="_blank"
                 rel="noreferrer"
-                className="text-[#38bdf8] hover:underline inline-flex items-center gap-0.5"
+                className="text-info hover:underline inline-flex items-center gap-0.5"
               >
                 <span>{daoId}</span>
                 <ExternalLink className="h-2.5 w-2.5" />
@@ -117,7 +117,7 @@ export default function ApprovePage() {
                 loadProposals();
               }}
               disabled={refreshing}
-              className="flex items-center gap-1 text-muted hover:text-[#00ec97] text-[11px] transition-colors"
+              className="flex items-center gap-1 text-muted hover:text-brand text-[11px] transition-colors"
             >
               <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
               <span>[REFRESH]</span>
@@ -137,12 +137,12 @@ export default function ApprovePage() {
                     onClick={() => connect(acc)}
                     className={`py-1.5 px-2 text-center text-xs font-semibold transition-colors border ${
                       isCurrent
-                        ? "border-[#00ec97] bg-[#00ec97]/15 text-[#00ec97]"
-                        : "border-border bg-[#090a0f] text-muted hover:text-foreground hover:border-zinc-700"
+                        ? "border-brand bg-brand/15 text-brand"
+                        : "border-border bg-background text-muted hover:text-foreground hover:border-zinc-700"
                     }`}
                   >
                     <span>[ SEAT {idx + 1} ]</span>
-                    {isCurrent && <span className="block text-[9px] text-[#00ec97]">ACTIVE VOTER</span>}
+                    {isCurrent && <span className="block text-[9px] text-brand">ACTIVE VOTER</span>}
                   </button>
                 );
               })}
@@ -175,16 +175,16 @@ export default function ApprovePage() {
                 const hasVoted = accountId ? p.votes[accountId] : undefined;
 
               return (
-                <div key={p.id} className="border border-border bg-[#090a0f] p-3 text-xs font-mono">
+                <div key={p.id} className="border border-border bg-background p-3 text-xs ">
                   <div className="flex items-center justify-between mb-2 pb-2 border-b border-border/60">
                     <div className="flex items-center gap-1.5">
-                      <ShieldCheck className="h-4 w-4 text-[#38bdf8]" />
+                      <ShieldCheck className="h-4 w-4 text-info" />
                       <span className="font-bold text-foreground">PROPOSAL #{p.id}</span>
                     </div>
                     <span
                       className={`border px-2 py-0.5 text-[10px] font-semibold uppercase ${
                         isApproved
-                          ? "border-[#00ec97] bg-[#00ec97]/10 text-[#00ec97]"
+                          ? "border-brand bg-brand/10 text-brand"
                           : "border-amber-400 bg-amber-400/10 text-amber-400"
                       }`}
                     >
@@ -207,7 +207,7 @@ export default function ApprovePage() {
                             key={voter}
                             className={`border px-1.5 py-0.5 text-[10px] ${
                               v === "Approve"
-                                ? "border-[#00ec97] text-[#00ec97] bg-[#00ec97]/10"
+                                ? "border-brand text-brand bg-brand/10"
                                 : "border-red-400 text-red-400 bg-red-400/10"
                             }`}
                           >
@@ -231,7 +231,7 @@ export default function ApprovePage() {
                               <button
                                 key={acc}
                                 onClick={() => connect(acc)}
-                                className="flex-1 py-1.5 px-2 border border-[#38bdf8] bg-[#38bdf8]/10 text-[#38bdf8] text-[11px] font-semibold hover:bg-[#38bdf8]/20 transition-colors"
+                                className="flex-1 py-1.5 px-2 border border-info bg-info/10 text-info text-[11px] font-semibold hover:bg-info/20 transition-colors"
                               >
                                 [ VOTE AS COUNCIL {idx + 1} &rarr; ]
                               </button>
@@ -239,7 +239,7 @@ export default function ApprovePage() {
                           </div>
                         </div>
                       ) : hasVoted ? (
-                        <div className="text-[11px] text-[#00ec97] font-semibold">
+                        <div className="text-[11px] text-brand font-semibold">
                           [✓] You already voted &quot;{hasVoted}&quot; on this proposal with {accountId}.
                         </div>
                       ) : (
@@ -247,7 +247,7 @@ export default function ApprovePage() {
                           <button
                             onClick={() => handleVote(p.id, "VoteApprove")}
                             disabled={isProcessing}
-                            className="flex-1 py-2 bg-[#00ec97] text-[#090a0f] border border-[#00ec97] font-bold hover:bg-[#00ec97]/90 disabled:opacity-50 transition-colors text-xs"
+                            className="flex-1 py-2 bg-brand text-background border border-brand font-bold hover:bg-brand/90 disabled:opacity-50 transition-colors text-xs"
                           >
                             {isProcessing
                               ? "[ CASTING VOTE... ]"
@@ -268,7 +268,7 @@ export default function ApprovePage() {
                   )}
 
                   {isApproved && (
-                    <div className="pt-2 border-t border-border text-[11px] text-[#00ec97] font-semibold flex items-center gap-1.5">
+                    <div className="pt-2 border-t border-border text-[11px] text-brand font-semibold flex items-center gap-1.5">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       <span>SPUTNIK DAO APPROVED // ORDER ACTIVATED ON FXBUDGET CONTRACT</span>
                     </div>

@@ -56,11 +56,11 @@ export function LiveQuoteCard() {
   }, [amount]);
 
   return (
-    <div className="border border-border bg-surface p-4 text-foreground font-mono">
+    <div className="border border-border bg-surface p-4 text-foreground ">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-border/60 gap-2">
         <div>
           <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted">
-            <span className="text-[#00ec97]">┌─</span>
+            <span className="text-brand">┌─</span>
             <span>[ LIVE FX RATE DISCOVERY ]</span>
           </div>
           <div className="text-sm font-semibold text-foreground mt-0.5 pl-3">
@@ -68,7 +68,7 @@ export function LiveQuoteCard() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center bg-[#090a0f] p-0.5 border border-border text-xs">
+          <div className="flex items-center bg-background p-0.5 border border-border text-xs">
             {[10, 50, 100].map((val) => (
               <button
                 key={val}
@@ -76,7 +76,7 @@ export function LiveQuoteCard() {
                 onClick={() => setAmount(val)}
                 className={`px-2 py-0.5 text-[11px] transition-colors ${
                   amount === val
-                    ? "bg-[#00ec97] text-[#090a0f] font-bold"
+                    ? "bg-brand text-background font-bold"
                     : "text-muted hover:text-foreground"
                 }`}
               >
@@ -84,13 +84,13 @@ export function LiveQuoteCard() {
               </button>
             ))}
           </div>
-          <span className="text-[10px] uppercase px-1.5 py-0.5 border border-border bg-[#090a0f] text-muted">
+          <span className="text-[10px] uppercase px-1.5 py-0.5 border border-border bg-background text-muted">
             DRY QUOTE
           </span>
           <button
             onClick={() => fetchQuote(amount)}
             disabled={loading}
-            className="text-[11px] px-2.5 py-0.5 border border-border bg-surface hover:border-[#00ec97] hover:text-[#00ec97] transition-colors disabled:opacity-50"
+            className="text-[11px] px-2.5 py-0.5 border border-border bg-surface hover:border-brand hover:text-brand transition-colors disabled:opacity-50"
           >
             {loading ? "[...]" : "[REFRESH]"}
           </button>
@@ -108,7 +108,7 @@ export function LiveQuoteCard() {
       ) : (
         <div className="mt-3 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <div className="p-2.5 bg-[#090a0f] border border-border">
+            <div className="p-2.5 bg-background border border-border">
               <div className="text-[10px] font-semibold text-muted uppercase tracking-wider">
                 1CLICK DRY QUOTE
               </div>
@@ -120,7 +120,7 @@ export function LiveQuoteCard() {
               </div>
             </div>
 
-            <div className="p-2.5 bg-[#090a0f] border border-border">
+            <div className="p-2.5 bg-background border border-border">
               <div className="text-[10px] font-semibold text-muted uppercase tracking-wider">
                 ECB OFFICIAL REF
               </div>
@@ -132,14 +132,14 @@ export function LiveQuoteCard() {
               </div>
             </div>
 
-            <div className="p-2.5 bg-[#090a0f] border border-border">
+            <div className="p-2.5 bg-background border border-border">
               <div className="text-[10px] font-semibold text-muted uppercase tracking-wider">
                 SPREAD DEVIATION
               </div>
               <div
                 className={`text-lg font-bold mt-1 ${
                   Math.abs(data.deviationBps) <= 50
-                    ? "text-[#00ec97]"
+                    ? "text-brand"
                     : Math.abs(data.deviationBps) <= 120
                     ? "text-amber-400"
                     : "text-red-400"
@@ -160,7 +160,7 @@ export function LiveQuoteCard() {
               <span className="font-semibold text-foreground">${amount}.00 USDC</span>
               <span className="mx-2 text-border">|</span>
               <span>Min Feasible Chunk: </span>
-              <span className="font-semibold text-[#00ec97]">
+              <span className="font-semibold text-brand">
                 ${data.route.recommendedMinChunkUsd}.00 USDC
               </span>
             </div>

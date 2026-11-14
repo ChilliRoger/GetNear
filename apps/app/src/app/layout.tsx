@@ -15,21 +15,24 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "GetNear — The Treasury System for the Stablecoin Era",
+  title: "GetNear — Controlled supplier payments on NEAR testnet",
   description:
-    "AI treasury agent replacing $120B/year in bank FX fees. Autonomous USDC/EURC conversion powered by Chainlink CRE, Uniswap, and Circle Arc.",
+    "A treasury agent that pays supplier invoices in chunks under on-chain limits and DAO approval. Testnet-only hackathon prototype; the FX conversion is simulated.",
   openGraph: {
     title: "GetNear",
-    description: "Autonomous treasury FX for the stablecoin era",
+    description: "Controlled supplier payments on NEAR testnet",
     type: "website",
     url: "https://github.com/ChilliRoger/GetNear",
   },
   twitter: {
     card: "summary_large_image",
     title: "GetNear",
-    description: "Autonomous treasury FX for the stablecoin era",
+    description: "Controlled supplier payments on NEAR testnet",
   },
 };
+
+// Applied before first paint so the page never flashes the wrong theme.
+const themeScript = `try{var t=localStorage.getItem("getnear_theme");if(t!=="light"&&t!=="dark"){t=window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"}document.documentElement.setAttribute("data-theme",t)}catch(e){document.documentElement.setAttribute("data-theme","dark")}`;
 
 export default function RootLayout({
   children,
@@ -37,9 +40,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background font-[family-name:var(--font-geist-sans)] text-foreground antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background font-sans text-foreground antialiased`}
       >
         <I18nProvider>{children}</I18nProvider>
       </body>
