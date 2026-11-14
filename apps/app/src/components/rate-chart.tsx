@@ -48,7 +48,7 @@ function smooth(points: HistoryPoint[]): HistoryPoint[] {
 /** Dependency-free SVG line chart: 1Click dry quote vs ECB reference, with last-price tag and hover crosshair. */
 export function RateChart({ height = 280, defaultHours = 24 }: { height?: number; defaultHours?: number }) {
   const [hours, setHours] = useState(defaultHours);
-  const { data, error, loading } = useHistory(hours);
+  const { data, error, loading, source } = useHistory(hours);
   const wrap = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
   const [hover, setHover] = useState<number | null>(null);
@@ -205,8 +205,12 @@ export function RateChart({ height = 280, defaultHours = 24 }: { height?: number
           </svg>
         ) : (
           <div className="flex h-full items-center justify-center rounded-md border border-dashed border-border-bright text-xs text-muted">
-            {loading ? "Loading rate history…" : error ? "Oracle offline: no history" : "Collecting samples…"}
+            {loading ? "Loading rate history…" : error ? "Collecting live samples: the history service is not connected (updates every 15 s)" : "Collecting samples…"}
           </div>
+        )}
+
+        {source === "browser" && geo && (
+          <p className="absolute bottom-0 right-1 text-[10px] text-muted">Live samples from this browser (history service not connected)</p>
         )}
 
         {hp && geo && (

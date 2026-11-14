@@ -42,7 +42,7 @@ export function LiveFeed({ rows = 10 }: { rows?: number }) {
   const online = Boolean(data?.online);
   const agentLine = data?.agent
     ? `${data.agent.strategyMode ?? "score"} mode · ${data.agent.totalChunksExecuted ?? 0} settled · ${String(data.agent.lastStatus ?? "").slice(0, 44)}`
-    : "Start the agent: pnpm agent:start";
+    : "The agent service is not connected to this deployment";
 
   return (
     <div className="flex h-full flex-col">
@@ -69,7 +69,7 @@ export function LiveFeed({ rows = 10 }: { rows?: number }) {
         ))}
         {events.length === 0 && (
           <li className="px-5 py-8 text-center text-muted">
-            {loading ? "Listening…" : "No decisions yet. Create an order and the agent's reasoning streams here."}
+            {loading ? "Listening…" : online ? "No decisions yet. Create an order and the agent's reasoning streams here." : "No agent connected. Locally: pnpm agent:start. Hosted: set AGENT_API_URL to where the agent runs."}
           </li>
         )}
       </ol>
