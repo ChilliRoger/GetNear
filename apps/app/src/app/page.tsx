@@ -129,9 +129,9 @@ export default function LandingPage() {
       <section className="mx-auto max-w-[1100px] px-4 pb-20">
         <Reveal>
           <div className="relative isolate h-[300px] overflow-hidden rounded-2xl border-2 border-brand bg-black shadow-brutal md:h-[380px]">
-            <AsciiScene className="absolute inset-0 -z-10 opacity-90" />
-            <div className="absolute inset-0 -z-10 bg-gradient-to-t from-black via-black/10 to-transparent" />
-            <div className="absolute inset-0 -z-10 bg-gradient-to-r from-black/80 via-transparent to-transparent" />
+            <AsciiScene className="absolute inset-0 -z-10" />
+            <div className="absolute inset-0 -z-10 bg-gradient-to-t from-black/85 via-transparent to-transparent" />
+            <div className="absolute inset-0 -z-10 bg-gradient-to-r from-black/55 via-transparent to-transparent" />
             <div className="flex h-full flex-col justify-end p-6">
               <span className="pill w-fit">
                 <BadgeCheck size={12} /> Auditable end to end

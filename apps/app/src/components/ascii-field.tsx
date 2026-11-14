@@ -4,6 +4,32 @@ import { useEffect, useRef } from "react";
 
 const RAMP = " .·:-=+*#%@";
 
+// Colours taken from the "Neon Harbour Ferry" piece: dusk purple -> magenta -> pink -> salmon -> peach.
+const STOPS: [number, number, number][] = [
+  [80, 56, 160],
+  [138, 72, 176],
+  [208, 96, 168],
+  [255, 140, 150],
+  [255, 176, 154],
+  [255, 212, 168],
+];
+// Neon sparkles from the same piece (cyan, hot pink, amber, moon white).
+const SPARKS: [number, number, number][] = [
+  [63, 230, 255],
+  [255, 63, 164],
+  [240, 188, 104],
+  [255, 251, 234],
+];
+
+function gradient(u: number): [number, number, number] {
+  const x = Math.min(1, Math.max(0, u)) * (STOPS.length - 1);
+  const i = Math.min(STOPS.length - 2, Math.floor(x));
+  const k = x - i;
+  const a = STOPS[i];
+  const b = STOPS[i + 1];
+  return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+}
+
 /**
  * Interactive ASCII field: a drifting, multi-colour character wave that ripples away from the pointer.
  * Pure canvas, no dependencies. Pauses off-screen / when the tab is hidden; a single still frame for reduced motion.
@@ -84,11 +110,11 @@ export function AsciiField({
           const idx = Math.min(RAMP.length - 1, Math.max(0, Math.floor(v * RAMP.length)));
           if (idx === 0) continue;
 
-          // Colour sweeps green -> teal -> blue -> violet across the page and drifts with time.
-          const hue = 170 + 60 * Math.sin(c * 0.022 + t * 0.25) + 50 * Math.sin(r * 0.035 - t * 0.18) + boost * 70;
-          const hot = v > 0.86;
-          const light = hot ? 78 : 42 + v * 22;
-          ctx.fillStyle = `hsla(${hue.toFixed(0)},${hot ? 95 : 85}%,${light.toFixed(0)}%,${(0.2 + v * 0.7).toFixed(2)})`;
+          // Position along the dusk gradient drifts across the page; the pointer pushes it toward peach.
+          const u = 0.5 + 0.32 * Math.sin(c * 0.021 + t * 0.22) + 0.22 * Math.sin(r * 0.032 - t * 0.15) + boost * 0.35;
+          const hot = v > 0.88;
+          const [rr, gg, bb] = hot ? SPARKS[(c * 7 + r * 3 + Math.floor(t * 0.5)) % SPARKS.length] : gradient(u);
+          ctx.fillStyle = `rgba(${rr | 0},${gg | 0},${bb | 0},${(0.22 + v * 0.7).toFixed(2)})`;
           ctx.fillText(RAMP[idx], x, y);
         }
       }
