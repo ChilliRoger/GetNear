@@ -5,19 +5,17 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
-/** True only if a WebGL context exists AND returns the pixel we just drew (Brave Shields etc. can block or garble it). */
+/**
+ * True if the browser can create a WebGL context at all. Deliberately does NOT compare pixels: privacy
+ * browsers (Brave Shields) perturb readbacks while still rendering fine, so a pixel test gives false negatives.
+ */
 function webglUsable(): boolean {
   try {
     const c = document.createElement("canvas");
-    c.width = c.height = 4;
-    const gl = (c.getContext("webgl2") || c.getContext("webgl")) as WebGLRenderingContext | null;
+    const gl = c.getContext("webgl2") || c.getContext("webgl");
     if (!gl) return false;
-    gl.clearColor(1, 0, 0, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    const px = new Uint8Array(4);
-    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
-    gl.getExtension("WEBGL_lose_context")?.loseContext();
-    return px[0] > 200 && px[1] < 60 && px[2] < 60;
+    (gl as WebGLRenderingContext).getExtension("WEBGL_lose_context")?.loseContext();
+    return true;
   } catch {
     return false;
   }
