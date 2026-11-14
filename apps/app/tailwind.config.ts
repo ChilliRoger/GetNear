@@ -37,7 +37,7 @@ const config: Config = {
         },
       },
       // One monospace family everywhere: it is the product's voice.
-      fontFamily: { sans: mono, mono },
+      fontFamily: { sans: mono, mono, brand: ["var(--font-brand)", "ui-sans-serif", "system-ui", "sans-serif"] },
       boxShadow: {
         // Hard offset shadow + soft glow: the neo-brutalist card.
         brutal: "6px 6px 0 0 rgb(var(--brand-dark)), 0 0 32px rgb(var(--brand) / 0.16)",
