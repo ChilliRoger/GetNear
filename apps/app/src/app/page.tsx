@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { ArrowRight, BadgeCheck, GitBranch, KeyRound, Landmark, ListChecks, Scale, TrendingUp } from "lucide-react";
 import { BrandMark } from "@/components/brand";
 import { TickerTape } from "@/components/ticker-tape";
@@ -11,6 +12,12 @@ import { RateChart } from "@/components/rate-chart";
 import { LiveFeed } from "@/components/live-feed";
 import { Card } from "@/components/card";
 import { useOraclePrice } from "@/lib/live";
+
+// WebGL only runs in the browser: load the 3D token on the client.
+const NearToken3D = dynamic(() => import("@/components/near-token-3d").then((m) => m.NearToken3D), {
+  ssr: false,
+  loading: () => <div className="h-[340px] w-full sm:h-[440px]" />,
+});
 
 const REPO = "https://github.com/ChilliRoger/GetNear";
 const NB = "https://testnet.nearblocks.io/txns";
@@ -59,32 +66,39 @@ export default function LandingPage() {
       </header>
 
       {/* ── Hero ───────────────────────────────────────────── */}
-      <section className="mx-auto max-w-[1100px] px-4 pb-16 pt-16 md:pt-24">
-        <Reveal>
-          <span className="pill">
-            <TrendingUp size={12} /> Live on NEAR testnet
-          </span>
-        </Reveal>
-        <Reveal delay={80}>
-          <h1 className="mt-6 max-w-3xl text-4xl font-bold leading-[1.15] tracking-tight md:text-6xl">
-            GetNear: Controlled <span className="text-brand">Supplier Payments</span>
-          </h1>
-        </Reveal>
-        <Reveal delay={160}>
-          <p className="mt-6 max-w-2xl text-sm leading-7 text-muted md:text-[15px]">
-            A treasury agent that pays euro invoices from USDC in timed chunks, with on-chain limits, DAO approval for large payments, and a
-            ledger that marks an invoice paid only when the transfer really happened. Built on NEAR with 1Click quotes and ECB reference rates.
-          </p>
-        </Reveal>
-        <Reveal delay={240}>
-          <div className="mt-8 flex flex-wrap gap-4">
-            <Link href="/dashboard" className="btn-primary h-10 px-5">
-              Launch App <ArrowRight size={14} />
-            </Link>
-            <Link href="/analytics" className="btn-secondary h-10 px-5">
-              View Analytics
-            </Link>
-          </div>
+      <section className="mx-auto grid max-w-[1100px] items-center gap-8 px-4 pb-16 pt-12 md:pt-20 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+        <div>
+          <Reveal>
+            <span className="pill">
+              <TrendingUp size={12} /> Live on NEAR testnet
+            </span>
+          </Reveal>
+          <Reveal delay={80}>
+            <h1 className="mt-6 text-4xl font-bold leading-[1.15] tracking-tight md:text-5xl">
+              GetNear: Controlled <span className="text-brand">Supplier Payments</span>
+            </h1>
+          </Reveal>
+          <Reveal delay={160}>
+            <p className="mt-6 max-w-xl text-sm leading-7 text-muted md:text-[15px]">
+              A treasury agent that pays euro invoices from USDC in timed chunks, with on-chain limits, DAO approval for large payments, and a
+              ledger that marks an invoice paid only when the transfer really happened. Built on NEAR with 1Click quotes and ECB reference rates.
+            </p>
+          </Reveal>
+          <Reveal delay={240}>
+            <div className="mt-8 flex flex-wrap gap-4">
+              <Link href="/dashboard" className="btn-primary h-10 px-5">
+                Launch App <ArrowRight size={14} />
+              </Link>
+              <Link href="/analytics" className="btn-secondary h-10 px-5">
+                View Analytics
+              </Link>
+            </div>
+          </Reveal>
+        </div>
+
+        <Reveal delay={200} className="relative flex items-center justify-center">
+          <div className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-[radial-gradient(circle_at_center,rgb(34_197_94/0.22),transparent_65%)]" />
+          <NearToken3D />
         </Reveal>
       </section>
 
