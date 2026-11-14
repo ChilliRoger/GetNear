@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/card";
+import { LivePanels } from "@/components/live-panels";
 import { LiveQuoteCard } from "@/components/live-quote-card";
 import { TokenBalanceCard } from "@/components/token-balance-card";
 import { AiOrderIntake } from "@/components/ai-order-intake";
@@ -465,7 +466,7 @@ export default function DashboardPage() {
   const isCouncil = Boolean(accountId && councilAccounts.includes(accountId));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       {/* 1. Terminal System Status & Security Bar */}
       <div className="border border-border bg-surface p-3 text-xs ">
         <div className="flex items-center justify-between pb-2 mb-2 border-b border-border">
@@ -523,6 +524,9 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* 1b. Live market + agent decision stream */}
+      <LivePanels />
 
       {/* 2. Rate Discovery & Timing Score Card */}
       <LiveQuoteCard />
