@@ -91,10 +91,10 @@ export default function ApprovePage() {
   const isCouncil = Boolean(accountId && councilAccounts.includes(accountId));
 
   return (
-    <div className="space-y-4 ">
+    <div className="mx-auto max-w-4xl space-y-4">
       {/* 1. Header & Council Switcher */}
       <Card
-        title="SPUTNIK DAO MULTISIG GOVERNANCE (2-OF-3)"
+        title="Sputnik DAO governance (2 of 3)"
         subtitle="2-of-3 council approval required for orders exceeding 100 USDC auto-cap"
       >
         <div className="space-y-3 pt-1 text-xs">

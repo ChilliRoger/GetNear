@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/card";
-import { LivePanels } from "@/components/live-panels";
+import { RateChart } from "@/components/rate-chart";
+import { LiveFeed } from "@/components/live-feed";
 import { LiveQuoteCard } from "@/components/live-quote-card";
 import { TokenBalanceCard } from "@/components/token-balance-card";
 import { AiOrderIntake } from "@/components/ai-order-intake";
@@ -466,7 +467,7 @@ export default function DashboardPage() {
   const isCouncil = Boolean(accountId && councilAccounts.includes(accountId));
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       {/* 1. Terminal System Status & Security Bar */}
       <div className="border border-border bg-surface p-3 text-xs ">
         <div className="flex items-center justify-between pb-2 mb-2 border-b border-border">
@@ -525,236 +526,10 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 1b. Live market + agent decision stream */}
-      <LivePanels />
-
-      {/* 2. Rate Discovery & Timing Score Card */}
-      <LiveQuoteCard />
-
-      {/* 2b. Testnet Stablecoin Balances & Faucet */}
-      <TokenBalanceCard
-        accountId={accountId}
-        userUsdc={tokens.userUsdc}
-        userDemoUsdc={tokens.userDemoUsdc}
-        userEure={tokens.userEure}
-        vaultUsdc={tokens.vaultUsdc}
-        vaultEure={tokens.vaultEure}
-        usdcId={tokens.usdcId}
-        eureId={tokens.eureId}
-        onRefresh={loadData}
-      />
-
-      {/* 3. Interactive Order Intake Card */}
-      <Card title="Create FX Goal (NEAR Testnet)" subtitle="Auto-executes small orders, requires DAO 2-of-3 approval above $100">
-        <div className="space-y-3 pt-1">
-          <AiOrderIntake
-            onApply={(parsed: ParsedOrderData) => {
-              setOrderAmount(String(parsed.totalUsdc));
-              if (parsed.maxChunkUsdc !== null) {
-                const clamped = Math.min(parsed.maxChunkUsdc, maxChunkLimitUsdc);
-                setMaxChunk(String(clamped));
-                if (parsed.maxChunkUsdc > maxChunkLimitUsdc) {
-                  showToast(`Max chunk capped at contract limit ($${maxChunkLimitUsdc} USDC)`, "info");
-                }
-              }
-              if (parsed.deadlineHours !== null) setDeadlineHours(String(Math.max(1, Math.round(parsed.deadlineHours))));
-              if (parsed.maxDevBps !== null) setMaxDevBps(String(parsed.maxDevBps));
-              if (parsed.recipient !== null) setRecipientAccount(parsed.recipient);
-              if (parsed.targetEuRe !== null) setTargetEure(String(parsed.targetEuRe));
-              if (parsed.invoiceRef !== null) setInvoiceRef(parsed.invoiceRef);
-              if (parsed.fundingMode === "circle_escrow") setFundWithCircleEscrow(true);
-              if (parsed.fundingMode === "accounting") setFundWithCircleEscrow(false);
-              showToast("AI draft applied to order form. Review all fields before signing.", "info");
-            }}
-          />
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setOrderAmount("15");
-                setMaxChunk("10");
-                setMaxDevBps("120");
-                setDeadlineHours("4");
-                setTargetEure("8");
-                setInvoiceRef("INV-DEMO-8");
-                setFundWithCircleEscrow(true);
-                showToast("Preset loaded: $15 Circle USDC Escrow (Auto-Active). Click Submit Order below when ready.", "info");
-              }}
-              className={`flex-1 py-1.5 px-2.5 rounded-lg border text-xs font-medium transition-colors text-left ${
-                orderAmount === "15"
-                  ? "border-accent-green bg-accent-green/10 text-foreground"
-                  : "border-border bg-surface-hover text-foreground hover:border-accent-green"
-              }`}
-            >
-              <div className="font-semibold text-accent-green">Preset: $15 Circle USDC</div>
-              <div className="text-[10px] text-muted">Real Circle USDC escrow · €8.00 invoice</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setOrderAmount("250");
-                setMaxChunk("20");
-                setMaxDevBps("120");
-                setDeadlineHours("4");
-                setTargetEure("200");
-                setInvoiceRef("INV-DEMO-200");
-                setFundWithCircleEscrow(false);
-                showToast("Preset loaded: $250 USDC Budget (Requires DAO Approval). Click Submit Order below when ready.", "info");
-              }}
-              className={`flex-1 py-1.5 px-2.5 rounded-lg border text-xs font-medium transition-colors text-left ${
-                orderAmount === "250"
-                  ? "border-amber-500 bg-amber-500/10 text-foreground"
-                  : "border-border bg-surface-hover text-foreground hover:border-amber-500"
-              }`}
-            >
-              <div className="font-semibold text-amber-400">Preset: $250 USDC</div>
-              <div className="text-[10px] text-muted">Pending (Needs DAO 2-of-3)</div>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div>
-              <label className="text-[11px] text-muted block mb-1">Total Amount (USDC)</label>
-              <input
-                type="number"
-                value={orderAmount}
-                onChange={(e) => setOrderAmount(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
-                placeholder="50"
-              />
-            </div>
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-[11px] text-muted block">Max Chunk (USDC)</label>
-                <span className="text-[10px] text-muted ">Limit: ${maxChunkLimitUsdc}</span>
-              </div>
-              <input
-                type="number"
-                value={maxChunk}
-                onChange={(e) => setMaxChunk(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
-                placeholder="20"
-              />
-            </div>
-            <div>
-              <label className="text-[11px] text-muted block mb-1">Max Deviation (bps)</label>
-              <input
-                type="number"
-                value={maxDevBps}
-                onChange={(e) => setMaxDevBps(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
-                placeholder="120"
-              />
-            </div>
-            <div>
-              <label className="text-[11px] text-muted block mb-1">Deadline (Hours)</label>
-              <input
-                type="number"
-                value={deadlineHours}
-                onChange={(e) => setDeadlineHours(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
-                placeholder="4"
-              />
-            </div>
-          </div>
-
-          {/* Supplier Invoice Settlement Fields */}
-          <div className="rounded-lg border border-border bg-background/60 p-2.5 space-y-2">
-            <div className="text-[11px] font-medium text-muted">
-              Supplier invoice (required): EURe is paid from the prefunded demo vault and confirmed by the on-chain callback
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <div className="col-span-2">
-                <label className="text-[10px] text-muted block mb-1">Supplier Account</label>
-                <input
-                  type="text"
-                  value={recipientAccount}
-                  onChange={(e) => setRecipientAccount(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
-                  placeholder={accountId || "supplier.testnet"}
-                />
-              </div>
-              <div>
-                <label className="text-[10px] text-muted block mb-1">Target Due (EURe)</label>
-                <input
-                  type="number"
-                  value={targetEure}
-                  onChange={(e) => setTargetEure(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
-                  placeholder="1000"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-[10px] text-muted block mb-1">Invoice Reference</label>
-              <input
-                type="text"
-                value={invoiceRef}
-                onChange={(e) => setInvoiceRef(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
-                placeholder="INV-2026-001"
-              />
-            </div>
-          </div>
-
-          {/* Circle Native USDC Escrow Toggle */}
-          <label className="flex items-start gap-2 rounded-lg border border-border bg-background/60 p-2 text-xs cursor-pointer">
-            <input
-              type="checkbox"
-              checked={fundWithCircleEscrow}
-              onChange={(e) => setFundWithCircleEscrow(e.target.checked)}
-              className="mt-0.5 rounded border-border accent-accent-blue"
-            />
-            <div>
-              <div className="font-medium text-foreground">
-                Lock Real Circle Native USDC Escrow (ft_transfer_call)
-              </div>
-              <div className="text-[10px] text-muted">
-                Wallet Circle USDC balance: {tokens.userUsdc.toFixed(2)} USDC (refunds unspent USDC on cancel/expiry)
-              </div>
-            </div>
-          </label>
-
-          {/* Dynamic Cap Badge */}
-          <div
-            className={`rounded-lg px-2.5 py-1.5 text-xs flex items-center justify-between ${
-              isAboveCap
-                ? "bg-amber-500/10 border border-amber-500/20 text-amber-400"
-                : "bg-green-500/10 border border-green-500/20 text-green-400"
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              {isAboveCap ? <AlertCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-              <span className="font-medium">
-                {isAboveCap ? "Requires Sputnik DAO Approval" : "Auto-Active Order"}
-              </span>
-            </div>
-            <span className="text-[10px] opacity-80">
-              {isAboveCap ? `> $${autoCapUsdc} Auto-Cap` : `<= $${autoCapUsdc} Auto-Cap`}
-            </span>
-          </div>
-
-          {!accountId ? (
-            <button
-              type="button"
-              onClick={() => connect()}
-              className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-accent-blue/40 bg-accent-blue/15 py-2 text-xs font-semibold text-accent-blue hover:bg-accent-blue/25 transition-colors"
-            >
-              <Shield className="h-3.5 w-3.5" />
-              <span>Connect Test Wallet to Submit Order</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleCreateOrder}
-              disabled={submittingOrder}
-              className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-accent-blue py-2 text-xs font-semibold text-white hover:bg-accent-blue/90 disabled:opacity-50 transition-colors"
-            >
-              <PlusCircle className="h-3.5 w-3.5" />
-              <span>{submittingOrder ? "Submitting to NEAR Testnet..." : "Submit Order to Testnet"}</span>
-            </button>
-          )}
-        </div>
+      <div className="grid items-start gap-4 lg:grid-cols-12">
+        <div className="min-w-0 space-y-4 lg:col-span-8">
+      <Card title="USDC / EURe" subtitle="1Click dry quote vs ECB reference">
+        <RateChart height={260} defaultHours={6} />
       </Card>
 
       {/* 4. On-Chain Active Orders List */}
@@ -1109,163 +884,8 @@ export default function DashboardPage() {
         )}
       </Card>
 
-      {/* 5. Sputnik DAO Council Approvals Card */}
-      <Card
-        title={`Sputnik DAO Council Approvals (${proposals.length})`}
-        subtitle="2-of-3 multisig votes required for orders above $100 auto-cap"
-      >
-        <div className="mb-3 pb-2 border-b border-border flex items-center justify-between text-xs">
-          <span className="text-muted">Active Signer: <strong className="text-accent-blue ">{accountId}</strong></span>
-          <div className="flex items-center gap-1">
-            <span className="text-[11px] text-muted mr-1">Switch:</span>
-            {councilAccounts.map((acc, idx) => (
-              <button
-                key={acc}
-                onClick={() => connect(acc)}
-                className={`px-1.5 py-0.5 rounded text-[10px] border ${
-                  acc === accountId
-                    ? "bg-accent-blue/20 border-accent-blue text-accent-blue font-bold"
-                    : "bg-surface border-border text-muted hover:text-foreground"
-                }`}
-              >
-                C{idx + 1}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {proposals.length === 0 ? (
-          <div className="py-4 text-center text-xs text-muted">No pending DAO proposals on testnet.</div>
-        ) : (
-          <div className="space-y-2.5 pt-1">
-            {[...proposals]
-              .sort((a, b) => {
-                if (a.status === "InProgress" && b.status !== "InProgress") return -1;
-                if (a.status !== "InProgress" && b.status === "InProgress") return 1;
-                return b.id - a.id;
-              })
-              .map((p) => {
-                const approveVotes = Object.values(p.votes).filter((v) => v === "Approve").length;
-                const isApproved = p.status === "Approved";
-                const isVoting = votingProposalId === p.id;
-                const hasVoted = accountId ? p.votes[accountId] : undefined;
-
-                return (
-                  <div key={p.id} className="rounded-xl border border-border bg-background p-3 text-xs">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <Vote className="h-3.5 w-3.5 text-accent-blue" />
-                        <span className="font-semibold text-foreground">Proposal #{p.id}</span>
-                      </div>
-                      <span
-                        className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
-                          isApproved ? "bg-green-500/15 text-green-400" : "bg-amber-500/15 text-amber-400"
-                        }`}
-                      >
-                        {p.status} ({approveVotes}/2 votes)
-                      </span>
-                    </div>
-
-                    <p className="text-[11px] text-muted mb-2 break-all">{p.description}</p>
-
-                    <div className="text-[10px] text-muted mb-2">
-                      Votes cast:{" "}
-                      {Object.keys(p.votes).length === 0 ? (
-                        <span>None yet</span>
-                      ) : (
-                        Object.entries(p.votes).map(([voter, vote]) => (
-                          <span key={voter} className="inline-block mr-2 text-foreground ">
-                            {voter.slice(0, 15)}... ({vote})
-                          </span>
-                        ))
-                      )}
-                    </div>
-
-                    {!isApproved && (
-                      <div className="pt-2 border-t border-border">
-                        {!accountId ? (
-                          <button
-                            onClick={() => connect(councilAccounts[0])}
-                            className="w-full py-1.5 rounded-lg bg-accent-blue/15 text-accent-blue border border-accent-blue/20 font-semibold hover:bg-accent-blue/25 transition-colors text-xs"
-                          >
-                            Connect Council Wallet to Vote
-                          </button>
-                        ) : !isCouncil ? (
-                          <div className="rounded-lg bg-surface border border-border p-2 space-y-1.5">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-amber-400 font-medium">Connected as Operator</span>
-                              <span className="text-[10px] text-muted">Council only</span>
-                            </div>
-                            <div className="text-[11px] text-zinc-400">
-                              Operator cannot vote on DAO proposals. Switch to a Council member:
-                            </div>
-                            <div className="flex gap-2">
-                              {councilAccounts.slice(0, 2).map((acc, idx) => (
-                                <button
-                                  key={acc}
-                                  onClick={() => connect(acc)}
-                                  className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/30 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors "
-                                >
-                                  Switch to Council {idx + 1} &rarr;
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ) : hasVoted === "Approve" ? (
-                          <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-2 space-y-1.5">
-                            <div className="text-xs text-green-400 font-medium flex items-center justify-between">
-                              <span>Council {councilAccounts.indexOf(accountId) + 1} voted Approve ✓</span>
-                              <span className="text-[10px] text-muted ">{approveVotes}/2 votes</span>
-                            </div>
-                            <div className="text-[11px] text-zinc-300">
-                              Switch to the next Council member to cast the 2nd approval vote:
-                            </div>
-                            <div className="flex gap-2">
-                              {councilAccounts
-                                .filter((acc) => !p.votes[acc])
-                                .map((acc) => {
-                                  const idx = councilAccounts.indexOf(acc);
-                                  return (
-                                    <button
-                                      key={acc}
-                                      onClick={() => connect(acc)}
-                                      className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/40 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors "
-                                    >
-                                      Switch to Council {idx + 1} & Vote &rarr;
-                                    </button>
-                                  );
-                                })}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleVote(p.id, "VoteApprove")}
-                              disabled={isVoting}
-                              className="flex-1 py-1.5 rounded-lg bg-green-500/15 text-green-400 border border-green-500/20 font-semibold hover:bg-green-500/25 disabled:opacity-50 transition-colors text-xs"
-                            >
-                              {isVoting
-                                ? "Broadcasting vote..."
-                                : approveVotes === 1
-                                ? "Vote Approve (2nd Vote -> Automatically Activates Order!)"
-                                : "Vote Approve (1st Vote)"}
-                            </button>
-                            <button
-                              onClick={() => handleVote(p.id, "VoteReject")}
-                              disabled={isVoting}
-                              className="py-1.5 px-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/20 font-semibold hover:bg-red-500/25 disabled:opacity-50 transition-colors text-xs"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-          </div>
-        )}
+      <Card title="Live agent feed" subtitle="Decisions and settlements as they happen">
+        <LiveFeed rows={8} />
       </Card>
 
       {/* 6. Agent Ops & Callback-Verified Settlement Log */}
@@ -1459,6 +1079,397 @@ export default function DashboardPage() {
           </div>
         )}
       </Card>
+        </div>
+        <div className="min-w-0 space-y-4 lg:col-span-4">
+      {/* 3. Interactive Order Intake Card */}
+      <Card title="Create FX Goal (NEAR Testnet)" subtitle="Auto-executes small orders, requires DAO 2-of-3 approval above $100">
+        <div className="space-y-3 pt-1">
+          <AiOrderIntake
+            onApply={(parsed: ParsedOrderData) => {
+              setOrderAmount(String(parsed.totalUsdc));
+              if (parsed.maxChunkUsdc !== null) {
+                const clamped = Math.min(parsed.maxChunkUsdc, maxChunkLimitUsdc);
+                setMaxChunk(String(clamped));
+                if (parsed.maxChunkUsdc > maxChunkLimitUsdc) {
+                  showToast(`Max chunk capped at contract limit ($${maxChunkLimitUsdc} USDC)`, "info");
+                }
+              }
+              if (parsed.deadlineHours !== null) setDeadlineHours(String(Math.max(1, Math.round(parsed.deadlineHours))));
+              if (parsed.maxDevBps !== null) setMaxDevBps(String(parsed.maxDevBps));
+              if (parsed.recipient !== null) setRecipientAccount(parsed.recipient);
+              if (parsed.targetEuRe !== null) setTargetEure(String(parsed.targetEuRe));
+              if (parsed.invoiceRef !== null) setInvoiceRef(parsed.invoiceRef);
+              if (parsed.fundingMode === "circle_escrow") setFundWithCircleEscrow(true);
+              if (parsed.fundingMode === "accounting") setFundWithCircleEscrow(false);
+              showToast("AI draft applied to order form. Review all fields before signing.", "info");
+            }}
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setOrderAmount("15");
+                setMaxChunk("10");
+                setMaxDevBps("120");
+                setDeadlineHours("4");
+                setTargetEure("8");
+                setInvoiceRef("INV-DEMO-8");
+                setFundWithCircleEscrow(true);
+                showToast("Preset loaded: $15 Circle USDC Escrow (Auto-Active). Click Submit Order below when ready.", "info");
+              }}
+              className={`flex-1 py-1.5 px-2.5 rounded-lg border text-xs font-medium transition-colors text-left ${
+                orderAmount === "15"
+                  ? "border-accent-green bg-accent-green/10 text-foreground"
+                  : "border-border bg-surface-hover text-foreground hover:border-accent-green"
+              }`}
+            >
+              <div className="font-semibold text-accent-green">Preset: $15 Circle USDC</div>
+              <div className="text-[10px] text-muted">Real Circle USDC escrow · €8.00 invoice</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOrderAmount("250");
+                setMaxChunk("20");
+                setMaxDevBps("120");
+                setDeadlineHours("4");
+                setTargetEure("200");
+                setInvoiceRef("INV-DEMO-200");
+                setFundWithCircleEscrow(false);
+                showToast("Preset loaded: $250 USDC Budget (Requires DAO Approval). Click Submit Order below when ready.", "info");
+              }}
+              className={`flex-1 py-1.5 px-2.5 rounded-lg border text-xs font-medium transition-colors text-left ${
+                orderAmount === "250"
+                  ? "border-amber-500 bg-amber-500/10 text-foreground"
+                  : "border-border bg-surface-hover text-foreground hover:border-amber-500"
+              }`}
+            >
+              <div className="font-semibold text-amber-400">Preset: $250 USDC</div>
+              <div className="text-[10px] text-muted">Pending (Needs DAO 2-of-3)</div>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <label className="text-[11px] text-muted block mb-1">Total Amount (USDC)</label>
+              <input
+                type="number"
+                value={orderAmount}
+                onChange={(e) => setOrderAmount(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                placeholder="50"
+              />
+            </div>
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-[11px] text-muted block">Max Chunk (USDC)</label>
+                <span className="text-[10px] text-muted ">Limit: ${maxChunkLimitUsdc}</span>
+              </div>
+              <input
+                type="number"
+                value={maxChunk}
+                onChange={(e) => setMaxChunk(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                placeholder="20"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-muted block mb-1">Max Deviation (bps)</label>
+              <input
+                type="number"
+                value={maxDevBps}
+                onChange={(e) => setMaxDevBps(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                placeholder="120"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-muted block mb-1">Deadline (Hours)</label>
+              <input
+                type="number"
+                value={deadlineHours}
+                onChange={(e) => setDeadlineHours(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                placeholder="4"
+              />
+            </div>
+          </div>
+
+          {/* Supplier Invoice Settlement Fields */}
+          <div className="rounded-lg border border-border bg-background/60 p-2.5 space-y-2">
+            <div className="text-[11px] font-medium text-muted">
+              Supplier invoice (required): EURe is paid from the prefunded demo vault and confirmed by the on-chain callback
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="col-span-2">
+                <label className="text-[10px] text-muted block mb-1">Supplier Account</label>
+                <input
+                  type="text"
+                  value={recipientAccount}
+                  onChange={(e) => setRecipientAccount(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                  placeholder={accountId || "supplier.testnet"}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted block mb-1">Target Due (EURe)</label>
+                <input
+                  type="number"
+                  value={targetEure}
+                  onChange={(e) => setTargetEure(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                  placeholder="1000"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] text-muted block mb-1">Invoice Reference</label>
+              <input
+                type="text"
+                value={invoiceRef}
+                onChange={(e) => setInvoiceRef(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:border-accent-blue focus:outline-none"
+                placeholder="INV-2026-001"
+              />
+            </div>
+          </div>
+
+          {/* Circle Native USDC Escrow Toggle */}
+          <label className="flex items-start gap-2 rounded-lg border border-border bg-background/60 p-2 text-xs cursor-pointer">
+            <input
+              type="checkbox"
+              checked={fundWithCircleEscrow}
+              onChange={(e) => setFundWithCircleEscrow(e.target.checked)}
+              className="mt-0.5 rounded border-border accent-accent-blue"
+            />
+            <div>
+              <div className="font-medium text-foreground">
+                Lock Real Circle Native USDC Escrow (ft_transfer_call)
+              </div>
+              <div className="text-[10px] text-muted">
+                Wallet Circle USDC balance: {tokens.userUsdc.toFixed(2)} USDC (refunds unspent USDC on cancel/expiry)
+              </div>
+            </div>
+          </label>
+
+          {/* Dynamic Cap Badge */}
+          <div
+            className={`rounded-lg px-2.5 py-1.5 text-xs flex items-center justify-between ${
+              isAboveCap
+                ? "bg-amber-500/10 border border-amber-500/20 text-amber-400"
+                : "bg-green-500/10 border border-green-500/20 text-green-400"
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              {isAboveCap ? <AlertCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+              <span className="font-medium">
+                {isAboveCap ? "Requires Sputnik DAO Approval" : "Auto-Active Order"}
+              </span>
+            </div>
+            <span className="text-[10px] opacity-80">
+              {isAboveCap ? `> $${autoCapUsdc} Auto-Cap` : `<= $${autoCapUsdc} Auto-Cap`}
+            </span>
+          </div>
+
+          {!accountId ? (
+            <button
+              type="button"
+              onClick={() => connect()}
+              className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-accent-blue/40 bg-accent-blue/15 py-2 text-xs font-semibold text-accent-blue hover:bg-accent-blue/25 transition-colors"
+            >
+              <Shield className="h-3.5 w-3.5" />
+              <span>Connect Test Wallet to Submit Order</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleCreateOrder}
+              disabled={submittingOrder}
+              className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-accent-blue py-2 text-xs font-semibold text-white hover:bg-accent-blue/90 disabled:opacity-50 transition-colors"
+            >
+              <PlusCircle className="h-3.5 w-3.5" />
+              <span>{submittingOrder ? "Submitting to NEAR Testnet..." : "Submit Order to Testnet"}</span>
+            </button>
+          )}
+        </div>
+      </Card>
+
+      {/* 2. Rate Discovery & Timing Score Card */}
+      <LiveQuoteCard />
+
+      {/* 2b. Testnet Stablecoin Balances & Faucet */}
+      <TokenBalanceCard
+        accountId={accountId}
+        userUsdc={tokens.userUsdc}
+        userDemoUsdc={tokens.userDemoUsdc}
+        userEure={tokens.userEure}
+        vaultUsdc={tokens.vaultUsdc}
+        vaultEure={tokens.vaultEure}
+        usdcId={tokens.usdcId}
+        eureId={tokens.eureId}
+        onRefresh={loadData}
+      />
+
+      {/* 5. Sputnik DAO Council Approvals Card */}
+      <Card
+        title={`Sputnik DAO Council Approvals (${proposals.length})`}
+        subtitle="2-of-3 multisig votes required for orders above $100 auto-cap"
+      >
+        <div className="mb-3 pb-2 border-b border-border flex items-center justify-between text-xs">
+          <span className="text-muted">Active Signer: <strong className="text-accent-blue ">{accountId}</strong></span>
+          <div className="flex items-center gap-1">
+            <span className="text-[11px] text-muted mr-1">Switch:</span>
+            {councilAccounts.map((acc, idx) => (
+              <button
+                key={acc}
+                onClick={() => connect(acc)}
+                className={`px-1.5 py-0.5 rounded text-[10px] border ${
+                  acc === accountId
+                    ? "bg-accent-blue/20 border-accent-blue text-accent-blue font-bold"
+                    : "bg-surface border-border text-muted hover:text-foreground"
+                }`}
+              >
+                C{idx + 1}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {proposals.length === 0 ? (
+          <div className="py-4 text-center text-xs text-muted">No pending DAO proposals on testnet.</div>
+        ) : (
+          <div className="space-y-2.5 pt-1">
+            {[...proposals]
+              .sort((a, b) => {
+                if (a.status === "InProgress" && b.status !== "InProgress") return -1;
+                if (a.status !== "InProgress" && b.status === "InProgress") return 1;
+                return b.id - a.id;
+              })
+              .map((p) => {
+                const approveVotes = Object.values(p.votes).filter((v) => v === "Approve").length;
+                const isApproved = p.status === "Approved";
+                const isVoting = votingProposalId === p.id;
+                const hasVoted = accountId ? p.votes[accountId] : undefined;
+
+                return (
+                  <div key={p.id} className="rounded-xl border border-border bg-background p-3 text-xs">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Vote className="h-3.5 w-3.5 text-accent-blue" />
+                        <span className="font-semibold text-foreground">Proposal #{p.id}</span>
+                      </div>
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                          isApproved ? "bg-green-500/15 text-green-400" : "bg-amber-500/15 text-amber-400"
+                        }`}
+                      >
+                        {p.status} ({approveVotes}/2 votes)
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-muted mb-2 break-all">{p.description}</p>
+
+                    <div className="text-[10px] text-muted mb-2">
+                      Votes cast:{" "}
+                      {Object.keys(p.votes).length === 0 ? (
+                        <span>None yet</span>
+                      ) : (
+                        Object.entries(p.votes).map(([voter, vote]) => (
+                          <span key={voter} className="inline-block mr-2 text-foreground ">
+                            {voter.slice(0, 15)}... ({vote})
+                          </span>
+                        ))
+                      )}
+                    </div>
+
+                    {!isApproved && (
+                      <div className="pt-2 border-t border-border">
+                        {!accountId ? (
+                          <button
+                            onClick={() => connect(councilAccounts[0])}
+                            className="w-full py-1.5 rounded-lg bg-accent-blue/15 text-accent-blue border border-accent-blue/20 font-semibold hover:bg-accent-blue/25 transition-colors text-xs"
+                          >
+                            Connect Council Wallet to Vote
+                          </button>
+                        ) : !isCouncil ? (
+                          <div className="rounded-lg bg-surface border border-border p-2 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-amber-400 font-medium">Connected as Operator</span>
+                              <span className="text-[10px] text-muted">Council only</span>
+                            </div>
+                            <div className="text-[11px] text-zinc-400">
+                              Operator cannot vote on DAO proposals. Switch to a Council member:
+                            </div>
+                            <div className="flex gap-2">
+                              {councilAccounts.slice(0, 2).map((acc, idx) => (
+                                <button
+                                  key={acc}
+                                  onClick={() => connect(acc)}
+                                  className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/30 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors "
+                                >
+                                  Switch to Council {idx + 1} &rarr;
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : hasVoted === "Approve" ? (
+                          <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-2 space-y-1.5">
+                            <div className="text-xs text-green-400 font-medium flex items-center justify-between">
+                              <span>Council {councilAccounts.indexOf(accountId) + 1} voted Approve ✓</span>
+                              <span className="text-[10px] text-muted ">{approveVotes}/2 votes</span>
+                            </div>
+                            <div className="text-[11px] text-zinc-300">
+                              Switch to the next Council member to cast the 2nd approval vote:
+                            </div>
+                            <div className="flex gap-2">
+                              {councilAccounts
+                                .filter((acc) => !p.votes[acc])
+                                .map((acc) => {
+                                  const idx = councilAccounts.indexOf(acc);
+                                  return (
+                                    <button
+                                      key={acc}
+                                      onClick={() => connect(acc)}
+                                      className="flex-1 py-1 px-2 rounded-lg border border-accent-blue/40 bg-accent-blue/15 text-accent-blue text-xs font-semibold hover:bg-accent-blue/25 transition-colors "
+                                    >
+                                      Switch to Council {idx + 1} & Vote &rarr;
+                                    </button>
+                                  );
+                                })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleVote(p.id, "VoteApprove")}
+                              disabled={isVoting}
+                              className="flex-1 py-1.5 rounded-lg bg-green-500/15 text-green-400 border border-green-500/20 font-semibold hover:bg-green-500/25 disabled:opacity-50 transition-colors text-xs"
+                            >
+                              {isVoting
+                                ? "Broadcasting vote..."
+                                : approveVotes === 1
+                                ? "Vote Approve (2nd Vote -> Automatically Activates Order!)"
+                                : "Vote Approve (1st Vote)"}
+                            </button>
+                            <button
+                              onClick={() => handleVote(p.id, "VoteReject")}
+                              disabled={isVoting}
+                              className="py-1.5 px-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/20 font-semibold hover:bg-red-500/25 disabled:opacity-50 transition-colors text-xs"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+        )}
+      </Card>
+        </div>
+      </div>
     </div>
   );
 }

@@ -52,12 +52,10 @@ export default function SettingsPage() {
   }, []);
 
   return (
-    <div className="space-y-4 ">
+    <div className="mx-auto max-w-4xl space-y-4">
       {/* Header */}
       <div>
-        <h2 className="text-base font-bold uppercase tracking-wider text-foreground">
-          Operations &amp; security audit · testnet
-        </h2>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">Operations &amp; security</h1>
         <p className="text-[11px] text-muted">
           Verifiable on-chain parameters, restricted agent keys, and multisig governance rules on NEAR testnet.
         </p>

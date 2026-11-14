@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { Card } from "@/components/card";
+import { LiveQuoteCard } from "@/components/live-quote-card";
+import { RateChart } from "@/components/rate-chart";
 import { AiOrderIntake } from "@/components/ai-order-intake";
 import { useToast } from "@/components/toast-provider";
 import { useNearWallet } from "@/lib/near-wallet";
@@ -195,14 +197,14 @@ export default function TradePage() {
     <div className="space-y-4">
       {/* 1. Header */}
       <div>
-        <h2 className="text-lg font-semibold text-foreground">Create Treasury FX Goal</h2>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">Create invoice order</h1>
         <p className="text-xs text-muted">
           Goal-based conversions on NEAR testnet with automated TWAP chunking and DAO-enforced spending limits.
         </p>
       </div>
 
-      {/* 2. Order Form */}
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <div className="grid items-start gap-4 lg:grid-cols-12">
+      <form onSubmit={handleSubmit} className="min-w-0 space-y-3 lg:col-span-7">
         <Card title="Order Parameters">
           <div className="space-y-3 pt-1 text-xs">
             <AiOrderIntake
@@ -442,6 +444,13 @@ export default function TradePage() {
           </button>
         )}
       </form>
+      <aside className="min-w-0 space-y-4 lg:col-span-5">
+        <LiveQuoteCard />
+        <Card title="USDC / EURe" subtitle="1Click dry quote vs ECB reference">
+          <RateChart height={220} defaultHours={6} />
+        </Card>
+      </aside>
+      </div>
     </div>
   );
 }
