@@ -6,25 +6,23 @@ import { RateChart } from "@/components/rate-chart";
 import { LiveFeed } from "@/components/live-feed";
 import { KpiStrip, Meter, Spark } from "@/components/ascii-viz";
 import { Reveal } from "@/components/reveal";
-import { useHistory, useLiveJson, useOraclePrice } from "@/lib/live";
+import { useFeed, useHistory, useLiveJson, useOraclePrice } from "@/lib/live";
 
-interface StrategyRow {
-  id: number;
-  timestamp: number;
-  order_id: string | null;
-  score: number;
-  action: string;
-  reason: string;
-  price_score: number | null;
-  divergence_score: number | null;
-  urgency_score: number | null;
-  deviation_bps: number | null;
+interface MarketScore {
+  available: boolean;
+  priceScore?: number;
+  divergenceScore?: number;
+  marketScore?: number;
+  deviationBps?: number;
+  samples24h?: number;
+  note?: string;
 }
 
 export default function AnalyticsPage() {
   const { data: price } = useOraclePrice();
   const { data: hist } = useHistory(24);
-  const { data: rows } = useLiveJson<StrategyRow[]>("/api/oracle/api/strategy/decisions?limit=40", 10_000);
+  const { data: market } = useLiveJson<MarketScore>("/api/oracle/api/strategy/market", 15_000);
+  const { data: feed } = useFeed();
 
   const p = price?.["USDC/EURe"];
   const pts = useMemo(() => hist?.points ?? [], [hist]);
@@ -35,18 +33,18 @@ export default function AnalyticsPage() {
     return { min: Math.min(...d), max: Math.max(...d), avg: d.reduce((a, b) => a + b, 0) / d.length, series: d.slice(-60) };
   }, [pts]);
 
-  const all = rows ?? [];
-  const latest = all.find((r) => r.order_id !== null) ?? all[0];
-  const score = latest?.score ?? 0;
-  const scoreSeries = [...all].reverse().map((r) => r.score);
+  // The agent's own scored decisions (one per evaluation of an active order).
+  const scored = useMemo(() => (feed?.events ?? []).filter((e) => typeof e.score === "number" && (e.tag === "WAIT" || e.tag === "EXECUTE" || e.tag === "SETTLED")), [feed]);
+  const latest = scored[0];
+  const orderScore = latest?.score;
+  const scoreSeries = useMemo(() => [...scored].reverse().map((e) => e.score as number), [scored]);
+  const marketOk = market?.available;
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Analytics</h1>
-          <p className="text-xs text-muted">Live 1Click dry quotes against the ECB reference, and the timing score that gates each chunk. Indicative only; the FX leg is simulated.</p>
-        </div>
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight">Analytics</h1>
+        <p className="text-xs text-muted">Live 1Click dry quotes against the ECB reference, and the timing score that gates each chunk. Indicative only; the FX leg is simulated.</p>
       </div>
 
       <KpiStrip
@@ -60,7 +58,7 @@ export default function AnalyticsPage() {
             tone: typeof p?.deviationBps === "number" && Math.abs(p.deviationBps) > 120 ? "warn" : "ok",
           },
           { label: "24h avg deviation", value: devStats ? `${devStats.avg.toFixed(1)} bps` : "--", sub: devStats ? `range ${devStats.min} to ${devStats.max}` : "collecting samples" },
-          { label: "Timing score", value: score, sub: latest?.action === "EXECUTE" ? "executing" : "holding capital", tone: score >= 70 ? "ok" : "warn" },
+          { label: "Market score", value: marketOk ? market?.marketScore ?? "--" : "--", sub: "price + ECB parts only", tone: (market?.marketScore ?? 0) >= 70 ? "ok" : "warn" },
         ]}
       />
 
@@ -72,14 +70,19 @@ export default function AnalyticsPage() {
         </Reveal>
 
         <Reveal delay={80} className="lg:col-span-4">
-          <Card title="Timing score" subtitle="≥70 pays a chunk · ≥85 pays double" badge={{ label: latest?.action ?? "WAIT", color: latest?.action === "EXECUTE" ? "green" : "amber" }} className="h-full">
+          <Card
+            title="Timing score"
+            subtitle="≥70 pays a chunk · ≥85 pays double"
+            badge={{ label: latest ? latest.tag : "No active order", color: latest?.tag === "WAIT" ? "amber" : latest ? "green" : "blue" }}
+            className="h-full"
+          >
             <div className="space-y-5">
               <div>
                 <div className="mb-2 flex items-baseline justify-between">
-                  <span className="text-xs text-muted">Composite</span>
-                  <span className="num text-3xl font-semibold leading-none">{score}</span>
+                  <span className="text-xs text-muted">{latest ? "Latest order decision" : "Market score"}</span>
+                  <span className="num text-3xl font-semibold leading-none">{latest ? orderScore : marketOk ? market?.marketScore : "--"}</span>
                 </div>
-                <Meter value={score} threshold={70} tone={score >= 70 ? "ok" : "warn"} />
+                <Meter value={(latest ? orderScore : market?.marketScore) ?? 0} threshold={70} tone={((latest ? orderScore : market?.marketScore) ?? 0) >= 70 ? "ok" : "warn"} />
                 <div className="mt-1 flex justify-between text-[10px] text-muted">
                   <span>0</span>
                   <span>70 execute</span>
@@ -90,9 +93,8 @@ export default function AnalyticsPage() {
               <div className="space-y-3 border-t border-border pt-4 text-xs">
                 {(
                   [
-                    ["Price vs average", "40%", latest?.price_score],
-                    ["Quote vs ECB", "20%", latest?.divergence_score],
-                    ["Deadline urgency", "40%", latest?.urgency_score],
+                    ["Price vs 24h average", "40%", market?.priceScore],
+                    ["Quote vs ECB", "20%", market?.divergenceScore],
                   ] as const
                 ).map(([label, weight, v]) => (
                   <div key={label}>
@@ -105,13 +107,19 @@ export default function AnalyticsPage() {
                     <Meter value={typeof v === "number" ? v : 0} />
                   </div>
                 ))}
+                <div className="flex justify-between text-muted">
+                  <span>
+                    Deadline urgency <span className="text-border-bright">· 40%</span>
+                  </span>
+                  <span>per order, set by the agent</span>
+                </div>
               </div>
 
               <div className="border-t border-border pt-4">
-                <div className="mb-1.5 text-xs text-muted">Score history</div>
-                <Spark values={scoreSeries} color="rgb(34 197 94)" />
+                <div className="mb-1.5 text-xs text-muted">Agent score history</div>
+                <Spark values={scoreSeries} />
               </div>
-              <p className="text-xs leading-5 text-muted">{latest?.reason ?? "Waiting for the first strategy evaluation."}</p>
+              <p className="text-xs leading-5 text-muted">{latest ? latest.text : market?.note ?? "Waiting for the first market sample."}</p>
             </div>
           </Card>
         </Reveal>
@@ -119,7 +127,7 @@ export default function AnalyticsPage() {
 
       <div className="grid gap-4 lg:grid-cols-12">
         <Reveal className="lg:col-span-7">
-          <Card title="Live agent feed" subtitle="On-chain agent decisions and strategy evaluations" className="h-full">
+          <Card title="Live agent feed" subtitle="On-chain agent decisions and settlements" className="h-full">
             <LiveFeed rows={10} />
           </Card>
         </Reveal>
@@ -152,8 +160,8 @@ export default function AnalyticsPage() {
                 <b className="text-foreground">Deadline urgency (40%).</b> Rises with the square of elapsed time, so the agent always finishes before the deadline.
               </li>
               <li className="border-t border-border pt-3">
-                Score <b className="num text-ok">70+</b> pays a normal chunk, <b className="num text-ok">85+</b> pays double, below 70 it waits.
-                Hard guards (deviation limit, interval, on-chain caps) always apply. This is a timing heuristic, not a promise of better rates.
+                Score <b className="num text-ok">70+</b> pays a normal chunk, <b className="num text-ok">85+</b> pays double, below 70 it waits. Hard guards (deviation limit,
+                interval, on-chain caps) always apply. This is a timing heuristic, not a promise of better rates.
               </li>
             </ol>
           </Card>

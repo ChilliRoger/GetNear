@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { NearClient } from '@getnear/near-client'
 import { resolveNetworkId } from '@getnear/shared'
-import Database from 'better-sqlite3'
-import * as path from 'node:path'
-import * as fs from 'node:fs'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,21 +30,17 @@ const USDC_ID = process.env.USDC_CONTRACT_ID || (isMainnet ? CIRCLE_NEAR_MAINNET
 const FAUCET_USDC_ID = process.env.FAUCET_USDC_CONTRACT_ID || `usdc.${OPERATOR}`
 const EURE_ID = process.env.EURE_CONTRACT_ID || `eure.${OPERATOR}`
 
-// SQLite connection for agent fills and decisions
-function getAgentDb() {
+// The agent runs as its own service. Its fills and decisions are read over its read-only HTTP API
+// (never from its SQLite file), so this route also works when the dashboard is deployed separately.
+const AGENT_API_URL = (process.env.AGENT_API_URL || process.env.AGENT_TRIGGER_URL || 'http://127.0.0.1:38175').replace(/\/+$/, '')
+
+async function getAgentJson<T>(pathAndQuery: string): Promise<T | null> {
   try {
-    const envPath = process.env.GETNEAR_AGENT_DB_PATH?.trim()
-    const dbPath = envPath
-      ? path.resolve(envPath)
-      : path.resolve(process.cwd(), '..', 'agent', 'data', 'agent.db')
-    if (fs.existsSync(dbPath)) {
-      const db = new Database(dbPath, { readonly: true })
-      return db
-    }
-  } catch (err) {
-    console.warn('[API/Near] Could not open agent database:', err)
+    const res = await fetch(`${AGENT_API_URL}${pathAndQuery}`, { cache: 'no-store', signal: AbortSignal.timeout(3000) })
+    return res.ok ? ((await res.json()) as T) : null
+  } catch {
+    return null
   }
-  return null
 }
 
 const cacheMap = new Map<string, { timestamp: number; data: unknown }>()
@@ -139,23 +132,13 @@ export async function GET(req: NextRequest) {
     const requesterAuthorized =
       !userAccount || isRequesterRes.status !== 'fulfilled' ? null : Boolean(isRequesterRes.value)
 
-    // Read agent fills and decisions (normalize SQLite 0/1 integer to boolean)
-    let fills: Record<string, unknown>[] = []
-    let decisions: Record<string, unknown>[] = []
-    const db = getAgentDb()
-    if (db) {
-      try {
-        const rawFills = db.prepare('SELECT * FROM agent_fills ORDER BY id DESC LIMIT 100').all() as Record<string, unknown>[]
-        fills = rawFills.map((f) => ({
-          ...f,
-          is_simulated: Boolean(f.is_simulated),
-        }))
-        decisions = db.prepare('SELECT * FROM agent_decisions ORDER BY id DESC LIMIT 20').all() as Record<string, unknown>[]
-        db.close()
-      } catch (e) {
-        console.warn('[API/Near] Error querying agent db:', e)
-      }
-    }
+    // Agent fills and decisions (empty when the agent service is not reachable)
+    const [fillsRes, decisionsRes] = await Promise.all([
+      getAgentJson<{ fills: Record<string, unknown>[] }>('/fills?limit=100'),
+      getAgentJson<{ decisions: Record<string, unknown>[] }>('/decisions?limit=20'),
+    ])
+    const fills = (fillsRes?.fills ?? []).map((f) => ({ ...f, is_simulated: Boolean(f.is_simulated) }))
+    const decisions = decisionsRes?.decisions ?? []
 
     const payload = {
       success: true,
