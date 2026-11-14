@@ -28,3 +28,9 @@ scripts/
 
 # VM setup package is not part of the dashboard build
 deploy/
+
+# Local agent-skill installs
+/.agents/
+/.claude/
+/agent/
+/skills-lock.json

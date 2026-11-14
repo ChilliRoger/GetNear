@@ -66,6 +66,8 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  loadRootEnvIfPresent()
+
   const requestedProvider =
     typeof body.provider === 'string' && body.provider in AI_PROVIDER_DEFAULTS
       ? (body.provider as AiProviderId)
