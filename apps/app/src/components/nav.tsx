@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, LineChart, ArrowLeftRight, ShieldCheck, Settings } from "lucide-react";
+import { LayoutDashboard, LineChart, ArrowLeftRight, ShieldCheck, Settings, Droplets } from "lucide-react";
+import { FAUCET_URL } from "@/lib/links";
 import { useI18n } from "@/lib/i18n";
 
 const tabs = [
@@ -41,6 +42,15 @@ export function DesktopNav() {
           </Link>
         );
       })}
+      <a
+        href={FAUCET_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Free testnet demo USDC and EURe"
+        className="rounded-lg border-2 border-transparent px-3 py-1 text-[13px] font-bold text-muted transition-all hover:border-border-bright hover:text-foreground"
+      >
+        Faucet ↗
+      </a>
     </nav>
   );
 }
@@ -65,6 +75,15 @@ export function Nav() {
             {t(labelKey)}
           </Link>
         ))}
+        <a
+          href={FAUCET_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-bold text-muted transition-colors"
+        >
+          <Droplets size={18} />
+          Faucet
+        </a>
       </div>
     </nav>
   );

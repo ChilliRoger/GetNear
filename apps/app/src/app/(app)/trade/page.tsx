@@ -8,6 +8,7 @@ import { AiOrderIntake } from "@/components/ai-order-intake";
 import { useToast } from "@/components/toast-provider";
 import { useNearWallet } from "@/lib/near-wallet";
 import type { ParsedOrderData } from "@getnear/shared";
+import { FAUCET_URL } from "@/lib/links";
 import { CheckCircle2, AlertCircle, PlusCircle } from "lucide-react";
 
 export default function TradePage() {
@@ -451,6 +452,16 @@ export default function TradePage() {
         </Card>
         <Card title="What happens after you sign" subtitle="Every step is a testnet transaction you can open on NEARBlocks">
           <ol className="space-y-3 text-xs leading-5 text-muted">
+            <li className="flex gap-3">
+              <span className="num flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-brand/50 text-[10px] font-semibold text-brand">1</span>
+              <span>
+                <b className="text-foreground">Get testnet tokens.</b> Claim free demo USDC and EURe (500 per token every 24 hours) at the{" "}
+                <a href={FAUCET_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand underline">
+                  NEAR faucet ↗
+                </a>
+                , then connect your wallet.
+              </span>
+            </li>
             {[
               ["Order created", "Under the $100 auto-cap it is Active at once. Above it, it stays Pending for DAO approval."],
               ["DAO votes", "Two of three council members approve on the Approve page; the contract then activates the order."],
@@ -458,7 +469,7 @@ export default function TradePage() {
               ["Settled by callback", "Demo EURe reaches the supplier; the amount due only falls after the transfer is confirmed on-chain."],
             ].map(([title, desc], i) => (
               <li key={title} className="flex gap-3">
-                <span className="num flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-brand/50 text-[10px] font-semibold text-brand">{i + 1}</span>
+                <span className="num flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-brand/50 text-[10px] font-semibold text-brand">{i + 2}</span>
                 <span>
                   <b className="text-foreground">{title}.</b> {desc}
                 </span>

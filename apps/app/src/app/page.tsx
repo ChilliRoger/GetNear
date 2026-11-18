@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ArrowRight, BadgeCheck, GitBranch, KeyRound, Landmark, ListChecks, Scale, TrendingUp } from "lucide-react";
+import { ArrowRight, BadgeCheck, Droplets, GitBranch, KeyRound, Landmark, ListChecks, Scale, TrendingUp } from "lucide-react";
 import { BrandMark } from "@/components/brand";
 import { TickerTape } from "@/components/ticker-tape";
 import { SiteFooter } from "@/components/site-footer";
@@ -12,6 +12,7 @@ import { RateChart } from "@/components/rate-chart";
 import { LiveFeed } from "@/components/live-feed";
 import { Card } from "@/components/card";
 import { useOraclePrice } from "@/lib/live";
+import { FAUCET_URL, REPO_URL } from "@/lib/links";
 
 // WebGL only runs in the browser: load the 3D token on the client.
 const NearToken3D = dynamic(() => import("@/components/near-token-3d").then((m) => m.NearToken3D), {
@@ -19,7 +20,7 @@ const NearToken3D = dynamic(() => import("@/components/near-token-3d").then((m) 
   loading: () => <div className="h-[400px] w-full sm:h-[540px]" />,
 });
 
-const REPO = "https://github.com/ChilliRoger/GetNear";
+const REPO = REPO_URL;
 const NB = "https://testnet.nearblocks.io/txns";
 
 const features = [
@@ -29,7 +30,7 @@ const features = [
 ];
 
 const flow = [
-  { step: "Fund", desc: "Lock Circle testnet USDC against an invoice target in EURe." },
+  { step: "Fund", desc: "Grab demo tokens from the faucet, then lock Circle testnet USDC against an invoice target in EURe." },
   { step: "Approve", desc: "Over $100 the DAO votes 2-of-3. Under it, the order is active at once." },
   { step: "Time", desc: "The agent scores live quotes against ECB and the deadline, then pays in chunks." },
   { step: "Settle", desc: "Demo EURe reaches the supplier. Unspent escrow is refunded." },
@@ -56,6 +57,9 @@ export default function LandingPage() {
           <div className="flex items-center gap-3">
             <a href={REPO} target="_blank" rel="noopener noreferrer" className="btn-secondary hidden sm:inline-flex">
               <GitBranch size={14} /> Source
+            </a>
+            <a href={FAUCET_URL} target="_blank" rel="noopener noreferrer" className="btn-secondary hidden sm:inline-flex">
+              <Droplets size={14} /> Faucet
             </a>
             <Link href="/dashboard" className="btn-primary">
               Launch app <ArrowRight size={14} />
@@ -246,6 +250,9 @@ export default function LandingPage() {
               </Link>
               <a href={REPO} target="_blank" rel="noopener noreferrer" className="btn-secondary h-10 px-5">
                 <GitBranch size={14} /> Read the code
+              </a>
+              <a href={FAUCET_URL} target="_blank" rel="noopener noreferrer" className="btn-secondary h-10 px-5">
+                <Droplets size={14} /> Get testnet tokens
               </a>
             </div>
           </Reveal>

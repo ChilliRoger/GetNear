@@ -1,4 +1,4 @@
-const REPO = "https://github.com/ChilliRoger/GetNear";
+import { FAUCET_URL, REPO_URL as REPO } from "@/lib/links";
 
 export function SiteFooter() {
   return (
@@ -8,6 +8,9 @@ export function SiteFooter() {
         <p className="flex flex-wrap gap-x-4 gap-y-1">
           <a className="hover:text-foreground" href={REPO} target="_blank" rel="noopener noreferrer">
             Source
+          </a>
+          <a className="hover:text-foreground" href={FAUCET_URL} target="_blank" rel="noopener noreferrer">
+            Testnet faucet
           </a>
           <a className="hover:text-foreground" href="https://www.ascii-magic.com/ascii" target="_blank" rel="noopener noreferrer">
             ASCII art: ASCII Magic (MIT)

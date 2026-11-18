@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Card } from "@/components/card";
 import { useToast } from "@/components/toast-provider";
 import { Coins, Copy, Check, Droplets, ExternalLink, ArrowRight, ShieldCheck } from "lucide-react";
+import { FAUCET_URL } from "@/lib/links";
 
 interface TokenBalanceCardProps {
   accountId: string | null;
@@ -94,6 +95,15 @@ export function TokenBalanceCard({
           >
             <ExternalLink className="w-3.5 h-3.5" />
             <span>Circle USDC Faucet ↗</span>
+          </a>
+          <a
+            href={FAUCET_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-semibold border border-brand bg-brand/10 hover:bg-brand/20 text-brand transition-colors"
+          >
+            <Droplets className="w-3.5 h-3.5" />
+            <span>NEAR Faucet: demo USDC + EURe ↗</span>
           </a>
           <button
             onClick={handleClaimFaucet}

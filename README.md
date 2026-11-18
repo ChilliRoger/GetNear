@@ -47,6 +47,8 @@ Today teams either convert manually, convert everything in one trade at whatever
 ## Try it in 2 minutes
 No wallet, key or account is needed for steps 1 to 4.
 
+> **Need testnet tokens?** Use the companion **[GetNear Faucet](https://getnear-faucet.vercel.app)** (`apps/faucet`, NEAR testnet only). Enter a testnet account and claim free demo **USDC** and **EURe**, 500 per token every 24 hours. It is also linked from the app's header, footer, Trade tutorial and the Testnet Stablecoin Vault. The faucet pays out the team's demo tokens, not Circle's canonical testnet USDC used for escrow. Details: [docs/FAUCET_DEPLOYMENT.md](docs/FAUCET_DEPLOYMENT.md).
+
 1. **Open the live app:** https://getnear-psi.vercel.app. The rate bar shows the live USDC/EURe 1Click dry quote next to the ECB reference rate and their deviation in bps.
 2. **See an on-chain invoice settle:** on the landing page open *Live, not mocked → Order #13*. It links the three NEARBlocks transactions: escrow funding, the final `execute_chunk` (+€5.00 demo EURe), and the refund of unspent escrow.
 3. **Read the contract state:** open `/dashboard`. *Active & Recent Orders* is read straight from the `FxBudget` contract over RPC (16 orders, with invoice targets, settled amounts, chunk counts and statuses). `/approve` lists the Sputnik DAO proposals and their votes.
@@ -166,7 +168,7 @@ contracts/fx-budget/   Rust FxBudget contract, unit tests, reproducible WASM art
 apps/app/              Next.js 14 dashboard (landing, dashboard, analytics, trade, approve, settings)
 apps/agent/            Agent runner: attempt persistence, reconciliation, read-only HTTP API (SQLite)
 apps/oracle/           Read-only market recorder (1Click dry quotes + ECB) and market-score endpoint
-apps/faucet/           Demo-token faucet (separate Next.js app)
+apps/faucet/           Demo-token faucet (separate Next.js app, live at https://getnear-faucet.vercel.app)
 packages/shared/       Domain types, strategy engine, chunk sizing, 1Click and Frankfurter sources, config
 packages/near-client/  JSON-RPC client with failover
 scripts/               Deployment, verification and drill scripts (testnet), read-only verifier
@@ -219,6 +221,7 @@ Trust model and key inventory: [docs/SECURITY.md](docs/SECURITY.md). Pre-deploym
 | [docs/EVIDENCE.md](docs/EVIDENCE.md) | Testnet transactions and what each check proves |
 | [docs/CONFIG.md](docs/CONFIG.md) | Environment variables |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/ORACLE_CLOUD.md](docs/ORACLE_CLOUD.md) | Vercel, hosting the oracle and agent |
+| [docs/FAUCET_DEPLOYMENT.md](docs/FAUCET_DEPLOYMENT.md) | The standalone testnet faucet: https://getnear-faucet.vercel.app |
 | [docs/AUDIT.md](docs/AUDIT.md) | Pre-deployment audit |
 | [docs/FAILURE_DRILLS.md](docs/FAILURE_DRILLS.md), [docs/UPGRADE_AND_FRESH_INVOICE.md](docs/UPGRADE_AND_FRESH_INVOICE.md) | Failure drills and the upgrade runbook |
 
